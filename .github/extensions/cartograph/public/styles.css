@@ -33,6 +33,11 @@ input { font: inherit; color: inherit; }
 .phase { position: absolute; inset: 0; }
 .hidden { display: none !important; }
 
+#crawl-sky, #welcome-sky, #jump-sky {
+  pointer-events: none !important;
+  z-index: 0;
+}
+
 .skip {
   position: absolute; right: 1rem; bottom: 1rem; z-index: 20;
   min-height: 44px; border-radius: 999px; border: 1px solid var(--color-border);
@@ -59,13 +64,14 @@ input { font: inherit; color: inherit; }
 @keyframes crawl-rise { 0% { transform: translateY(115%); } 20% { transform: translateY(42%); } 100% { transform: translateY(-120%); } }
 
 .welcome, .map { display: flex; flex-direction: column; height: 100%; }
+.welcome-header, .store-grid, .path-row, #welcome-error { position: relative; z-index: 2; }
 .welcome-header { text-align: center; padding: 2.5rem 1.25rem 1rem; }
 .welcome-header h1 { font-family: var(--font-display); font-style: italic; font-size: 2.4rem; margin: 0.4rem 0 0; font-weight: 500; }
 .kicker { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.28em; text-transform: uppercase; color: var(--color-subtle); }
 .muted { color: var(--color-muted); }
 .subtle { color: var(--color-subtle); font-family: var(--font-mono); font-size: 11px; }
 
-.store-grid { display: grid; gap: 0.75rem; grid-template-columns: 1fr; padding: 1rem; overflow: auto; max-width: 48rem; margin: 0 auto; width: 100%; }
+.store-grid { display: grid; gap: 0.75rem; grid-template-columns: 1fr; padding: 1rem; overflow: auto; max-width: 48rem; margin: 0 auto; width: 100%; flex: 1; min-height: 0; }
 @media (min-width: 640px) { .store-grid { grid-template-columns: 1fr 1fr; } }
 .store-card {
   text-align: left; border: 1px solid var(--color-border); background: rgba(12, 18, 28, 0.9);

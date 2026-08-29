@@ -99,9 +99,6 @@ function renderStores() {
       </button>`,
     )
     .join("");
-  grid.querySelectorAll("[data-root]").forEach((btn) => {
-    btn.addEventListener("click", () => openRoot(btn.getAttribute("data-root")));
-  });
 }
 
 function ensureMap() {
@@ -317,6 +314,10 @@ seedStars($("jump-sky"), (now) => {
 
 $("skip-crawl").addEventListener("click", () => post("phase", { phase: "welcome" }));
 $("skip-jump").addEventListener("click", () => post("phase", { phase: "map" }));
+$("store-grid").addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-root]");
+  if (btn) openRoot(btn.getAttribute("data-root"));
+});
 $("open-path").addEventListener("submit", (e) => {
   e.preventDefault();
   const root = $("path-input").value.trim();
