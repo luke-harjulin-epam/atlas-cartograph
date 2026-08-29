@@ -69,3 +69,12 @@ test("loadPage and selectNode expose relates_to navigation", () => {
   assert.ok(paths.some((p) => p.includes("migrate-cartograph")));
   assert.ok(paths.some((p) => p.includes("copilot-canvas")));
 });
+
+test("selectNode ignores broken links and keeps the current page", () => {
+  const state = freshState(repo, { skipIntro: true });
+  openAtlas(state, fixture);
+  selectNode(state, "experiences/canvas-port");
+  selectNode(state, "does-not-exist");
+  assert.equal(state.selectedId, "experiences/canvas-port");
+  assert.match(state.linkError || "", /does-not-exist/);
+});

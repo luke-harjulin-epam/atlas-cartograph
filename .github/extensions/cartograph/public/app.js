@@ -1,4 +1,5 @@
 import { mountGraphCanvas } from "./graph-canvas.js";
+import { escapeHtml, renderMarkdown } from "./markdown.js";
 
 const CRAWL_BODY = `Compiled memory, mapped as sky.
 
@@ -22,7 +23,7 @@ const phases = {
   map: $("phase-map"),
 };
 
-let state = { phase: "crawl", stores: [], graph: null, root: "", query: "", selectedId: null, previewOpen: false, layers: {}, error: null, page: null };
+let state = { phase: "crawl", stores: [], graph: null, root: "", query: "", selectedId: null, previewOpen: false, layers: {}, error: null, linkError: null, page: null };
 let map = null;
 
 function showPhase(name) {
@@ -62,25 +63,23 @@ function visibleGraph() {
   return { nodes, edges };
 }
 
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-}
-
-function renderMarkdown(md) {
-  const text = String(md || "");
-  const html = escapeHtml(text)
-    .replace(/^### (.*)$/gm, "<h3>$1</h3>")
-    .replace(/^## (.*)$/gm, "<h2>$1</h2>")
-    .replace(/^# (.*)$/gm, "<h1>$1</h1>")
-    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
-    .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, t, l) => `<button class="wikilink" data-target="${escapeHtml(t)}">${escapeHtml(l || t)}</button>`)
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
-    .replace(/^\- (.*)$/gm, "<li>$1</li>")
-    .replace(/(<li>.*<\/li>\n?)+/g, (m) => `<ul>${m}</ul>`)
-    .replace(/\n{2,}/g, "</p><p>")
-    .replace(/\n/g, "<br>");
-  return `<p>${html}</p>`;
+function onPreviewClick(e) {
+  const a = e.target.closest("a");
+  if (a) {
+    e.preventDefault();
+    const href = a.getAttribute("href") || "";
+    if (/^https?:\/\//i.test(href) || href.startsWith("mailto:")) {
+      window.open(href, "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (href && href !== "#") navigateWiki(href);
+    return;
+  }
+  const wiki = e.target.closest(".wikilink, [data-target]");
+  if (wiki && wiki.closest("#preview")) {
+    e.preventDefault();
+    navigateWiki(wiki.getAttribute("data-target"));
+  }
 }
 
 function renderStores() {
@@ -148,6 +147,11 @@ function renderPreview() {
   const page = state.page;
   $("preview-title").textContent = page?.title || node?.title || state.selectedId;
   $("preview-meta").textContent = `${page?.kind || node?.kind || ""} · ${page?.path || node?.path || ""}`;
+  const err = $("preview-link-error");
+  if (err) {
+    err.textContent = state.linkError || "";
+    err.classList.toggle("hidden", !state.linkError);
+  }
   const chips = [
     ...(page?.relatesTo ?? []).map((r) => ({ kind: r.kind || "relates", path: r.path })),
     ...(page?.sources ?? []).map((s) => ({ kind: "source", path: s })),
@@ -325,6 +329,18 @@ $("open-path").addEventListener("submit", (e) => {
 });
 $("search").addEventListener("input", (e) => post("query", { query: e.target.value }));
 $("toggle-panel").addEventListener("click", () => $("panel").classList.toggle("hidden"));
+$("preview").addEventListener("click", onPreviewClick);
+document.addEventListener("click", (e) => {
+  const a = e.target.closest("a");
+  if (!a) return;
+  e.preventDefault();
+  const href = a.getAttribute("href") || "";
+  if (/^https?:\/\//i.test(href) || href.startsWith("mailto:")) {
+    window.open(href, "_blank", "noopener,noreferrer");
+    return;
+  }
+  if (href && href !== "#") navigateWiki(href);
+});
 $("preview-close").addEventListener("click", () => post("preview", { open: false }));
 $("preview-backdrop").addEventListener("click", () => post("preview", { open: false }));
 document.querySelectorAll("[data-layer]").forEach((btn) => {

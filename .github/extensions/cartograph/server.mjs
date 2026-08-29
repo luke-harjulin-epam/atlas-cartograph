@@ -38,6 +38,7 @@ export function freshState(cwd, input = {}) {
     graph: null,
     page: null,
     error: null,
+    linkError: null,
     stores: [],
     openedAt: new Date().toISOString(),
   };
@@ -54,6 +55,7 @@ function snapshot(state) {
     graph: state.graph,
     page: state.page,
     error: state.error,
+    linkError: state.linkError,
     stores: state.stores,
     openedAt: state.openedAt,
   };
@@ -174,11 +176,24 @@ function enrichPage(state, page, nodeId) {
 }
 
 export function selectNode(state, nodeId) {
-  const id = nodeId ? resolveNodeId(state, nodeId) : null;
+  if (!nodeId) {
+    state.selectedId = null;
+    state.previewOpen = false;
+    state.page = null;
+    state.linkError = null;
+    return state;
+  }
+  const id = resolveNodeId(state, nodeId);
+  const inGraph = Boolean(state.graph?.nodes?.some((n) => n.id === id));
+  const loaded = state.root ? loadPage(state.root, id, state.cwd) : null;
+  if (!inGraph && !loaded) {
+    state.linkError = `No page for “${nodeId}”.`;
+    return state;
+  }
+  state.linkError = null;
   state.selectedId = id;
-  state.previewOpen = Boolean(id);
-  const loaded = id && state.root ? loadPage(state.root, id, state.cwd) : null;
-  state.page = id ? enrichPage(state, loaded, id) : null;
+  state.previewOpen = true;
+  state.page = enrichPage(state, loaded, id);
   return state;
 }
 
@@ -187,8 +202,8 @@ function serveStatic(req, res) {
   if (urlPath === "/") urlPath = "/index.html";
   const file = join(PUBLIC_DIR, urlPath.replace(/^\/+/, ""));
   if (!file.startsWith(PUBLIC_DIR) || !existsSync(file) || !statSync(file).isFile()) {
-    res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
-    res.end("Not found");
+    res.writeHead(404, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+    res.end(`<!doctype html><title>Cartograph</title><script>location.replace("/")</script>`);
     return;
   }
   const type = MIME[extname(file)] ?? "application/octet-stream";

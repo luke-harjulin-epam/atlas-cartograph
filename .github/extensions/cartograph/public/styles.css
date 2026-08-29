@@ -161,8 +161,15 @@ input { font: inherit; color: inherit; }
 .relates button:hover { color: var(--color-fg); border-color: var(--color-border-strong); }
 .relates .kind-source { color: var(--color-source); }
 .wiki-md { font-size: 14px; line-height: 1.6; color: var(--color-muted); }
-.wiki-md h1, .wiki-md h2, .wiki-md h3 { color: var(--color-fg); font-family: var(--font-display); font-style: italic; }
+.wiki-md h1, .wiki-md h2, .wiki-md h3, .wiki-md h4 { color: var(--color-fg); font-family: var(--font-display); font-style: italic; }
 .wiki-md a, .wiki-md .wikilink { color: var(--color-experience); cursor: pointer; text-decoration: underline; background: none; border: 0; padding: 0; font: inherit; }
+.wiki-md ul, .wiki-md ol { padding-left: 1.2rem; }
+.md-table { overflow-x: auto; margin: 0.75rem 0; border: 1px solid var(--color-border); border-radius: 12px; }
+.md-table table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; }
+.md-table th, .md-table td { border-bottom: 1px solid var(--color-border); padding: 0.45rem 0.7rem; vertical-align: top; }
+.md-table th { color: var(--color-fg); background: var(--color-elevated); font-weight: 600; }
+.md-table tr:last-child td { border-bottom: 0; }
+.md-pre { overflow-x: auto; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-elevated); padding: 0.7rem 0.85rem; font-family: var(--font-mono); font-size: 12px; color: var(--color-fg); }
 .danger { color: var(--color-danger); border: 1px solid var(--color-border); border-radius: 12px; padding: 0.75rem 1rem; margin: 0.75rem 1rem; background: var(--color-elevated); }
 
 @media (prefers-reduced-motion: reduce) {

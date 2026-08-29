@@ -11,3 +11,11 @@ An Atlas is a folder with `SCHEMA.json` or `index.md`. Pages are Markdown with Y
 Kinds: experience, decision, work, lesson, recipe, index, knowledge, raw, module.
 
 Links: `[[wikilinks]]`, `relates_to`, `sources`, and `atlas://id/path`.
+
+| Kind | Folder |
+| --- | --- |
+| experience | `experiences/` |
+| decision | `decisions/` |
+| work | `work/` |
+
+Broken wiki: [[does-not-exist]]. Broken markdown: [missing](missing.md).
