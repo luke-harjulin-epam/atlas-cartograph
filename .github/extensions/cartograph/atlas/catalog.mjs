@@ -1,5 +1,9 @@
 import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const EXTENSION_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+export const BUNDLED_MINI_ATLAS = resolve(EXTENSION_ROOT, "fixtures/mini-atlas");
 
 function env(name) {
   return String(process.env[name] ?? "").trim();
@@ -22,8 +26,10 @@ function parsePresets(raw) {
 
 export function workspacePresets(cwd) {
   const root = cwd || process.cwd();
+  const workspaceMini = resolve(root, "fixtures/mini-atlas");
+  const mini = existsSync(workspaceMini) ? workspaceMini : BUNDLED_MINI_ATLAS;
   return [
-    { label: "Mini atlas", root: resolve(root, "fixtures/mini-atlas") },
+    { label: "Mini atlas", root: mini },
     { label: "Mounted atlas", root: resolve(root, "atlas") },
   ];
 }

@@ -16,10 +16,12 @@ It is not a Vercel/Grok web app. The viewer lives in
 
 ## Open the canvas
 
-From a Copilot session in this repo:
+From a Copilot session:
 
-1. The project extension loads from `.github/extensions/cartograph/`
-2. Ask the agent to open Cartograph, or call:
+1. Project sessions in this repo load `.github/extensions/cartograph/`
+2. Any other session loads the user install at `~/.copilot/extensions/cartograph/`
+   (copy `.github/extensions/cartograph/` there once; this machine already has it)
+3. Ask the agent to open Cartograph, or call:
 
 ```text
 open_canvas({ canvasId: "cartograph", instanceId: "cartograph-1" })
@@ -39,7 +41,7 @@ Priority:
 
 1. `ATLAS_ROOT` / `ATLAS_VIEWER_ROOT`
 2. `atlas/` in the workspace (OKF / mounted Atlas)
-3. `fixtures/mini-atlas` (small fixture in this repo)
+3. `fixtures/mini-atlas` in the workspace, or the fixture bundled in the extension
 
 Any folder with `SCHEMA.json` or `index.md` is an Atlas. Legacy okf-wiki
 stores (`knowledge/`, `SCHEMA.md`) still open.
