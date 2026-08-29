@@ -2,7 +2,7 @@ import { existsSync, readdirSync, statSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const EXTENSION_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+export const EXTENSION_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const BUNDLED_MINI_ATLAS = resolve(EXTENSION_ROOT, "fixtures/mini-atlas");
 
 function env(name) {
@@ -37,11 +37,16 @@ const SKIP_WALK = new Set([
 ]);
 
 function isAtlasDir(dir) {
-  return existsSync(join(dir, "SCHEMA.json")) || existsSync(join(dir, "index.md"));
+  if (existsSync(join(dir, "SCHEMA.json")) || existsSync(join(dir, "SCHEMA.md"))) return true;
+  if (existsSync(join(dir, "knowledge")) && existsSync(join(dir, "index.md"))) return true;
+  if (existsSync(join(dir, "index.md")) && (existsSync(join(dir, "experiences")) || existsSync(join(dir, "work")) || existsSync(join(dir, "decisions")))) {
+    return true;
+  }
+  return false;
 }
 
 function walkAtlasDirs(dir, acc = [], depth = 0) {
-  if (!dir || !existsSync(dir) || depth > 4) return acc;
+  if (!dir || !existsSync(dir) || depth > 6) return acc;
   if (isAtlasDir(dir)) {
     acc.push(dir);
     if (depth > 0) return acc;
@@ -76,15 +81,18 @@ function labelFor(root, cwd) {
 }
 
 export function workspacePresets(cwd) {
-  const root = cwd || process.cwd();
-  const found = walkAtlasDirs(root).map((dir) => ({
-    label: labelFor(dir, root),
-    root: resolve(dir),
-  }));
-  const workspaceMini = resolve(root, "fixtures/mini-atlas");
-  const mini = existsSync(workspaceMini) ? workspaceMini : BUNDLED_MINI_ATLAS;
+  const root = cwd && existsSync(cwd) ? resolve(cwd) : "";
+  const inInstall = root && (root === EXTENSION_ROOT || root.startsWith(`${EXTENSION_ROOT}/`));
+  const found = root && !inInstall
+    ? walkAtlasDirs(root).map((dir) => ({
+        label: labelFor(dir, root),
+        root: resolve(dir),
+      }))
+    : [];
+  const workspaceMini = root ? resolve(root, "fixtures/mini-atlas") : "";
+  const mini = workspaceMini && existsSync(workspaceMini) ? workspaceMini : BUNDLED_MINI_ATLAS;
   found.push({ label: "Mini atlas", root: mini });
-  found.push({ label: "Mounted atlas", root: resolve(root, "atlas") });
+  if (root && !inInstall) found.push({ label: "Mounted atlas", root: resolve(root, "atlas") });
   return found;
 }
 

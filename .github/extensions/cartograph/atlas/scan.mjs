@@ -281,7 +281,7 @@ export function loadPage(rawRoot, nodeId, cwd) {
 export function listPresets(cwd) {
   return allPresetSpecs(cwd)
     .map((p) => inspectRoot(p.root, cwd))
-    .filter((s) => s.available || s.root.includes("mini-atlas") || s.label === "Mounted atlas");
+    .filter((s) => s.available);
 }
 
 export function defaultRoot(cwd) {

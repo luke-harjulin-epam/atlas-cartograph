@@ -84,7 +84,7 @@ function onPreviewClick(e) {
 
 function renderStores() {
   const grid = $("store-grid");
-  const atlas = (state.stores || []).filter((s) => s.format === "atlas" && s.available);
+  const atlas = (state.stores || []).filter((s) => s.available);
   if (!atlas.length) {
     grid.innerHTML = `<p class="muted">No Atlas stores found. Use the path field or add fixtures/mini-atlas.</p>`;
     return;
@@ -93,7 +93,7 @@ function renderStores() {
     .map(
       (s) => `<button class="store-card" data-root="${escapeHtml(s.root)}">
         <h3>${escapeHtml(s.label)}</h3>
-        <div class="subtle">SCHEMA.json${s.atlasId ? ` · ${escapeHtml(s.atlasId)}` : ""}</div>
+        <div class="subtle">${escapeHtml(s.format || "atlas")}${s.atlasId ? ` · ${escapeHtml(s.atlasId)}` : ""}</div>
         <div class="muted" style="margin-top:0.75rem">${s.pages ?? 0} pages</div>
       </button>`,
     )

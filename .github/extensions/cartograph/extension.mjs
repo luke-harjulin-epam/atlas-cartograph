@@ -1,6 +1,8 @@
 // Extension: cartograph
 // Cartograph Atlas knowledge-graph viewer as a Copilot App Canvas.
 
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { joinSession, createCanvas, CanvasError } from "@github/copilot-sdk/extension";
 import {
   defaultRoot,
@@ -10,11 +12,37 @@ import {
   selectNode,
   startServer,
 } from "./server.mjs";
+import { EXTENSION_ROOT } from "./atlas/catalog.mjs";
 
 const instances = new Map();
+let sessionCwd = "";
 
-function cwdFrom(ctx) {
-  return ctx?.session?.workingDirectory || process.cwd();
+function isInstallDir(p) {
+  if (!p) return false;
+  const abs = resolve(p);
+  return abs === EXTENSION_ROOT || abs.startsWith(`${EXTENSION_ROOT}/`);
+}
+
+function firstRealCwd(...candidates) {
+  for (const c of candidates) {
+    if (!c || !existsSync(c) || isInstallDir(c)) continue;
+    return resolve(c);
+  }
+  return "";
+}
+
+async function resolveCwd(ctx) {
+  let snapCwd = "";
+  try {
+    snapCwd = (await session.rpc.metadata.snapshot())?.workingDirectory || "";
+  } catch {
+    /* rpc not ready */
+  }
+  return (
+    firstRealCwd(ctx?.session?.workingDirectory, snapCwd, sessionCwd) ||
+    sessionCwd ||
+    (isInstallDir(process.cwd()) ? "" : process.cwd())
+  );
 }
 
 function requireEntry(instanceId) {
@@ -24,6 +52,14 @@ function requireEntry(instanceId) {
 }
 
 const session = await joinSession({
+  hooks: {
+    onSessionStart: async ({ workingDirectory }) => {
+      if (workingDirectory && !isInstallDir(workingDirectory)) sessionCwd = workingDirectory;
+    },
+    onUserPromptSubmitted: async ({ workingDirectory }) => {
+      if (workingDirectory && !isInstallDir(workingDirectory)) sessionCwd = workingDirectory;
+    },
+  },
   canvases: [
     createCanvas({
       id: "cartograph",
@@ -151,7 +187,8 @@ const session = await joinSession({
         let entry = instances.get(ctx.instanceId);
         if (!entry) {
           const input = ctx.input && typeof ctx.input === "object" ? ctx.input : {};
-          const state = freshState(cwdFrom(ctx), input);
+          const cwd = await resolveCwd(ctx);
+          const state = freshState(cwd, input);
           hydrateStores(state);
           const root = input.root || defaultRoot(state.cwd);
           if (root) openAtlas(state, root);
@@ -159,6 +196,14 @@ const session = await joinSession({
             state.phase = input.skipIntro === false ? "jump" : "map";
           } else {
             state.phase = "welcome";
+          }
+          try {
+            await session.log(
+              `Cartograph cwd ${cwd || "(none)"} · ${state.stores.filter((s) => s.available).length} stores`,
+              { ephemeral: true },
+            );
+          } catch {
+            /* ignore */
           }
           entry = await startServer(ctx.instanceId, state);
           instances.set(ctx.instanceId, entry);
