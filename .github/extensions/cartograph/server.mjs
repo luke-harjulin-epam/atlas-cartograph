@@ -3,6 +3,7 @@ import { readFileSync, existsSync, statSync } from "node:fs";
 import { dirname, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defaultRoot, inspectRoot, listPresets, loadFullGraph, loadPage } from "./atlas/scan.mjs";
+import { normalizeLink } from "./atlas/parse.mjs";
 export { defaultRoot };
 
 const PUBLIC_DIR = join(dirname(fileURLToPath(import.meta.url)), "public");
@@ -113,11 +114,71 @@ export function openAtlas(state, root) {
   return state;
 }
 
+function resolveNodeId(state, raw) {
+  const key = normalizeLink(String(raw ?? ""));
+  if (!key) return null;
+  const nodes = state.graph?.nodes ?? [];
+  const hit = nodes.find(
+    (n) =>
+      n.id === raw ||
+      n.id === key ||
+      n.path === raw ||
+      n.path === `${key}.md` ||
+      (n.aliases ?? []).some((a) => normalizeLink(a) === key) ||
+      n.title.toLowerCase() === String(raw).trim().toLowerCase() ||
+      n.id.endsWith(`/${key}`) ||
+      n.id.endsWith(`/${key.split("/").pop()}`),
+  );
+  return hit?.id ?? key;
+}
+
+function enrichPage(state, page, nodeId) {
+  const node = state.graph?.nodes?.find((n) => n.id === nodeId);
+  const relatesTo = [...(page?.relatesTo ?? [])];
+  const seen = new Set(relatesTo.map((r) => normalizeLink(r.path)));
+  if (!relatesTo.length && node) {
+    for (const r of node.refs ?? []) {
+      if (r.kind !== "relates" && r.kind !== "mesh") continue;
+      const path = r.raw;
+      if (!path || seen.has(normalizeLink(path))) continue;
+      seen.add(normalizeLink(path));
+      relatesTo.push({ path, kind: r.relKind || r.kind });
+    }
+  }
+  for (const e of state.graph?.edges ?? []) {
+    if (e.kind === "source") continue;
+    let other = null;
+    if (e.source === nodeId) other = e.target;
+    else if (e.target === nodeId) other = e.source;
+    if (!other || seen.has(normalizeLink(other))) continue;
+    seen.add(normalizeLink(other));
+    relatesTo.push({ path: other, kind: e.relKind || e.kind });
+  }
+  const sources =
+    page?.sources?.length
+      ? page.sources
+      : (node?.refs ?? []).filter((r) => r.kind === "source").map((r) => r.raw);
+  if (!page) {
+    return {
+      id: nodeId,
+      path: node?.path ?? nodeId,
+      title: node?.title ?? nodeId,
+      type: node?.type ?? node?.kind ?? "",
+      kind: node?.kind ?? "page",
+      sources,
+      relatesTo,
+      body: "",
+    };
+  }
+  return { ...page, relatesTo, sources };
+}
+
 export function selectNode(state, nodeId) {
-  const id = nodeId ? String(nodeId) : null;
+  const id = nodeId ? resolveNodeId(state, nodeId) : null;
   state.selectedId = id;
   state.previewOpen = Boolean(id);
-  state.page = id && state.root ? loadPage(state.root, id, state.cwd) : null;
+  const loaded = id && state.root ? loadPage(state.root, id, state.cwd) : null;
+  state.page = id ? enrichPage(state, loaded, id) : null;
   return state;
 }
 

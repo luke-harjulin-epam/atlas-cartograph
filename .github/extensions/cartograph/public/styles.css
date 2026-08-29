@@ -141,6 +141,13 @@ input { font: inherit; color: inherit; }
   .preview { top: 50%; bottom: auto; transform: translate(-50%, -50%); border-radius: 16px; max-height: 80%; }
 }
 .preview h2 { font-family: var(--font-display); font-style: italic; margin: 0 0 0.35rem; }
+.relates { display: flex; flex-wrap: wrap; gap: 0.4rem; list-style: none; margin: 0.65rem 0 1rem; padding: 0; }
+.relates button {
+  border-radius: 999px; border: 1px solid var(--color-border); background: transparent;
+  padding: 0.25rem 0.65rem; font-family: var(--font-mono); font-size: 11px; color: var(--color-muted);
+}
+.relates button:hover { color: var(--color-fg); border-color: var(--color-border-strong); }
+.relates .kind-source { color: var(--color-source); }
 .wiki-md { font-size: 14px; line-height: 1.6; color: var(--color-muted); }
 .wiki-md h1, .wiki-md h2, .wiki-md h3 { color: var(--color-fg); font-family: var(--font-display); font-style: italic; }
 .wiki-md a, .wiki-md .wikilink { color: var(--color-experience); cursor: pointer; text-decoration: underline; background: none; border: 0; padding: 0; font: inherit; }

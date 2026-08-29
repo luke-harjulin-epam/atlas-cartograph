@@ -115,6 +115,31 @@ function ensureMap() {
   return map;
 }
 
+function chipLabel(path) {
+  return String(path)
+    .replace(/\\/g, "/")
+    .replace(/\.md$/i, "")
+    .split("/")
+    .pop();
+}
+
+function navigateWiki(target) {
+  const key = String(target || "")
+    .replace(/\\/g, "/")
+    .replace(/^\.\//, "")
+    .replace(/\.md$/i, "");
+  const hit = state.graph?.nodes?.find(
+    (n) =>
+      n.id === key ||
+      n.id === target ||
+      (n.aliases ?? []).includes(key) ||
+      n.path === key ||
+      n.path === `${key}.md` ||
+      n.title.toLowerCase() === key.toLowerCase(),
+  );
+  return post("select", { nodeId: hit?.id || key });
+}
+
 function renderPreview() {
   const box = $("preview");
   const back = $("preview-backdrop");
@@ -126,15 +151,24 @@ function renderPreview() {
   const page = state.page;
   $("preview-title").textContent = page?.title || node?.title || state.selectedId;
   $("preview-meta").textContent = `${page?.kind || node?.kind || ""} · ${page?.path || node?.path || ""}`;
+  const chips = [
+    ...(page?.relatesTo ?? []).map((r) => ({ kind: r.kind || "relates", path: r.path })),
+    ...(page?.sources ?? []).map((s) => ({ kind: "source", path: s })),
+  ];
+  const rel = $("preview-relates");
+  rel.classList.toggle("hidden", chips.length === 0);
+  rel.innerHTML = chips
+    .map(
+      (c) =>
+        `<li><button type="button" class="kind-${escapeHtml(c.kind)}" data-target="${escapeHtml(c.path)}">${escapeHtml(c.kind)} · ${escapeHtml(chipLabel(c.path))}</button></li>`,
+    )
+    .join("");
+  rel.querySelectorAll("button").forEach((el) => {
+    el.addEventListener("click", () => navigateWiki(el.getAttribute("data-target")));
+  });
   $("preview-body").innerHTML = renderMarkdown(page?.body || "_No page body._");
   $("preview-body").querySelectorAll(".wikilink").forEach((el) => {
-    el.addEventListener("click", () => {
-      const target = el.getAttribute("data-target");
-      const hit = state.graph?.nodes?.find(
-        (n) => n.id === target || n.aliases?.includes(target) || n.path === `${target}.md` || n.path === target,
-      );
-      post("select", { nodeId: hit?.id || target });
-    });
+    el.addEventListener("click", () => navigateWiki(el.getAttribute("data-target")));
   });
 }
 

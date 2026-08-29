@@ -119,6 +119,14 @@ const session = await joinSession({
               store: g?.store ?? null,
               nodeCount: g?.nodes?.length ?? 0,
               edgeCount: g?.edges?.length ?? 0,
+              page: entry.state.page
+                ? {
+                    id: entry.state.page.id,
+                    title: entry.state.page.title,
+                    relatesTo: entry.state.page.relatesTo,
+                    sources: entry.state.page.sources,
+                  }
+                : null,
               nodes: (g?.nodes ?? []).map((n) => ({ id: n.id, title: n.title, kind: n.kind })),
             };
           },

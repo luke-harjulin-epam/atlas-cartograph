@@ -8,7 +8,8 @@ import {
   parseFrontmatter,
   relatesToOf,
 } from "../.github/extensions/cartograph/atlas/parse.mjs";
-import { loadFullGraph, inspectRoot } from "../.github/extensions/cartograph/atlas/scan.mjs";
+import { loadFullGraph, inspectRoot, loadPage } from "../.github/extensions/cartograph/atlas/scan.mjs";
+import { freshState, openAtlas, selectNode } from "../.github/extensions/cartograph/server.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const fixture = resolve(repo, "fixtures/mini-atlas");
@@ -50,4 +51,21 @@ test("inspectRoot and loadFullGraph read the mini atlas fixture", () => {
   assert.ok(graph.nodes.some((n) => n.id === "index"));
   assert.ok(graph.nodes.some((n) => n.kind === "experience"));
   assert.ok(graph.complete);
+});
+
+test("loadPage and selectNode expose relates_to navigation", () => {
+  const page = loadPage(fixture, "experiences/canvas-port", repo);
+  assert.ok(page);
+  assert.ok(page.relatesTo.some((r) => r.path.includes("migrate-cartograph")));
+  assert.ok(page.relatesTo.some((r) => r.path.includes("copilot-canvas")));
+  assert.ok(page.sources.some((s) => s.includes("atlas-pages")));
+
+  const state = freshState(repo, { skipIntro: true });
+  openAtlas(state, fixture);
+  selectNode(state, "experiences/canvas-port");
+  assert.equal(state.selectedId, "experiences/canvas-port");
+  assert.ok(state.page.relatesTo.length >= 2);
+  const paths = state.page.relatesTo.map((r) => r.path);
+  assert.ok(paths.some((p) => p.includes("migrate-cartograph")));
+  assert.ok(paths.some((p) => p.includes("copilot-canvas")));
 });

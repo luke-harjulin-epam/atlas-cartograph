@@ -1,5 +1,4 @@
 import { layoutUniverse } from "./universe.js";
-import { createGraphGL, packBgStars } from "./graph-gl.js";
 
 const KIND_CORE = {
   experience: "#d4e4ff",
@@ -242,17 +241,10 @@ function draw2d(ctx, s) {
 
 export function mountGraphCanvas(wrap, options) {
   const canvas = document.createElement("canvas");
-  wrap.appendChild(canvas);
-  const ctx = canvas.getContext("2d");
-  const glCanvas = document.createElement("canvas");
-  glCanvas.style.position = "absolute";
-  glCanvas.style.inset = "0";
-  wrap.insertBefore(glCanvas, canvas);
   canvas.style.position = "absolute";
   canvas.style.inset = "0";
-  canvas.style.pointerEvents = "none";
-  const gl = createGraphGL(glCanvas);
-  const bgPacked = new Float32Array(7 * BG_STARS.length);
+  wrap.insertBefore(canvas, wrap.firstChild);
+  const ctx = canvas.getContext("2d");
 
   const s = {
     sim: [], edges: [], selectedId: null, query: "",
@@ -287,7 +279,6 @@ export function mountGraphCanvas(wrap, options) {
     canvas.height = Math.max(1, Math.floor(rect.height * dpr));
     canvas.style.width = `${rect.width}px`; canvas.style.height = `${rect.height}px`;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    if (gl) gl.resize(rect.width, rect.height, dpr);
   }
 
   let raf = 0;
@@ -322,34 +313,7 @@ export function mountGraphCanvas(wrap, options) {
     }
     s.cam.pitch = Math.max(-1.2, Math.min(1.2, s.cam.pitch));
     projectGlobe(s);
-    if (gl) {
-      const nBg = packBgStars(BG_STARS, s.w, s.h, s.cam.yaw, s.cam.pitch, s.t, s.cam.x, s.cam.y, bgPacked);
-      gl.draw({
-        w: s.w, h: s.h, t: s.t, k: s.cam.k, cx: s.w / 2, cy: s.h / 2,
-        selectedId: s.selectedId, hover: s.hover, query: s.query,
-        nodes: s.sim, edges: s.edges, bg: bgPacked.subarray(0, nBg),
-      });
-      ctx.clearRect(0, 0, s.w, s.h);
-      const q = s.query.trim().toLowerCase();
-      const match = (n) => !q || n.title.toLowerCase().includes(q) || n.id.toLowerCase().includes(q);
-      const focusSet = neighborhood(s.selectedId, s.edges);
-      const locked = Boolean(s.selectedId);
-      for (const n of s.sim) {
-        if (n.depth < 0.62) continue;
-        const sel = n.id === s.selectedId; const hov = n.id === s.hover; const related = focusSet.has(n.id);
-        if (locked && !related && !hov) continue;
-        const faded = Boolean(q && !match(n));
-        const show = n.kind !== "raw" && n.kind !== "page" ? true : sel || hov || related;
-        if (!show || (faded && !sel && !hov && !related)) continue;
-        ctx.font = `${sel ? 600 : 450} 12px "Cormorant Garamond", "Newsreader", serif`;
-        ctx.fillStyle = sel ? "rgba(230, 245, 255, 0.95)" : related ? "rgba(200, 230, 255, 0.85)" : `rgba(190,220,255,${0.4 + n.depth * 0.5})`;
-        ctx.textAlign = "center"; ctx.textBaseline = "top";
-        const label = n.title.length > 26 ? `${n.title.slice(0, 24)}…` : n.title;
-        ctx.fillText(label, n.sx, n.sy + Math.max(2, n.r * n.depth) + 6);
-      }
-    } else {
-      draw2d(ctx, s);
-    }
+    draw2d(ctx, s);
     raf = requestAnimationFrame(tick);
   };
 
