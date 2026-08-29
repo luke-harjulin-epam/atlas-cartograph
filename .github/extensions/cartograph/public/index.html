@@ -85,15 +85,18 @@
         <p id="map-error" class="danger hidden" style="position:absolute;top:4.5rem;left:1rem;right:1rem;z-index:30"></p>
         <button id="preview-backdrop" class="preview-backdrop hidden" type="button" aria-label="Dismiss preview"></button>
         <article id="preview" class="preview hidden">
-          <div style="display:flex;justify-content:space-between;gap:1rem;align-items:start">
+          <div class="preview-handle" aria-hidden="true"></div>
+          <div class="preview-head">
             <div>
               <h2 id="preview-title"></h2>
               <p id="preview-meta" class="subtle"></p>
             </div>
             <button id="preview-close" class="btn-ghost btn" type="button">Close</button>
           </div>
-          <ul id="preview-relates" class="relates hidden"></ul>
-          <div id="preview-body" class="wiki-md"></div>
+          <div class="preview-scroll">
+            <ul id="preview-relates" class="relates hidden"></ul>
+            <div id="preview-body" class="wiki-md"></div>
+          </div>
         </article>
       </section>
     </div>

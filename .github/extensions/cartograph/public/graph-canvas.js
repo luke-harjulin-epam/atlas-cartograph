@@ -28,14 +28,23 @@ const KIND_GLOW = {
 const MIN_K = 0.22;
 const MAX_K = 20;
 
-const BG_STARS = Array.from({ length: 280 }, (_, i) => {
-  let h = 2166136261 ^ (i * 2654435761);
-  const rand = () => {
+function hashedRand(seed) {
+  let h = 2166136261 ^ seed;
+  return () => {
     h = Math.imul(h ^ (h >>> 16), 2246822507);
     h = Math.imul(h ^ (h >>> 13), 3266489909);
     return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
   };
-  return { lon: rand() * Math.PI * 2, lat: Math.acos(2 * rand() - 1), mag: 0.25 + rand() * 0.85, tw: rand() * Math.PI * 2 };
+}
+
+const BG_STARS = Array.from({ length: 820 }, (_, i) => {
+  const rand = hashedRand(i * 2654435761);
+  return { lon: rand() * Math.PI * 2, lat: Math.acos(2 * rand() - 1), mag: 0.18 + rand() * 0.95, tw: rand() * Math.PI * 2 };
+});
+
+const DUST = Array.from({ length: 640 }, (_, i) => {
+  const rand = hashedRand((i + 17) * 2246822507);
+  return { x: rand(), y: rand(), z: rand(), tw: rand() * Math.PI * 2 };
 });
 
 function homeCam() {
@@ -104,13 +113,20 @@ function rotatePoint(x0, y0, z0, yaw, pitch) {
 }
 function drawStarfield(ctx, s) {
   const { w, h, cam, t } = s;
-  const cx = w / 2 + cam.x * 0.08;
-  const cy = h / 2 + cam.y * 0.08;
-  const far = Math.max(w, h) * 0.72;
-  const cyaw = Math.cos(cam.yaw * 0.35); const syaw = Math.sin(cam.yaw * 0.35);
-  const cp = Math.cos(cam.pitch * 0.35); const sp = Math.sin(cam.pitch * 0.35);
   ctx.save();
   ctx.globalCompositeOperation = "lighter";
+  for (const d of DUST) {
+    const twinkle = 0.4 + 0.6 * Math.sin(t * (0.45 + d.z) + d.tw);
+    const a = (0.1 + d.z * 0.65) * twinkle;
+    const r = d.z < 0.5 ? 0.7 : d.z < 0.82 ? 1.15 : 1.7;
+    ctx.fillStyle = `rgba(214, 232, 255, ${a})`;
+    ctx.fillRect(d.x * w, d.y * h, r, r);
+  }
+  const cx = w / 2 + cam.x * 0.08;
+  const cy = h / 2 + cam.y * 0.08;
+  const far = Math.max(w, h) * 0.95;
+  const cyaw = Math.cos(cam.yaw * 0.35); const syaw = Math.sin(cam.yaw * 0.35);
+  const cp = Math.cos(cam.pitch * 0.35); const sp = Math.sin(cam.pitch * 0.35);
   for (const star of BG_STARS) {
     const r = far;
     const x0 = r * Math.sin(star.lat) * Math.cos(star.lon);
@@ -120,11 +136,12 @@ function drawStarfield(ctx, s) {
     const z1 = x0 * syaw + z0 * cyaw;
     const y2 = y0 * cp - z1 * sp;
     const z2 = y0 * sp + z1 * cp;
-    if (z2 > far * 0.15) continue;
-    const twinkle = 0.55 + 0.45 * Math.sin(t * 1.4 + star.tw);
-    ctx.fillStyle = `rgba(190, 220, 255, ${(0.18 + star.mag * 0.55) * twinkle})`;
+    if (z2 > far * 0.42) continue;
+    const twinkle = 0.5 + 0.5 * Math.sin(t * 1.4 + star.tw);
+    const size = 0.55 + star.mag * 1.55;
+    ctx.fillStyle = `rgba(200, 228, 255, ${(0.22 + star.mag * 0.62) * twinkle})`;
     ctx.beginPath();
-    ctx.arc(cx + x1 * 0.55, cy + y2 * 0.55, 0.5 + star.mag * 1.35, 0, Math.PI * 2);
+    ctx.arc(cx + x1 * 0.7, cy + y2 * 0.7, size, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.restore();
