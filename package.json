@@ -1,0 +1,12 @@
+{
+  "name": "atlas-cartograph",
+  "private": true,
+  "type": "module",
+  "description": "Cartograph knowledge-graph viewer as a GitHub Copilot App Canvas",
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

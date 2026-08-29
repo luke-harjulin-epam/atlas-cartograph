@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cartograph</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <section id="phase-crawl" class="phase">
+        <canvas id="crawl-sky" class="phase" aria-hidden="true"></canvas>
+        <p class="crawl-foreword">A long time ago, in a skill library far, far away…</p>
+        <div class="crawl-sky">
+          <div class="crawl-lane">
+            <div class="crawl-text">
+              <p class="crawl-kicker">Autogenesis</p>
+              <h1 class="crawl-title">Episode Atlas</h1>
+              <p id="crawl-body" class="crawl-body"></p>
+            </div>
+          </div>
+        </div>
+        <button id="skip-crawl" class="skip" type="button">Skip</button>
+      </section>
+
+      <section id="phase-welcome" class="phase hidden welcome">
+        <canvas id="welcome-sky" class="phase" aria-hidden="true"></canvas>
+        <header class="welcome-header">
+          <p class="kicker">Autogenesis</p>
+          <h1>Open an Atlas</h1>
+          <p class="muted">Folders with SCHEMA.json — fixture or a mounted atlas/ root.</p>
+        </header>
+        <p id="welcome-error" class="danger hidden"></p>
+        <div id="store-grid" class="store-grid"></div>
+        <form id="open-path" class="path-row">
+          <label class="field">
+            <input id="path-input" placeholder="Or paste any Atlas root" spellcheck="false" aria-label="Atlas store path" />
+          </label>
+          <button class="btn" type="submit">Open path</button>
+        </form>
+      </section>
+
+      <section id="phase-jump" class="phase hidden">
+        <canvas id="jump-sky" class="phase" aria-hidden="true"></canvas>
+        <button id="skip-jump" class="skip" type="button">Skip</button>
+      </section>
+
+      <section id="phase-map" class="phase hidden map">
+        <div id="graph-wrap">
+          <p class="hint">Tap a star to lock · drag to orbit it</p>
+          <div class="zoom-bar">
+            <button type="button" data-zoom-out aria-label="Zoom out">−</button>
+            <span data-zoom>100%</span>
+            <button type="button" data-zoom-in aria-label="Zoom in">+</button>
+            <button type="button" data-zoom-reset aria-label="Reset view">⌂</button>
+          </div>
+        </div>
+        <div class="toolbar">
+          <button id="toggle-panel" class="icon-btn" type="button" aria-label="Show options">☰</button>
+          <div class="search field">
+            <input id="search" placeholder="Search stars" aria-label="Search graph" />
+          </div>
+        </div>
+        <ul id="matches" class="matches hidden" style="position:absolute;top:4rem;left:50%;transform:translateX(-50%);width:min(28rem,90%);z-index:45"></ul>
+        <aside id="panel" class="panel hidden">
+          <p class="kicker">Options</p>
+          <p class="muted" style="margin:0.5rem 0 0">Layers</p>
+          <div class="layers">
+            <button class="layer active" data-layer="experiences" type="button">Experiences</button>
+            <button class="layer active" data-layer="decisions" type="button">Decisions</button>
+            <button class="layer active" data-layer="work" type="button">Work</button>
+            <button class="layer active" data-layer="indexes" type="button">Indexes</button>
+            <button class="layer active" data-layer="relations" type="button">Relates</button>
+            <button class="layer active" data-layer="sources" type="button">Provenance</button>
+          </div>
+          <dl class="stats">
+            <div>Nodes <span id="stat-nodes">0</span></div>
+            <div>Edges <span id="stat-edges">0</span></div>
+            <div>Format <span id="stat-format">—</span></div>
+            <div id="stat-root" class="subtle"></div>
+          </dl>
+        </aside>
+        <p id="map-error" class="danger hidden" style="position:absolute;top:4.5rem;left:1rem;right:1rem;z-index:30"></p>
+        <button id="preview-backdrop" class="preview-backdrop hidden" type="button" aria-label="Dismiss preview"></button>
+        <article id="preview" class="preview hidden">
+          <div style="display:flex;justify-content:space-between;gap:1rem;align-items:start">
+            <div>
+              <h2 id="preview-title"></h2>
+              <p id="preview-meta" class="subtle"></p>
+            </div>
+            <button id="preview-close" class="btn-ghost btn" type="button">Close</button>
+          </div>
+          <div id="preview-body" class="wiki-md"></div>
+        </article>
+      </section>
+    </div>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

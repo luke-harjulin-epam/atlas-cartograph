@@ -1,0 +1,333 @@
+import { mountGraphCanvas } from "./graph-canvas.js";
+
+const CRAWL_BODY = `Compiled memory, mapped as sky.
+
+Atlas stores are not wikis of folders.
+They are claim-bearing pages — experience,
+decision, work — joined by relates_to
+and atlas:// across a mesh of skills.
+
+Open any Atlas-compatible skill.
+Lock a star. Read what the work
+already knows.
+
+The map remembers so you don't
+have to grep the dark.`;
+
+const $ = (id) => document.getElementById(id);
+const phases = {
+  crawl: $("phase-crawl"),
+  welcome: $("phase-welcome"),
+  jump: $("phase-jump"),
+  map: $("phase-map"),
+};
+
+let state = { phase: "crawl", stores: [], graph: null, root: "", query: "", selectedId: null, previewOpen: false, layers: {}, error: null, page: null };
+let map = null;
+
+function showPhase(name) {
+  for (const [key, el] of Object.entries(phases)) {
+    el.classList.toggle("hidden", key !== name);
+  }
+}
+
+function post(action, payload = {}) {
+  return fetch("/api/ui", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action, ...payload }),
+  }).then((r) => r.json());
+}
+
+function layerFor(kind) {
+  if (kind === "experience" || kind === "raw") return "experiences";
+  if (kind === "decision") return "decisions";
+  if (kind === "work" || kind === "module") return "work";
+  if (kind === "index") return "indexes";
+  return "other";
+}
+
+function visibleGraph() {
+  const g = state.graph;
+  if (!g) return { nodes: [], edges: [] };
+  const layers = state.layers || {};
+  const nodes = g.nodes.filter((n) => layers[layerFor(n.kind)] !== false);
+  const ids = new Set(nodes.map((n) => n.id));
+  const edges = g.edges.filter((e) => {
+    if (!ids.has(e.source) || !ids.has(e.target)) return false;
+    if (e.kind === "source" && layers.sources === false) return false;
+    if ((e.kind === "relates" || e.kind === "mesh") && layers.relations === false) return false;
+    return true;
+  });
+  return { nodes, edges };
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+function renderMarkdown(md) {
+  const text = String(md || "");
+  const html = escapeHtml(text)
+    .replace(/^### (.*)$/gm, "<h3>$1</h3>")
+    .replace(/^## (.*)$/gm, "<h2>$1</h2>")
+    .replace(/^# (.*)$/gm, "<h1>$1</h1>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, t, l) => `<button class="wikilink" data-target="${escapeHtml(t)}">${escapeHtml(l || t)}</button>`)
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
+    .replace(/^\- (.*)$/gm, "<li>$1</li>")
+    .replace(/(<li>.*<\/li>\n?)+/g, (m) => `<ul>${m}</ul>`)
+    .replace(/\n{2,}/g, "</p><p>")
+    .replace(/\n/g, "<br>");
+  return `<p>${html}</p>`;
+}
+
+function renderStores() {
+  const grid = $("store-grid");
+  const atlas = (state.stores || []).filter((s) => s.format === "atlas" && s.available);
+  if (!atlas.length) {
+    grid.innerHTML = `<p class="muted">No Atlas stores found. Use the path field or add fixtures/mini-atlas.</p>`;
+    return;
+  }
+  grid.innerHTML = atlas
+    .map(
+      (s) => `<button class="store-card" data-root="${escapeHtml(s.root)}">
+        <h3>${escapeHtml(s.label)}</h3>
+        <div class="subtle">SCHEMA.json${s.atlasId ? ` · ${escapeHtml(s.atlasId)}` : ""}</div>
+        <div class="muted" style="margin-top:0.75rem">${s.pages ?? 0} pages</div>
+      </button>`,
+    )
+    .join("");
+  grid.querySelectorAll("[data-root]").forEach((btn) => {
+    btn.addEventListener("click", () => openRoot(btn.getAttribute("data-root")));
+  });
+}
+
+function ensureMap() {
+  if (map) return map;
+  map = mountGraphCanvas($("graph-wrap"), {
+    onSelect: (id, meta) => {
+      post("select", { nodeId: id });
+      if (id && meta?.pointerType !== "touch") post("preview", { open: true });
+    },
+  });
+  return map;
+}
+
+function renderPreview() {
+  const box = $("preview");
+  const back = $("preview-backdrop");
+  const open = Boolean(state.previewOpen && state.selectedId);
+  box.classList.toggle("hidden", !open);
+  back.classList.toggle("hidden", !open);
+  if (!open) return;
+  const node = state.graph?.nodes?.find((n) => n.id === state.selectedId);
+  const page = state.page;
+  $("preview-title").textContent = page?.title || node?.title || state.selectedId;
+  $("preview-meta").textContent = `${page?.kind || node?.kind || ""} · ${page?.path || node?.path || ""}`;
+  $("preview-body").innerHTML = renderMarkdown(page?.body || "_No page body._");
+  $("preview-body").querySelectorAll(".wikilink").forEach((el) => {
+    el.addEventListener("click", () => {
+      const target = el.getAttribute("data-target");
+      const hit = state.graph?.nodes?.find(
+        (n) => n.id === target || n.aliases?.includes(target) || n.path === `${target}.md` || n.path === target,
+      );
+      post("select", { nodeId: hit?.id || target });
+    });
+  });
+}
+
+function renderMapChrome() {
+  const vis = visibleGraph();
+  $("stat-nodes").textContent = String(vis.nodes.length);
+  $("stat-edges").textContent = String(vis.edges.length);
+  $("stat-format").textContent = state.graph?.store?.format ?? "—";
+  $("stat-root").textContent = state.graph?.store?.atlasId || state.root || "No atlas";
+  $("search").value = state.query || "";
+  const q = (state.query || "").trim().toLowerCase();
+  const matches = q
+    ? vis.nodes.filter((n) => n.title.toLowerCase().includes(q) || n.id.toLowerCase().includes(q)).slice(0, 8)
+    : [];
+  const list = $("matches");
+  list.classList.toggle("hidden", matches.length === 0);
+  list.innerHTML = matches
+    .map((n) => `<li><button data-id="${escapeHtml(n.id)}">${escapeHtml(n.title)} <span class="subtle">${escapeHtml(n.kind)}</span></button></li>`)
+    .join("");
+  list.querySelectorAll("button").forEach((btn) => {
+    btn.addEventListener("click", () => post("select", { nodeId: btn.getAttribute("data-id") }).then(() => post("preview", { open: true })));
+  });
+  document.querySelectorAll("[data-layer]").forEach((btn) => {
+    const key = btn.getAttribute("data-layer");
+    btn.classList.toggle("active", state.layers?.[key] !== false);
+  });
+}
+
+function applyState(next) {
+  state = { ...state, ...next };
+  showPhase(state.phase || "welcome");
+  if (state.error) {
+    $("welcome-error").textContent = state.error;
+    $("welcome-error").classList.toggle("hidden", !state.error || state.phase !== "welcome");
+    $("map-error").textContent = state.error;
+    $("map-error").classList.toggle("hidden", !state.error || state.phase !== "map");
+  } else {
+    $("welcome-error").classList.add("hidden");
+    $("map-error").classList.add("hidden");
+  }
+  if (state.phase === "welcome") renderStores();
+  if (state.phase === "map") {
+    const m = ensureMap();
+    const vis = visibleGraph();
+    m.setGraph(vis.nodes, vis.edges);
+    m.setSelected(state.selectedId);
+    m.setQuery(state.query || "");
+    renderMapChrome();
+    renderPreview();
+  }
+}
+
+async function openRoot(root) {
+  await post("open", { root });
+}
+
+function seedStars(canvas, warpFn) {
+  const ctx = canvas.getContext("2d");
+  const stars = Array.from({ length: 420 }, () => {
+    const a = Math.random() * Math.PI * 2;
+    const r = 0.06 + Math.random() * 0.98;
+    return { x: Math.cos(a) * r, y: Math.sin(a) * r * 0.62, z: Math.random(), s: 0.4 + Math.random() * 1.4, hue: Math.random() };
+  });
+  let last = performance.now();
+  const tick = (now) => {
+    if (canvas.closest(".hidden")) {
+      requestAnimationFrame(tick);
+      return;
+    }
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    const { warp, flash } = warpFn(now);
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    if (canvas.width !== Math.floor(w * dpr) || canvas.height !== Math.floor(h * dpr)) {
+      canvas.width = Math.floor(w * dpr);
+      canvas.height = Math.floor(h * dpr);
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = "#020308";
+    ctx.fillRect(0, 0, w, h);
+    const vg = ctx.createRadialGradient(w * 0.5, h * 0.48, 6, w * 0.5, h * 0.5, Math.max(w, h) * 0.72);
+    vg.addColorStop(0, `rgba(36, 72, 128, ${0.14 + warp * 0.2})`);
+    vg.addColorStop(0.5, "rgba(8, 14, 28, 0.35)");
+    vg.addColorStop(1, "#020308");
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, w, h);
+    const cx = w / 2; const cy = h / 2; const focal = Math.min(w, h) * 0.55;
+    const vz = (0.018 + warp * 3.35) * dt;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    for (const star of stars) {
+      star.z -= vz * star.s;
+      if (star.z <= 0.04) {
+        star.z += 0.96;
+        const a = Math.random() * Math.PI * 2;
+        const r = 0.06 + Math.random() * 0.98;
+        star.x = Math.cos(a) * r; star.y = Math.sin(a) * r * 0.62;
+      }
+      const z = Math.max(0.04, star.z);
+      const sx = cx + (star.x / z) * focal;
+      const sy = cy + (star.y / z) * focal;
+      const trail = 0.01 + warp * (0.08 + star.s * 0.16);
+      const z2 = Math.min(1.2, z + trail);
+      const px = cx + (star.x / z2) * focal;
+      const py = cy + (star.y / z2) * focal;
+      const near = 1 - z;
+      const a = (0.22 + near * 0.78) * (0.4 + warp * 0.6);
+      const col = star.hue > 0.72 ? "180, 230, 255" : "232, 240, 255";
+      if (warp > 0.04) {
+        const g = ctx.createLinearGradient(px, py, sx, sy);
+        g.addColorStop(0, `rgba(${col}, 0)`);
+        g.addColorStop(1, `rgba(${col}, ${a})`);
+        ctx.strokeStyle = g;
+        ctx.lineWidth = 0.55 + star.s * (0.45 + warp * 1.85) * (0.35 + near);
+        ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(sx, sy); ctx.stroke();
+      } else {
+        ctx.fillStyle = `rgba(${col}, ${0.28 + near * 0.7})`;
+        ctx.beginPath(); ctx.arc(sx, sy, 0.45 + star.s * 1.05 * (0.35 + near), 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    ctx.restore();
+    if (flash > 0.02) {
+      ctx.fillStyle = `rgba(236, 246, 255, ${0.55 * flash})`;
+      ctx.fillRect(0, 0, w, h);
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+function smooth(t) { const x = Math.max(0, Math.min(1, t)); return x * x * (3 - 2 * x); }
+
+$("crawl-body").textContent = CRAWL_BODY;
+seedStars($("crawl-sky"), () => ({ warp: 0, flash: 0 }));
+seedStars($("welcome-sky"), () => ({ warp: 0, flash: 0 }));
+let jumpT0 = 0;
+seedStars($("jump-sky"), (now) => {
+  if (!jumpT0) jumpT0 = now;
+  const u = Math.min(1, (now - jumpT0) / 3400);
+  const warp = u < 0.16 ? smooth(u / 0.16) : u < 0.55 ? 1 : u < 0.88 ? 1 - smooth((u - 0.55) / 0.33) : 0;
+  const d = Math.abs(u - 0.8) / 0.07;
+  return { warp, flash: Math.max(0, 1 - d * d) };
+});
+
+$("skip-crawl").addEventListener("click", () => post("phase", { phase: "welcome" }));
+$("skip-jump").addEventListener("click", () => post("phase", { phase: "map" }));
+$("open-path").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const root = $("path-input").value.trim();
+  if (root) openRoot(root);
+});
+$("search").addEventListener("input", (e) => post("query", { query: e.target.value }));
+$("toggle-panel").addEventListener("click", () => $("panel").classList.toggle("hidden"));
+$("preview-close").addEventListener("click", () => post("preview", { open: false }));
+$("preview-backdrop").addEventListener("click", () => post("preview", { open: false }));
+document.querySelectorAll("[data-layer]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const key = btn.getAttribute("data-layer");
+    const next = { ...(state.layers || {}), [key]: state.layers?.[key] === false };
+    post("layers", { layers: { [key]: next[key] } });
+  });
+});
+
+const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+setTimeout(() => {
+  if (state.phase === "crawl") post("phase", { phase: "welcome" });
+}, reduce ? 0 : 22000);
+
+let jumpTimer = null;
+function armJump() {
+  clearTimeout(jumpTimer);
+  jumpT0 = 0;
+  jumpTimer = setTimeout(() => {
+    if (state.phase === "jump") post("phase", { phase: "map" });
+  }, reduce ? 0 : 3400);
+}
+
+const es = new EventSource("/events");
+es.onmessage = (e) => {
+  const next = JSON.parse(e.data);
+  const was = state.phase;
+  applyState(next);
+  if (next.phase === "jump" && was !== "jump") armJump();
+};
+
+fetch("/api/bootstrap")
+  .then((r) => r.json())
+  .then((boot) => {
+    applyState(boot.state || boot);
+    if ((boot.state?.phase || boot.phase) === "jump") armJump();
+  })
+  .catch((err) => {
+    applyState({ phase: "welcome", error: String(err) });
+  });
