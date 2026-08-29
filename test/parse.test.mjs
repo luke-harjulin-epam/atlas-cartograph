@@ -9,6 +9,7 @@ import {
   relatesToOf,
 } from "../.github/extensions/cartograph/atlas/parse.mjs";
 import { loadFullGraph, inspectRoot, loadPage } from "../.github/extensions/cartograph/atlas/scan.mjs";
+import { assignGalaxies, layoutUniverse } from "../.github/extensions/cartograph/atlas/universe.mjs";
 import { freshState, openAtlas, selectNode } from "../.github/extensions/cartograph/server.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -77,4 +78,27 @@ test("selectNode ignores broken links and keeps the current page", () => {
   selectNode(state, "does-not-exist");
   assert.equal(state.selectedId, "experiences/canvas-port");
   assert.match(state.linkError || "", /does-not-exist/);
+});
+
+test("layoutUniverse packs a connected workstream into one constellation", () => {
+  const graph = loadFullGraph(fixture, repo);
+  const galaxies = assignGalaxies(graph.nodes, graph.edges);
+  const ids = [...new Set([...galaxies.values()])];
+  assert.equal(ids.length, 1, "mini atlas is one connected workstream");
+  const laid = layoutUniverse(graph.nodes, graph.edges);
+  const ang = (a, b) => {
+    const ax = Math.sin(a.lat) * Math.cos(a.lon);
+    const ay = Math.cos(a.lat);
+    const az = Math.sin(a.lat) * Math.sin(a.lon);
+    const bx = Math.sin(b.lat) * Math.cos(b.lon);
+    const by = Math.cos(b.lat);
+    const bz = Math.sin(b.lat) * Math.sin(b.lon);
+    return Math.acos(Math.max(-1, Math.min(1, ax * bx + ay * by + az * bz)));
+  };
+  let max = 0;
+  for (let i = 0; i < laid.length; i++) {
+    for (let j = i + 1; j < laid.length; j++) max = Math.max(max, ang(laid[i], laid[j]));
+  }
+  assert.ok(max < 0.55, `cluster spread ${max} should stay tight`);
+  assert.ok(laid.every((n) => n.galaxyLabel));
 });

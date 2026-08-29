@@ -146,6 +146,49 @@ function drawStarfield(ctx, s) {
   }
   ctx.restore();
 }
+function drawClusters(ctx, s) {
+  const groups = new Map();
+  for (const n of s.sim) {
+    if (n.depth < 0.45) continue;
+    const gid = n.galaxy || "cloud";
+    if (!groups.has(gid)) groups.set(gid, []);
+    groups.get(gid).push(n);
+  }
+  ctx.save();
+  for (const members of groups.values()) {
+    if (members.length < 2) continue;
+    let sx = 0;
+    let sy = 0;
+    let depth = 0;
+    for (const n of members) {
+      sx += n.sx;
+      sy += n.sy;
+      depth += n.depth;
+    }
+    sx /= members.length;
+    sy /= members.length;
+    depth /= members.length;
+    let spread = 0;
+    for (const n of members) spread = Math.max(spread, Math.hypot(n.sx - sx, n.sy - sy));
+    const r = Math.max(28, spread + 18);
+    ctx.beginPath();
+    ctx.arc(sx, sy, r, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(150, 200, 255, ${0.12 * depth})`;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 6]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    const label = members[0].galaxyLabel || members[0].galaxy;
+    if (!label || depth < 0.55) continue;
+    ctx.font = '500 11px "IBM Plex Sans", "Segoe UI", sans-serif';
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    ctx.fillStyle = `rgba(200, 220, 245, ${0.55 + depth * 0.3})`;
+    ctx.fillText(label.length > 28 ? `${label.slice(0, 26)}…` : label, sx, sy - r - 4);
+  }
+  ctx.restore();
+}
+
 function drawUniverse(ctx, s, cx, cy, R) {
   const { cam, t } = s;
   const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 0.22);
@@ -220,6 +263,7 @@ function draw2d(ctx, s) {
   const R = Math.min(w, h) * 0.54;
   const focus = (s.selectedId ? s.sim.find((n) => n.id === s.selectedId) : undefined) ?? s.sim.reduce((b, n) => (!b || n.mass > b.mass ? n : b), null);
   drawUniverse(ctx, s, focus?.sx ?? w / 2 + cam.x, focus?.sy ?? h / 2 + cam.y, R * cam.k);
+  drawClusters(ctx, s);
   const q = s.query.trim().toLowerCase();
   const match = (n) => !q || n.title.toLowerCase().includes(q) || n.id.toLowerCase().includes(q);
   const lookup = new Map(s.sim.map((n) => [n.id, n]));
