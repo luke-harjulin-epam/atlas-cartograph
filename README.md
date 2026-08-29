@@ -37,11 +37,15 @@ Agent actions on an open instance: `open_atlas`, `select_node`, `set_query`,
 
 ## Atlas roots
 
+On open, Cartograph uses the **active session working directory** and auto-opens the first Atlas it finds.
+
 Priority:
 
 1. `ATLAS_ROOT` / `ATLAS_VIEWER_ROOT`
-2. `atlas/` in the workspace (OKF / mounted Atlas)
-3. `fixtures/mini-atlas` in the workspace, or the fixture bundled in the extension
+2. `atlas/` in the session workspace
+3. The workspace root itself if it is an Atlas (`SCHEMA.json` / `index.md`)
+4. Other Atlas folders discovered in the worktree
+5. `fixtures/mini-atlas` in the workspace, or the fixture bundled in the extension
 
 Any folder with `SCHEMA.json` or `index.md` is an Atlas. Legacy okf-wiki
 stores (`knowledge/`, `SCHEMA.md`) still open.

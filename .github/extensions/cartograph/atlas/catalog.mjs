@@ -1,5 +1,5 @@
-import { existsSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { existsSync, readdirSync, statSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const EXTENSION_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -24,14 +24,68 @@ function parsePresets(raw) {
   return out;
 }
 
+const SKIP_WALK = new Set([
+  "node_modules",
+  ".git",
+  "dist",
+  "build",
+  ".vercel",
+  ".tanstack",
+  ".grok",
+  "log",
+  "staging",
+]);
+
+function isAtlasDir(dir) {
+  return existsSync(join(dir, "SCHEMA.json")) || existsSync(join(dir, "index.md"));
+}
+
+function walkAtlasDirs(dir, acc = [], depth = 0) {
+  if (!dir || !existsSync(dir) || depth > 4) return acc;
+  if (isAtlasDir(dir)) {
+    acc.push(dir);
+    if (depth > 0) return acc;
+  }
+  let names = [];
+  try {
+    names = readdirSync(dir);
+  } catch {
+    return acc;
+  }
+  for (const name of names) {
+    if (name.startsWith(".") && name !== ".") continue;
+    if (SKIP_WALK.has(name)) continue;
+    const full = join(dir, name);
+    let st;
+    try {
+      st = statSync(full);
+    } catch {
+      continue;
+    }
+    if (st.isDirectory()) walkAtlasDirs(full, acc, depth + 1);
+  }
+  return acc;
+}
+
+function labelFor(root, cwd) {
+  const abs = resolve(root);
+  if (abs === resolve(cwd, "atlas")) return "Workspace atlas";
+  if (abs === resolve(cwd)) return "This workspace";
+  if (abs.endsWith("fixtures/mini-atlas") || abs.endsWith("fixtures\\mini-atlas")) return "Mini atlas";
+  return basename(abs);
+}
+
 export function workspacePresets(cwd) {
   const root = cwd || process.cwd();
+  const found = walkAtlasDirs(root).map((dir) => ({
+    label: labelFor(dir, root),
+    root: resolve(dir),
+  }));
   const workspaceMini = resolve(root, "fixtures/mini-atlas");
   const mini = existsSync(workspaceMini) ? workspaceMini : BUNDLED_MINI_ATLAS;
-  return [
-    { label: "Mini atlas", root: mini },
-    { label: "Mounted atlas", root: resolve(root, "atlas") },
-  ];
+  found.push({ label: "Mini atlas", root: mini });
+  found.push({ label: "Mounted atlas", root: resolve(root, "atlas") });
+  return found;
 }
 
 export function envPresets() {

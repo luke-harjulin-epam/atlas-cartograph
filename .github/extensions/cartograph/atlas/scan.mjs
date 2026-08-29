@@ -285,13 +285,15 @@ export function listPresets(cwd) {
 }
 
 export function defaultRoot(cwd) {
-  const presets = listPresets(cwd);
-  const envFirst = presets.find((s) => s.label === "ATLAS_ROOT" && s.available);
-  if (envFirst) return envFirst.root;
-  const mounted = presets.find((s) => s.label === "Mounted atlas" && s.available);
-  if (mounted) return mounted.root;
-  const mini = presets.find((s) => s.available);
-  return mini?.root ?? "";
+  const presets = listPresets(cwd).filter((s) => s.available);
+  const pick =
+    presets.find((s) => s.label === "ATLAS_ROOT") ||
+    presets.find((s) => s.label === "Workspace atlas") ||
+    presets.find((s) => s.label === "This workspace") ||
+    presets.find((s) => s.label === "Mounted atlas") ||
+    presets.find((s) => !String(s.root).includes("mini-atlas")) ||
+    presets[0];
+  return pick?.root ?? "";
 }
 
 export function loadFullGraph(rawRoot, cwd) {

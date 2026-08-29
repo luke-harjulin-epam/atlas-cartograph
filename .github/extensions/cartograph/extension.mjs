@@ -153,13 +153,13 @@ const session = await joinSession({
           const input = ctx.input && typeof ctx.input === "object" ? ctx.input : {};
           const state = freshState(cwdFrom(ctx), input);
           hydrateStores(state);
-          if (input.root) {
-            openAtlas(state, input.root);
-          } else if (input.skipIntro) {
-            const root = defaultRoot(state.cwd);
-            if (root) openAtlas(state, root);
+          const root = input.root || defaultRoot(state.cwd);
+          if (root) openAtlas(state, root);
+          if (state.graph?.store?.available) {
+            state.phase = input.skipIntro === false ? "jump" : "map";
+          } else {
+            state.phase = "welcome";
           }
-          if (input.skipIntro && state.graph?.store?.available) state.phase = "map";
           entry = await startServer(ctx.instanceId, state);
           instances.set(ctx.instanceId, entry);
         }

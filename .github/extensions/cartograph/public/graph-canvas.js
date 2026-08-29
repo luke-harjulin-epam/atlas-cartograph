@@ -323,19 +323,36 @@ export function mountGraphCanvas(wrap, options) {
     s.sim = laid.map((n) => {
       const prev = byId.get(n.id);
       return {
-        ...n, shell: prev?.shell ?? 0.012, born: prev?.born ?? s.t,
+        ...n, shell: prev?.shell ?? n.targetShell ?? 0.55, born: prev?.born ?? s.t,
         wx: prev?.wx ?? 0, wy: prev?.wy ?? 0, wz: prev?.wz ?? 0,
         sx: prev?.sx ?? s.w / 2, sy: prev?.sy ?? s.h / 2, depth: prev?.depth ?? 1,
         r: starRadius(n.degree, n.kind),
       };
     });
     s.edges = edges;
+    if (!s.selectedId && s.sim.length) {
+      const R = globeR(s);
+      let x = 0;
+      let y = 0;
+      let z = 0;
+      for (const n of s.sim) {
+        const w = nodeWorld({ ...n, shell: n.targetShell || n.shell }, R);
+        x += w.x;
+        y += w.y;
+        z += w.z;
+      }
+      const n = s.sim.length;
+      s.cam.pivot = { x: x / n, y: y / n, z: z / n };
+      s.cam.yaw = Math.atan2(z / n, x / n);
+      s.cam.pitch = Math.atan2(y / n, Math.hypot(x / n, z / n));
+    }
   }
 
   function resize() {
     const rect = wrap.getBoundingClientRect();
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    s.w = rect.width; s.h = rect.height;
+    s.w = Math.max(2, rect.width || wrap.clientWidth || 640);
+    s.h = Math.max(2, rect.height || wrap.clientHeight || 720);
     canvas.width = Math.max(1, Math.floor(rect.width * dpr));
     canvas.height = Math.max(1, Math.floor(rect.height * dpr));
     canvas.style.width = `${rect.width}px`; canvas.style.height = `${rect.height}px`;
@@ -356,7 +373,24 @@ export function mountGraphCanvas(wrap, options) {
     const R = globeR(s);
     const focus = s.selectedId ? s.sim.find((n) => n.id === s.selectedId) : undefined;
     const ease = s.reduce ? 1 : 1 - Math.exp(-dt * 2.6);
-    const dest = focus ? nodeWorld(focus, R) : { x: 0, y: 0, z: 0 };
+    const dest = focus
+      ? nodeWorld(focus, R)
+      : s.sim.reduce(
+          (acc, n) => {
+            const w = nodeWorld(n, R);
+            acc.x += w.x;
+            acc.y += w.y;
+            acc.z += w.z;
+            acc.n += 1;
+            return acc;
+          },
+          { x: 0, y: 0, z: 0, n: 0 },
+        );
+    if (dest.n) {
+      dest.x /= dest.n;
+      dest.y /= dest.n;
+      dest.z /= dest.n;
+    }
     s.cam.pivot.x += (dest.x - s.cam.pivot.x) * ease;
     s.cam.pivot.y += (dest.y - s.cam.pivot.y) * ease;
     s.cam.pivot.z += (dest.z - s.cam.pivot.z) * ease;

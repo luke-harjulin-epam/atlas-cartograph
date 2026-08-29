@@ -8,7 +8,7 @@ import {
   parseFrontmatter,
   relatesToOf,
 } from "../.github/extensions/cartograph/atlas/parse.mjs";
-import { loadFullGraph, inspectRoot, loadPage } from "../.github/extensions/cartograph/atlas/scan.mjs";
+import { loadFullGraph, inspectRoot, loadPage, defaultRoot } from "../.github/extensions/cartograph/atlas/scan.mjs";
 import { assignGalaxies, layoutUniverse } from "../.github/extensions/cartograph/atlas/universe.mjs";
 import { freshState, openAtlas, selectNode } from "../.github/extensions/cartograph/server.mjs";
 
@@ -101,4 +101,10 @@ test("layoutUniverse packs a connected workstream into one constellation", () =>
   }
   assert.ok(max < 0.55, `cluster spread ${max} should stay tight`);
   assert.ok(laid.every((n) => n.galaxyLabel));
+});
+
+test("defaultRoot prefers an atlas in the session workspace", () => {
+  const root = defaultRoot(repo);
+  assert.ok(root);
+  assert.ok(root.includes("mini-atlas") || root.endsWith("atlas"));
 });
