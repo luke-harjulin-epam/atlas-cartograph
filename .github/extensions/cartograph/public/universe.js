@@ -11,17 +11,18 @@ const KIND_MASS = {
   raw: 0.18,
 };
 
-const KIND_SLOT = {
-  index: 0,
-  work: 1,
-  module: 1,
-  decision: 2,
-  experience: 3,
-  raw: 3,
-  lesson: 4,
-  recipe: 4,
-  knowledge: 5,
-  page: 6,
+/** Visual islands around the orbital core — one sector per page kind. */
+const KIND_HOME = {
+  index: { lon: 0.15, lat: 0.55, shell: 0.32, label: "Index" },
+  work: { lon: 0.2, lat: 1.12, shell: 0.7, label: "Work" },
+  module: { lon: 0.35, lat: 1.18, shell: 0.68, label: "Work" },
+  decision: { lon: 1.35, lat: 1.12, shell: 0.7, label: "Decisions" },
+  experience: { lon: 2.55, lat: 1.18, shell: 0.76, label: "Experiences" },
+  raw: { lon: 2.7, lat: 1.28, shell: 0.82, label: "Experiences" },
+  knowledge: { lon: 3.9, lat: 1.14, shell: 0.72, label: "Knowledge" },
+  lesson: { lon: 5.05, lat: 1.16, shell: 0.7, label: "Lessons" },
+  recipe: { lon: 5.2, lat: 1.22, shell: 0.7, label: "Recipes" },
+  page: { lon: 5.7, lat: 1.35, shell: 0.88, label: "Pages" },
 };
 
 function hash01(s, salt = 0) {
@@ -43,130 +44,56 @@ export function massOf(n, maxDegree, maxSources) {
   return Math.min(1, kindBoost(n) * 0.38 + d * 0.47 + s * 0.15);
 }
 
-function folderCluster(n) {
-  const p = String(n.path || n.id || "").replace(/\\/g, "/");
-  if (p === "index.md" || p === "index" || n.kind === "index") return "index";
-  const folder = p.split("/")[0] || n.kind;
-  return folder || n.kind || "page";
+function islandOf(n) {
+  return KIND_HOME[n.kind] ?? KIND_HOME.page;
 }
 
-function unionFind(ids) {
-  const parent = new Map();
-  for (const id of ids) parent.set(id, id);
-  const find = (x) => {
-    let p = parent.get(x) ?? x;
-    while (p !== (parent.get(p) ?? p)) {
-      parent.set(p, parent.get(parent.get(p)) ?? p);
-      p = parent.get(p) ?? p;
-    }
-    return p;
-  };
-  const unite = (a, b) => {
-    const pa = find(a);
-    const pb = find(b);
-    if (pa !== pb) parent.set(pa, pb);
-  };
-  return { find, unite };
-}
-
-export function assignGalaxies(nodes, edges) {
-  const ids = nodes.map((n) => n.id);
-  const { find, unite } = unionFind(ids);
-  for (const e of edges) {
-    if (ids.includes(e.source) && ids.includes(e.target)) unite(e.source, e.target);
-  }
-  const byRoot = new Map();
-  for (const n of nodes) {
-    const root = find(n.id);
-    if (!byRoot.has(root)) byRoot.set(root, []);
-    byRoot.get(root).push(n);
-  }
+export function assignGalaxies(nodes) {
   const galaxy = new Map();
-  for (const members of byRoot.values()) {
-    if (members.length === 1) {
-      galaxy.set(members[0].id, `kind:${folderCluster(members[0])}`);
-      continue;
-    }
-    const seed =
-      members.find((n) => n.kind === "work" || n.kind === "module") ||
-      members.find((n) => n.kind === "index") ||
-      members.find((n) => n.kind === "decision") ||
-      members.reduce((a, b) => ((a.degree ?? 0) >= (b.degree ?? 0) ? a : b));
-    const gid = seed.id;
-    for (const n of members) galaxy.set(n.id, gid);
+  for (const n of nodes) {
+    const home = islandOf(n);
+    galaxy.set(n.id, home.label);
   }
   return galaxy;
-}
-
-function fibonacciDir(i, n) {
-  const golden = Math.PI * (3 - Math.sqrt(5));
-  const y = n <= 1 ? 0.2 : 1 - (2 * i + 1) / n;
-  const r = Math.sqrt(Math.max(0, 1 - y * y));
-  const theta = golden * i;
-  return { x: Math.cos(theta) * r, y, z: Math.sin(theta) * r };
-}
-
-function dirFromHash(key, salt) {
-  const u = hash01(key, salt);
-  const v = hash01(key, salt + 1);
-  const lat = Math.acos(Math.max(-1, Math.min(1, 2 * u - 1)));
-  const lon = v * Math.PI * 2;
-  return {
-    x: Math.sin(lat) * Math.cos(lon),
-    y: Math.cos(lat),
-    z: Math.sin(lat) * Math.sin(lon),
-  };
-}
-
-function norm(x, y, z) {
-  const l = Math.hypot(x, y, z) || 1;
-  return { x: x / l, y: y / l, z: z / l };
-}
-
-function galaxyLabel(gid, nodes) {
-  if (gid.startsWith("kind:")) {
-    const k = gid.slice(5);
-    return k.charAt(0).toUpperCase() + k.slice(1);
-  }
-  const seed = nodes.find((n) => n.id === gid);
-  return seed?.title || gid.split("/").pop() || gid;
 }
 
 export function layoutUniverse(nodes, edges) {
   const maxDegree = nodes.reduce((m, n) => Math.max(m, n.degree), 1);
   const maxSources = nodes.reduce((m, n) => Math.max(m, n.sourceCount), 1);
-  const galaxies = assignGalaxies(nodes, edges);
-  const gids = [...new Set([...galaxies.values()])].sort();
-  const home = new Map();
-  gids.forEach((gid, i) => home.set(gid, fibonacciDir(i, Math.max(gids.length, 1))));
+  const byKind = new Map();
+  for (const n of nodes) {
+    const k = n.kind || "page";
+    if (!byKind.has(k)) byKind.set(k, []);
+    byKind.get(k).push(n);
+  }
+  for (const list of byKind.values()) {
+    list.sort((a, b) => a.id.localeCompare(b.id));
+  }
 
   return nodes.map((n) => {
     const mass = massOf(n, maxDegree, maxSources);
-    const gid = galaxies.get(n.id) ?? n.id;
-    const cloud = home.get(gid) ?? dirFromHash(gid, 3);
-    const slot = KIND_SLOT[n.kind] ?? 5;
-    const local = dirFromHash(`${gid}:${n.id}`, 21);
-    const kindTilt = dirFromHash(`kind:${n.kind}`, 9);
-    const pull = 0.86;
-    const mixed = norm(
-      cloud.x * pull + local.x * 0.08 + kindTilt.x * 0.06,
-      cloud.y * pull + local.y * 0.08 + kindTilt.y * 0.06,
-      cloud.z * pull + local.z * 0.08 + kindTilt.z * 0.06,
-    );
-    const lon = Math.atan2(mixed.z, mixed.x);
-    const lat = Math.acos(Math.max(-1, Math.min(1, mixed.y)));
-    const clusterShell = 0.52 + (gids.indexOf(gid) % 3) * 0.08;
-    const kindShell = slot * 0.018;
-    const shell = clusterShell + kindShell + (1 - mass) * 0.08 + hash01(n.id, 5) * 0.03;
+    const home = islandOf(n);
+    const siblings = byKind.get(n.kind) ?? [n];
+    const i = Math.max(0, siblings.findIndex((s) => s.id === n.id));
+    const count = Math.max(1, siblings.length);
+    const ring = Math.floor(i / 8);
+    const slot = i % Math.max(1, Math.min(8, count));
+    const onRing = Math.min(8, count - ring * 8);
+    const theta = (slot / Math.max(1, onRing)) * Math.PI * 2 + hash01(n.id, 3) * 0.2;
+    const radius = 0.04 + ring * 0.055 + hash01(n.id, 11) * 0.03;
+    const lon = home.lon + Math.cos(theta) * radius;
+    const lat = home.lat + Math.sin(theta) * radius * 0.65;
+    const shell = home.shell + (1 - mass) * 0.06 + ring * 0.03;
 
     return {
       ...n,
       mass,
-      galaxy: gid,
-      galaxyLabel: galaxyLabel(gid, nodes),
+      galaxy: home.label,
+      galaxyLabel: home.label,
+      clusterKind: n.kind,
       lon: (lon + Math.PI * 2) % (Math.PI * 2),
-      lat,
-      targetShell: Math.min(1.08, shell),
+      lat: Math.max(0.15, Math.min(Math.PI - 0.15, lat)),
+      targetShell: Math.min(1.05, shell),
     };
   });
 }

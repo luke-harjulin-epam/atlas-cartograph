@@ -149,14 +149,14 @@ function drawStarfield(ctx, s) {
 function drawClusters(ctx, s) {
   const groups = new Map();
   for (const n of s.sim) {
-    if (n.depth < 0.45) continue;
-    const gid = n.galaxy || "cloud";
+    if (n.depth < 0.38) continue;
+    const gid = n.galaxyLabel || n.galaxy || n.kind;
     if (!groups.has(gid)) groups.set(gid, []);
     groups.get(gid).push(n);
   }
   ctx.save();
+  ctx.globalCompositeOperation = "lighter";
   for (const members of groups.values()) {
-    if (members.length < 2) continue;
     let sx = 0;
     let sy = 0;
     let depth = 0;
@@ -170,21 +170,28 @@ function drawClusters(ctx, s) {
     depth /= members.length;
     let spread = 0;
     for (const n of members) spread = Math.max(spread, Math.hypot(n.sx - sx, n.sy - sy));
-    const r = Math.max(28, spread + 18);
+    const r = Math.max(36, spread + 28);
+    const glow = KIND_GLOW[members[0].kind] ?? KIND_GLOW.knowledge;
+    const neb = ctx.createRadialGradient(sx, sy, r * 0.12, sx, sy, r);
+    neb.addColorStop(0, glow.replace(/[\d.]+\)$/, `${0.28 * depth})`));
+    neb.addColorStop(0.45, glow.replace(/[\d.]+\)$/, `${0.12 * depth})`));
+    neb.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = neb;
     ctx.beginPath();
     ctx.arc(sx, sy, r, 0, Math.PI * 2);
-    ctx.strokeStyle = `rgba(150, 200, 255, ${0.12 * depth})`;
-    ctx.lineWidth = 1;
-    ctx.setLineDash([4, 6]);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(sx, sy, r, 0, Math.PI * 2);
+    ctx.strokeStyle = glow.replace(/[\d.]+\)$/, `${0.35 * depth})`);
+    ctx.lineWidth = 1.4;
     ctx.stroke();
-    ctx.setLineDash([]);
     const label = members[0].galaxyLabel || members[0].galaxy;
-    if (!label || depth < 0.55) continue;
-    ctx.font = '500 11px "IBM Plex Sans", "Segoe UI", sans-serif';
+    if (!label || depth < 0.42) continue;
+    ctx.font = '600 12px "IBM Plex Sans", "Segoe UI", sans-serif';
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
-    ctx.fillStyle = `rgba(200, 220, 245, ${0.55 + depth * 0.3})`;
-    ctx.fillText(label.length > 28 ? `${label.slice(0, 26)}…` : label, sx, sy - r - 4);
+    ctx.fillStyle = `rgba(230, 240, 255, ${0.7 + depth * 0.25})`;
+    ctx.fillText(label, sx, sy - r - 6);
   }
   ctx.restore();
 }
