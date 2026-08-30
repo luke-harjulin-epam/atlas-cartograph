@@ -415,9 +415,9 @@ $("open-path").addEventListener("submit", (e) => {
 });
 $("search").addEventListener("input", (e) => post("query", { query: e.target.value }));
 $("chat-toggle").addEventListener("click", () => {
-  chatOpen = true;
+  chatOpen = !chatOpen;
   renderChat();
-  $("chat-input")?.focus();
+  if (chatOpen) $("chat-input")?.focus();
 });
 $("chat-close").addEventListener("click", () => {
   chatOpen = false;
@@ -465,29 +465,35 @@ $("panel").addEventListener("click", (e) => {
 
 function renderChat() {
   const log = $("chat-log");
-  const panel = $("chat-panel");
+  const drawer = $("graph-chat");
   const mapEl = $("phase-map");
-  if (!log || !panel) return;
-  panel.classList.toggle("hidden", !chatOpen);
+  const toggle = $("chat-toggle");
+  if (!log || !drawer) return;
+  drawer.classList.toggle("hidden", !chatOpen);
+  drawer.classList.toggle("chat-open", chatOpen);
   mapEl?.classList.toggle("chat-open", chatOpen);
-  $("graph-chat")?.classList.toggle("chat-open", chatOpen);
-  $("chat-toggle").textContent = "Chat with the graph";
+  toggle?.setAttribute("aria-pressed", chatOpen ? "true" : "false");
   const msgs = state.chat || [];
   log.innerHTML = msgs
     .map((m) => {
       const who = m.role === "user" ? "You" : "Graph";
-      const body = m.role === "graph" ? renderMarkdown(m.text || "") : escapeHtml(m.text || "");
+      const isGraph = m.role === "graph";
+      const body = isGraph ? renderMarkdown(m.text || "") : escapeHtml(m.text || "");
       const hits = (m.hits || [])
         .map(
           (h) =>
             `<button type="button" class="hit" data-node="${escapeHtml(h.id)}">${escapeHtml(h.title)} · ${escapeHtml(h.kind)}</button>`,
         )
         .join("");
-      return `<div class="chat-msg ${escapeHtml(m.role)}"><span class="who">${who}</span><div class="bubble">${body}${hits}</div></div>`;
+      const bubbleClass = isGraph ? "bubble wiki-md" : "bubble";
+      return `<div class="chat-msg ${escapeHtml(m.role)}"><span class="who">${who}</span><div class="${bubbleClass}">${body}${hits}</div></div>`;
     })
     .join("");
   log.querySelectorAll("[data-node]").forEach((btn) => {
     btn.addEventListener("click", () => post("select", { nodeId: btn.getAttribute("data-node") }));
+  });
+  log.querySelectorAll(".wikilink").forEach((el) => {
+    el.addEventListener("click", () => navigateWiki(el.getAttribute("data-target")));
   });
   log.scrollTop = log.scrollHeight;
 }

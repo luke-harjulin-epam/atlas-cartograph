@@ -16,6 +16,16 @@ test("renderMarkdown emits an HTML table", () => {
   assert.match(html, /<td>decision<\/td>/);
 });
 
+test("renderMarkdown styles chat-style bold, code, and markdown links", () => {
+  const html = renderMarkdown(
+    "**Mini atlas** is a fixture with `SCHEMA.json` and [Atlas page contract](knowledge/atlas-pages.md).",
+  );
+  assert.match(html, /<strong>Mini atlas<\/strong>/);
+  assert.match(html, /<code>SCHEMA.json<\/code>/);
+  assert.match(html, /data-target="knowledge\/atlas-pages.md"/);
+  assert.match(html, /<p>/);
+});
+
 test("renderMarkdown turns internal links into buttons, not href navigations", () => {
   const html = renderMarkdown("See [[work/migrate-cartograph]] and [missing](missing.md).");
   assert.match(html, /data-target="work\/migrate-cartograph"/);
