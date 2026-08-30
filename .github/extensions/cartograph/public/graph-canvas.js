@@ -455,6 +455,7 @@ export function mountGraphCanvas(wrap, options) {
       syncZoom();
     }
     if (!s.spin) {
+      if (!s.reduce && !s.selectedId && !s.targetLook) s.cam.yaw += 0.16 * dt;
       s.cam.yaw += s.cam.vYaw; s.cam.pitch += s.cam.vPitch;
       s.cam.vYaw *= 0.92; s.cam.vPitch *= 0.92;
     }
