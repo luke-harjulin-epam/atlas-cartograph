@@ -2,6 +2,7 @@
 type: work
 title: Migrate Cartograph
 created: 2026-08-30
+work_id: migrate-cartograph
 relates_to:
   - path: experiences/canvas-port
     kind: related

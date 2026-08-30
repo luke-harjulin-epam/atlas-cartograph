@@ -23,7 +23,7 @@ const phases = {
   map: $("phase-map"),
 };
 
-let state = { phase: "crawl", stores: [], graph: null, root: "", query: "", selectedId: null, previewOpen: false, layers: {}, error: null, linkError: null, page: null };
+let state = { phase: "crawl", stores: [], graph: null, root: "", query: "", selectedId: null, previewOpen: false, layers: {}, grouping: "layers", error: null, linkError: null, page: null };
 let map = null;
 
 function showPhase(name) {
@@ -220,6 +220,9 @@ function renderMapChrome() {
   list.querySelectorAll("button").forEach((btn) => {
     btn.addEventListener("click", () => post("select", { nodeId: btn.getAttribute("data-id") }).then(() => post("preview", { open: true })));
   });
+  document.querySelectorAll("[data-grouping]").forEach((btn) => {
+    btn.classList.toggle("active", (state.grouping || "layers") === btn.getAttribute("data-grouping"));
+  });
   document.querySelectorAll("[data-layer]").forEach((btn) => {
     const key = btn.getAttribute("data-layer");
     const on = key === "all" ? allNodeLayersOn(state.layers) : state.layers?.[key] !== false;
@@ -265,7 +268,7 @@ function applyState(next) {
   if (state.phase === "map") {
     const m = ensureMap();
     const vis = visibleGraph();
-    m.setGraph(vis.nodes, vis.edges);
+    m.setGraph(vis.nodes, vis.edges, state.grouping || "layers");
     m.setSelected(state.selectedId);
     m.setQuery(state.query || "");
     renderMapChrome();
@@ -394,6 +397,11 @@ document.addEventListener("click", (e) => {
 });
 $("preview-close").addEventListener("click", () => post("preview", { open: false }));
 $("preview-backdrop").addEventListener("click", () => post("preview", { open: false }));
+document.querySelectorAll("[data-grouping]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    post("grouping", { grouping: btn.getAttribute("data-grouping") });
+  });
+});
 document.querySelectorAll("[data-layer]").forEach((btn) => {
   btn.addEventListener("click", () => {
     const key = btn.getAttribute("data-layer");

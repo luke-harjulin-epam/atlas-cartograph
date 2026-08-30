@@ -176,6 +176,7 @@ function parseFiles(storeRoot, files, format, atlasId) {
     if (!text) continue;
     const { meta, body } = parseFrontmatter(text);
     const type = typeof meta.type === "string" && meta.type ? meta.type : "";
+    const workId = typeof meta.work_id === "string" ? meta.work_id : "";
     const kind = kindFor(rel, type, format);
     const sources = sourcesOf(meta);
     const relates = relatesToOf(meta);
@@ -208,6 +209,7 @@ function parseFiles(storeRoot, files, format, atlasId) {
       aliases: aliasesFor(rel),
       refs,
       atlasId,
+      workId,
     });
   }
   return nodes;

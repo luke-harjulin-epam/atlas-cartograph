@@ -319,15 +319,17 @@ export function mountGraphCanvas(wrap, options) {
     cam: homeCam(), spin: null, hover: null, w: 800, h: 600, t: 0,
     reduce: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
     pointers: new Map(), pinch: null,
-    focusCluster: null, targetPivot: null, targetLook: null, aimed: false,
+    focusCluster: null, targetPivot: null, targetLook: null, aimed: false, grouping: "layers",
   };
 
   const zoomEl = wrap.querySelector("[data-zoom]");
   const syncZoom = () => { if (zoomEl) zoomEl.textContent = `${Math.round(s.cam.k * 100)}%`; };
 
-  function setGraph(nodes, edges) {
+  function setGraph(nodes, edges, grouping = "layers") {
+    const groupingChanged = grouping !== s.grouping;
+    s.grouping = grouping;
     const byId = new Map(s.sim.map((n) => [n.id, n]));
-    const laid = layoutUniverse(nodes, edges);
+    const laid = layoutUniverse(nodes, edges, grouping);
     s.sim = laid.map((n) => {
       const prev = byId.get(n.id);
       return {
@@ -338,6 +340,7 @@ export function mountGraphCanvas(wrap, options) {
       };
     });
     s.edges = edges;
+    if (groupingChanged) s.aimed = false;
     if (!s.aimed && s.sim.length) {
       flyTo(null);
       s.aimed = true;

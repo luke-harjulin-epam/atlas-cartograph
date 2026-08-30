@@ -80,6 +80,21 @@ test("selectNode ignores broken links and keeps the current page", () => {
   assert.match(state.linkError || "", /does-not-exist/);
 });
 
+test("proximity grouping clusters by work_id and folder neighborhood", () => {
+  const nodes = [
+    { id: "work/a", kind: "work", title: "Mesh MVP", workId: "mesh-mvp", path: "work/a.md", degree: 2, sourceCount: 0 },
+    { id: "experiences/e", kind: "experience", title: "Write", workId: "mesh-mvp", path: "experiences/e.md", degree: 1, sourceCount: 0 },
+    { id: "atlas-project/vision", kind: "page", title: "Vision", path: "atlas-project/vision.md", degree: 0, sourceCount: 0 },
+  ];
+  const laid = layoutUniverse(nodes, [], "proximity");
+  const mesh = laid.filter((n) => n.galaxyLabel === "Mesh MVP");
+  const vision = laid.filter((n) => n.galaxyLabel === "Atlas Project");
+  assert.equal(mesh.length, 2);
+  assert.equal(vision.length, 1);
+  const dlon = Math.abs(mesh[0].lon - vision[0].lon);
+  assert.ok(Math.min(dlon, Math.PI * 2 - dlon) > 0.4);
+});
+
 test("layoutUniverse parks each kind in its own island", () => {
   const graph = loadFullGraph(fixture, repo);
   const laid = layoutUniverse(graph.nodes, graph.edges);

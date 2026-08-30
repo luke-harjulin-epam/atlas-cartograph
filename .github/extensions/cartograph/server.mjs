@@ -39,6 +39,7 @@ export function freshState(cwd, input = {}) {
     page: null,
     error: null,
     linkError: null,
+    grouping: input.grouping === "proximity" ? "proximity" : "layers",
     stores: [],
     openedAt: new Date().toISOString(),
   };
@@ -57,6 +58,7 @@ function snapshot(state) {
     error: state.error,
     linkError: state.linkError,
     stores: state.stores,
+    grouping: state.grouping || "layers",
     openedAt: state.openedAt,
   };
 }
@@ -270,6 +272,8 @@ export async function startServer(instanceId, state) {
           entry.state.query = String(body.query ?? "");
         } else if (body.action === "layers") {
           entry.state.layers = { ...entry.state.layers, ...body.layers };
+        } else if (body.action === "grouping") {
+          entry.state.grouping = body.grouping === "proximity" ? "proximity" : "layers";
         } else if (body.action === "preview") {
           entry.state.previewOpen = Boolean(body.open);
         }

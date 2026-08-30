@@ -11,7 +11,6 @@ const KIND_MASS = {
   raw: 0.18,
 };
 
-/** Visual islands around the orbital core — one sector per page kind. */
 const KIND_HOME = {
   index: { lon: 0.15, lat: 0.55, shell: 0.32, label: "Index" },
   work: { lon: 0.2, lat: 1.12, shell: 0.7, label: "Work" },
@@ -24,6 +23,17 @@ const KIND_HOME = {
   recipe: { lon: 5.2, lat: 1.22, shell: 0.7, label: "Recipes" },
   page: { lon: 5.7, lat: 1.35, shell: 0.88, label: "Pages" },
 };
+
+const KIND_ROOTS = new Set([
+  "experiences",
+  "decisions",
+  "work",
+  "lessons",
+  "recipes",
+  "knowledge",
+  "raw",
+  "modules",
+]);
 
 function hash01(s, salt = 0) {
   let h = 2166136261 ^ salt;
@@ -48,43 +58,32 @@ function islandOf(n) {
   return KIND_HOME[n.kind] ?? KIND_HOME.page;
 }
 
-export function assignGalaxies(nodes) {
-  const galaxy = new Map();
+function packInHome(nodes, homeFor) {
+  const maxDegree = nodes.reduce((m, n) => Math.max(m, n.degree || 0), 1);
+  const maxSources = nodes.reduce((m, n) => Math.max(m, n.sourceCount || 0), 1);
+  const byKey = new Map();
   for (const n of nodes) {
-    const home = islandOf(n);
-    galaxy.set(n.id, home.label);
+    const home = homeFor(n);
+    const key = home.key || home.label;
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(n);
   }
-  return galaxy;
-}
-
-export function layoutUniverse(nodes, edges) {
-  const maxDegree = nodes.reduce((m, n) => Math.max(m, n.degree), 1);
-  const maxSources = nodes.reduce((m, n) => Math.max(m, n.sourceCount), 1);
-  const byKind = new Map();
-  for (const n of nodes) {
-    const k = n.kind || "page";
-    if (!byKind.has(k)) byKind.set(k, []);
-    byKind.get(k).push(n);
-  }
-  for (const list of byKind.values()) {
-    list.sort((a, b) => a.id.localeCompare(b.id));
-  }
+  for (const list of byKey.values()) list.sort((a, b) => String(a.id).localeCompare(String(b.id)));
 
   return nodes.map((n) => {
     const mass = massOf(n, maxDegree, maxSources);
-    const home = islandOf(n);
-    const siblings = byKind.get(n.kind) ?? [n];
+    const home = homeFor(n);
+    const siblings = byKey.get(home.key || home.label) ?? [n];
     const i = Math.max(0, siblings.findIndex((s) => s.id === n.id));
     const count = Math.max(1, siblings.length);
     const ring = Math.floor(i / 8);
-    const slot = i % Math.max(1, Math.min(8, count));
     const onRing = Math.min(8, count - ring * 8);
+    const slot = i % Math.max(1, onRing);
     const theta = (slot / Math.max(1, onRing)) * Math.PI * 2 + hash01(n.id, 3) * 0.2;
     const radius = 0.04 + ring * 0.055 + hash01(n.id, 11) * 0.03;
     const lon = home.lon + Math.cos(theta) * radius;
     const lat = home.lat + Math.sin(theta) * radius * 0.65;
     const shell = home.shell + (1 - mass) * 0.06 + ring * 0.03;
-
     return {
       ...n,
       mass,
@@ -96,4 +95,120 @@ export function layoutUniverse(nodes, edges) {
       targetShell: Math.min(1.05, shell),
     };
   });
+}
+
+function fibonacciHome(i, n) {
+  const golden = Math.PI * (3 - Math.sqrt(5));
+  const y = n <= 1 ? 0.15 : 1 - (2 * i + 1) / n;
+  const r = Math.sqrt(Math.max(0, 1 - y * y));
+  const theta = golden * i;
+  const x = Math.cos(theta) * r;
+  const z = Math.sin(theta) * r;
+  return {
+    lon: Math.atan2(z, x),
+    lat: Math.acos(Math.max(-1, Math.min(1, y))),
+    shell: 0.62 + (i % 3) * 0.08,
+  };
+}
+
+function neighborhood(n) {
+  const p = String(n.path || n.id || "")
+    .replace(/\\/g, "/")
+    .replace(/\.md$/i, "");
+  const parts = p.split("/").filter(Boolean);
+  if (parts[0] === "work" && parts.length >= 2 && !parts[1].includes(".")) {
+    return { key: `work/${parts[1]}`, label: parts[1].replace(/[-_]/g, " ") };
+  }
+  if (parts[0] && !KIND_ROOTS.has(parts[0])) {
+    return { key: parts[0], label: parts[0].replace(/[-_]/g, " ") };
+  }
+  return null;
+}
+
+function titleCase(s) {
+  const t = String(s || "")
+    .replace(/^\d{4}-\d{2}-\d{2}-/, "")
+    .replace(/[-_]/g, " ")
+    .trim();
+  if (!t) return "Cluster";
+  return t.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+export function assignProximity(nodes, edges) {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const cluster = new Map();
+  const workTitle = new Map();
+  for (const n of nodes) {
+    const wid = n.workId || n.work_id;
+    if (wid && (n.kind === "work" || n.kind === "module")) workTitle.set(wid, n.title || titleCase(wid));
+  }
+  for (const n of nodes) {
+    const wid = n.workId || n.work_id;
+    if (wid) {
+      cluster.set(n.id, { key: `work:${wid}`, label: workTitle.get(wid) || titleCase(wid) });
+      continue;
+    }
+    const folder = neighborhood(n);
+    if (folder) cluster.set(n.id, { key: `folder:${folder.key}`, label: titleCase(folder.label) });
+  }
+
+  const parent = new Map();
+  const find = (x) => {
+    if (!parent.has(x)) parent.set(x, x);
+    let p = parent.get(x);
+    while (p !== parent.get(p)) p = parent.get(p);
+    return p;
+  };
+  const unite = (a, b) => {
+    const pa = find(a);
+    const pb = find(b);
+    if (pa !== pb) parent.set(pa, pb);
+  };
+  for (const n of nodes) if (!cluster.has(n.id)) parent.set(n.id, n.id);
+  for (const e of edges || []) {
+    if (cluster.has(e.source) || cluster.has(e.target)) continue;
+    if (byId.has(e.source) && byId.has(e.target)) unite(e.source, e.target);
+  }
+  const groups = new Map();
+  for (const n of nodes) {
+    if (cluster.has(n.id)) continue;
+    const root = find(n.id);
+    if (!groups.has(root)) groups.set(root, []);
+    groups.get(root).push(n);
+  }
+  for (const members of groups.values()) {
+    const seed =
+      members.find((n) => n.kind === "work" || n.kind === "module") ||
+      members.find((n) => n.kind === "index") ||
+      members.find((n) => n.kind === "decision") ||
+      members[0];
+    const label = seed?.title || titleCase(seed?.id);
+    const key = `comp:${seed?.id}`;
+    for (const n of members) cluster.set(n.id, { key, label });
+  }
+  return cluster;
+}
+
+function layoutLayers(nodes) {
+  return packInHome(nodes, (n) => islandOf(n));
+}
+
+function layoutProximity(nodes, edges) {
+  const assigned = assignProximity(nodes, edges);
+  const keys = [...new Set([...assigned.values()].map((c) => c.key))].sort();
+  const homes = new Map();
+  keys.forEach((key, i) => {
+    const fib = fibonacciHome(i, Math.max(keys.length, 1));
+    const label = [...assigned.values()].find((c) => c.key === key)?.label || key;
+    homes.set(key, { ...fib, label, key });
+  });
+  return packInHome(nodes, (n) => {
+    const c = assigned.get(n.id);
+    return homes.get(c?.key) || { lon: 0, lat: 1.2, shell: 0.7, label: c?.label || "Cluster" };
+  });
+}
+
+export function layoutUniverse(nodes, edges, grouping = "layers") {
+  if (grouping === "proximity") return layoutProximity(nodes, edges);
+  return layoutLayers(nodes);
 }
