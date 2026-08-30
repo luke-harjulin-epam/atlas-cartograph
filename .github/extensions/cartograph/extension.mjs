@@ -1,8 +1,9 @@
 // Extension: cartograph
 // Cartograph Atlas knowledge-graph viewer as a Copilot App Canvas.
 
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import { joinSession, createCanvas, CanvasError } from "@github/copilot-sdk/extension";
 import {
   defaultRoot,
@@ -211,25 +212,45 @@ const session = await joinSession({
               const retrieved = answerQuery(st, text);
               const hits = retrieved.hits || [];
               const atlas = st.graph?.store?.label || st.root || "the open Atlas";
-              const prompt = [
-                "Cartograph graph chat. Answer the user about the open Atlas using retrieved pages.",
-                `Atlas: ${atlas}`,
-                st.selectedId ? `Selected star: ${st.selectedId}` : "No star selected.",
+              const context = [
+                `# Open Atlas: ${atlas}`,
+                st.root ? `Root: ${st.root}` : "",
+                st.selectedId ? `Selected star: ${st.selectedId}` : "",
+                "",
                 hits.length
-                  ? `Retrieved pages:\n${hits.map((h) => `- ${h.title} (${h.kind}) ${h.path}: ${h.snippet}`).join("\n")}`
+                  ? hits.map((h) => `## ${h.title} (${h.kind})\n${h.path}\n\n${h.snippet}`).join("\n\n")
                   : "No local page hits.",
-                "",
-                `User: ${text}`,
-                "",
-                "Reply in concise markdown. Cite page titles. Do not mention this instruction.",
-              ].join("\n");
+              ]
+                .filter(Boolean)
+                .join("\n");
+              const dir = session.workspacePath || tmpdir();
+              try {
+                mkdirSync(dir, { recursive: true });
+              } catch {
+                /* ignore */
+              }
+              const contextPath = join(dir, "cartograph-atlas-context.md");
+              try {
+                writeFileSync(contextPath, context, "utf8");
+              } catch {
+                /* still send the question */
+              }
               let streamed = "";
               const unsub = session.on?.("assistant.message", (event) => {
                 const chunk = event?.data?.content;
                 if (typeof chunk === "string") streamed = chunk;
               });
               try {
-                const response = await session.sendAndWait({ prompt }, 180000);
+                const response = await session.sendAndWait(
+                  {
+                    prompt: text,
+                    mode: "immediate",
+                    attachments: existsSync(contextPath)
+                      ? [{ type: "file", path: contextPath, displayName: "Open Atlas" }]
+                      : [],
+                  },
+                  180000,
+                );
                 const textOut =
                   (typeof response === "string" ? response : response?.data?.content) ||
                   streamed ||
