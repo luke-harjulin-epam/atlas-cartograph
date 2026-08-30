@@ -196,33 +196,60 @@ function drawClusters(ctx, s) {
   ctx.restore();
 }
 
-function drawUniverse(ctx, s, cx, cy, R) {
+function beaconCenter(s) {
+  let members = s.sim;
+  if (s.selectedId) {
+    const n = s.sim.find((x) => x.id === s.selectedId);
+    const label = n?.galaxyLabel || n?.galaxy;
+    if (label) members = s.sim.filter((x) => (x.galaxyLabel || x.galaxy) === label);
+    else if (n) members = [n];
+  } else if (s.focusCluster) {
+    members = s.sim.filter((x) => (x.galaxyLabel || x.galaxy) === s.focusCluster);
+  }
+  const vis = members.filter((n) => n.depth > 0.32);
+  if (vis.length) members = vis;
+  if (!members.length) return { sx: s.w / 2, sy: s.h / 2, r: Math.min(s.w, s.h) * 0.2 };
+  let sx = 0;
+  let sy = 0;
+  for (const n of members) {
+    sx += n.sx;
+    sy += n.sy;
+  }
+  sx /= members.length;
+  sy /= members.length;
+  let spread = 0;
+  for (const n of members) spread = Math.max(spread, Math.hypot(n.sx - sx, n.sy - sy));
+  return { sx, sy, r: Math.max(48, spread + 24) };
+}
+
+function drawUniverse(ctx, s, cx, cy, radius) {
   const { cam, t } = s;
-  const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 0.22);
-  core.addColorStop(0, "rgba(180, 220, 255, 0.22)");
-  core.addColorStop(0.4, "rgba(80, 140, 220, 0.07)");
+  const coreR = radius * 0.32;
+  const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
+  core.addColorStop(0, "rgba(180, 220, 255, 0.32)");
+  core.addColorStop(0.4, "rgba(80, 140, 220, 0.1)");
   core.addColorStop(1, "rgba(0,0,0,0)");
   ctx.fillStyle = core;
-  ctx.beginPath(); ctx.arc(cx, cy, R * 0.22, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx, cy, coreR, 0, Math.PI * 2); ctx.fill();
   ctx.save();
   ctx.globalCompositeOperation = "lighter";
   for (let i = 0; i < 3; i++) {
     const phase = (t * 0.12 + i / 3) % 1;
     ctx.beginPath();
-    ctx.arc(cx, cy, R * (0.12 + phase * 0.95), 0, Math.PI * 2);
-    ctx.strokeStyle = `rgba(140, 190, 255, ${0.16 * (1 - phase)})`;
-    ctx.lineWidth = (1.2 - phase) / Math.max(cam.k, 0.5);
+    ctx.arc(cx, cy, radius * (0.18 + phase * 0.92), 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(140, 190, 255, ${0.22 * (1 - phase)})`;
+    ctx.lineWidth = (1.4 - phase) / Math.max(cam.k, 0.5);
     ctx.stroke();
   }
   ctx.beginPath();
   for (let i = 0; i <= 72; i++) {
     const lon = (i / 72) * Math.PI * 2;
-    const r = R * 0.5;
+    const r = radius * 0.55;
     const p = rotatePoint(r * Math.cos(lon), 0, r * Math.sin(lon), cam.yaw, cam.pitch);
     if (i === 0) ctx.moveTo(cx + p.x, cy + p.y);
     else ctx.lineTo(cx + p.x, cy + p.y);
   }
-  ctx.strokeStyle = "rgba(140, 190, 255, 0.12)";
+  ctx.strokeStyle = "rgba(140, 190, 255, 0.16)";
   ctx.lineWidth = 1;
   ctx.stroke();
   ctx.restore();
@@ -267,9 +294,8 @@ function draw2d(ctx, s) {
   bg.addColorStop(0, "#122033"); bg.addColorStop(0.22, "#0a121c"); bg.addColorStop(0.6, "#05080e"); bg.addColorStop(1, "#020308");
   ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
   drawStarfield(ctx, s);
-  const R = Math.min(w, h) * 0.54;
-  const focus = (s.selectedId ? s.sim.find((n) => n.id === s.selectedId) : undefined) ?? s.sim.reduce((b, n) => (!b || n.mass > b.mass ? n : b), null);
-  drawUniverse(ctx, s, focus?.sx ?? w / 2 + cam.x, focus?.sy ?? h / 2 + cam.y, R * cam.k);
+  const beacon = beaconCenter(s);
+  drawUniverse(ctx, s, beacon.sx, beacon.sy, beacon.r);
   drawClusters(ctx, s);
   const q = s.query.trim().toLowerCase();
   const match = (n) => !q || n.title.toLowerCase().includes(q) || n.id.toLowerCase().includes(q);
