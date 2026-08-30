@@ -231,19 +231,48 @@ function renderMapChrome() {
   renderIslands();
 }
 
+let islandStart = 0;
+const ISLAND_PAGE = 6;
+
 function renderIslands() {
   const nav = $("islands");
   if (!nav || !map) return;
-  const items = map.clusters?.() ?? [];
+  const items = [...(map.clusters?.() ?? [])].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
   const focus = map.focusCluster?.();
-  nav.innerHTML = `<button type="button" data-island="" class="${focus ? "" : "active"}">All</button>` +
-    items
+  if (focus) {
+    const idx = items.findIndex((c) => c.label === focus);
+    if (idx >= 0 && (idx < islandStart || idx >= islandStart + ISLAND_PAGE)) {
+      islandStart = Math.max(0, Math.min(idx, Math.max(0, items.length - ISLAND_PAGE)));
+    }
+  }
+  const maxStart = Math.max(0, items.length - ISLAND_PAGE);
+  islandStart = Math.max(0, Math.min(islandStart, maxStart));
+  const slice = items.slice(islandStart, islandStart + ISLAND_PAGE);
+  const canPrev = islandStart > 0;
+  const canNext = islandStart + ISLAND_PAGE < items.length;
+  const range =
+    items.length <= ISLAND_PAGE
+      ? ""
+      : `<span class="island-range">${islandStart + 1}–${islandStart + slice.length} / ${items.length}</span>`;
+  nav.innerHTML =
+    `<button type="button" data-island="" class="${focus ? "" : "active"}">All</button>` +
+    `<button type="button" data-island-shift="-1" ${canPrev ? "" : "disabled"}>‹</button>` +
+    slice
       .map(
         (c) =>
           `<button type="button" data-island="${escapeHtml(c.label)}" class="${focus === c.label ? "active" : ""}">${escapeHtml(c.label)} · ${c.count}</button>`,
       )
-      .join("");
-  nav.querySelectorAll("button").forEach((btn) => {
+      .join("") +
+    `<button type="button" data-island-shift="1" ${canNext ? "" : "disabled"}>›</button>` +
+    range;
+  map.setFeatured?.(slice.map((c) => c.label));
+  nav.querySelectorAll("[data-island-shift]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      islandStart += Number(btn.getAttribute("data-island-shift")) * ISLAND_PAGE;
+      renderIslands();
+    });
+  });
+  nav.querySelectorAll("[data-island]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const label = btn.getAttribute("data-island") || null;
       map.flyTo(label || null);

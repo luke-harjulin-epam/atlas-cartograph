@@ -157,6 +157,9 @@ function drawClusters(ctx, s) {
   ctx.save();
   ctx.globalCompositeOperation = "lighter";
   for (const members of groups.values()) {
+    const label = members[0].galaxyLabel || members[0].galaxy;
+    const featured = !s.featured || s.featured.has(label) || label === s.focusCluster;
+    if (!featured) continue;
     let sx = 0;
     let sy = 0;
     let depth = 0;
@@ -185,7 +188,6 @@ function drawClusters(ctx, s) {
     ctx.strokeStyle = glow.replace(/[\d.]+\)$/, `${0.35 * depth})`);
     ctx.lineWidth = 1.4;
     ctx.stroke();
-    const label = members[0].galaxyLabel || members[0].galaxy;
     if (!label || depth < 0.42) continue;
     ctx.font = '600 12px "IBM Plex Sans", "Segoe UI", sans-serif';
     ctx.textAlign = "center";
@@ -345,7 +347,7 @@ export function mountGraphCanvas(wrap, options) {
     cam: homeCam(), spin: null, hover: null, w: 800, h: 600, t: 0,
     reduce: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
     pointers: new Map(), pinch: null,
-    focusCluster: null, targetPivot: null, targetLook: null, aimed: false, grouping: "layers",
+    focusCluster: null, targetPivot: null, targetLook: null, aimed: false, grouping: "layers", featured: null,
   };
 
   const zoomEl = wrap.querySelector("[data-zoom]");
@@ -425,6 +427,7 @@ export function mountGraphCanvas(wrap, options) {
       groups.get(label).push(n);
     }
     for (const [label, members] of groups) {
+      if (s.featured && !s.featured.has(label) && label !== s.focusCluster) continue;
       let sx = 0, sy = 0;
       for (const n of members) { sx += n.sx; sy += n.sy; }
       sx /= members.length; sy /= members.length;
@@ -589,6 +592,9 @@ export function mountGraphCanvas(wrap, options) {
     flyTo,
     clusters,
     focusCluster: () => s.focusCluster,
+    setFeatured(labels) {
+      s.featured = labels && labels.length ? new Set(labels) : null;
+    },
     destroy() {
       cancelAnimationFrame(raf);
       ro.disconnect();
