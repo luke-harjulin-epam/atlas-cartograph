@@ -131,7 +131,7 @@ function ensureMap() {
   if (map) return map;
   map = mountGraphCanvas($("graph-wrap"), {
     onSelect: (id, meta) => {
-      post("select", { nodeId: id });
+      post("select", { nodeId: id || "" });
       if (id && meta?.pointerType !== "touch") post("preview", { open: true });
     },
     onCluster: () => renderIslands(),
@@ -253,7 +253,8 @@ function renderIslands() {
 }
 
 function applyState(next) {
-  state = { ...state, ...next };
+  const grouping = next.grouping || state.grouping || "layers";
+  state = { ...state, ...next, grouping };
   showPhase(state.phase || "welcome");
   if (state.error) {
     $("welcome-error").textContent = state.error;
@@ -395,20 +396,32 @@ document.addEventListener("click", (e) => {
   }
   if (href && href !== "#") navigateWiki(href);
 });
-$("preview-close").addEventListener("click", () => post("preview", { open: false }));
-$("preview-backdrop").addEventListener("click", () => post("preview", { open: false }));
-document.querySelectorAll("[data-grouping]").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    post("grouping", { grouping: btn.getAttribute("data-grouping") });
-  });
-});
-document.querySelectorAll("[data-layer]").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    const key = btn.getAttribute("data-layer");
-    const next = applyLayerClick(state.layers || {}, key);
+$("preview-close").addEventListener("click", () => post("select", { nodeId: "" }));
+$("preview-backdrop").addEventListener("click", () => post("select", { nodeId: "" }));
+$("panel").addEventListener("click", (e) => {
+  const groupBtn = e.target.closest("[data-grouping]");
+  if (groupBtn) {
+    e.preventDefault();
+    applyGrouping(groupBtn.getAttribute("data-grouping"));
+    return;
+  }
+  const layerBtn = e.target.closest("[data-layer]");
+  if (layerBtn) {
+    const next = applyLayerClick(state.layers || {}, layerBtn.getAttribute("data-layer"));
     post("layers", { layers: next });
-  });
+  }
 });
+
+function applyGrouping(mode) {
+  const grouping = mode === "proximity" ? "proximity" : "layers";
+  state.grouping = grouping;
+  if (map && state.graph) {
+    const vis = visibleGraph();
+    map.setGraph(vis.nodes, vis.edges, grouping);
+  }
+  renderMapChrome();
+  post("grouping", { grouping });
+}
 
 const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 setTimeout(() => {

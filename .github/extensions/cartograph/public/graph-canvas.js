@@ -333,7 +333,7 @@ export function mountGraphCanvas(wrap, options) {
     s.sim = laid.map((n) => {
       const prev = byId.get(n.id);
       return {
-        ...n, shell: prev?.shell ?? n.targetShell ?? 0.55, born: prev?.born ?? s.t,
+        ...n, shell: groupingChanged ? n.targetShell : (prev?.shell ?? n.targetShell ?? 0.55), born: groupingChanged ? s.t : (prev?.born ?? s.t),
         wx: prev?.wx ?? 0, wy: prev?.wy ?? 0, wz: prev?.wz ?? 0,
         sx: prev?.sx ?? s.w / 2, sy: prev?.sy ?? s.h / 2, depth: prev?.depth ?? 1,
         r: starRadius(n.degree, n.kind),
@@ -524,6 +524,7 @@ export function mountGraphCanvas(wrap, options) {
           const p = toLocal(ev.clientX, ev.clientY);
           const island = clusterHits().find((c) => Math.hypot(p.x - c.sx, p.y - c.sy) <= c.r);
           if (island) flyTo(island.label);
+          options.onSelect?.(null, { pointerType: ev.pointerType });
         }
       }
       s.spin = null;
