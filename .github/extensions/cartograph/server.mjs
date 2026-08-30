@@ -216,8 +216,8 @@ function serveStatic(req, res) {
   res.end(readFileSync(file));
 }
 
-export async function startServer(instanceId, state) {
-  const entry = { state, clients: new Set(), instanceId };
+export async function startServer(instanceId, state, options = {}) {
+  const entry = { state, clients: new Set(), instanceId, onChat: options.onChat };
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
     try {
@@ -284,13 +284,41 @@ export async function startServer(instanceId, state) {
           if (text) {
             const chat = Array.isArray(entry.state.chat) ? entry.state.chat : [];
             chat.push({ role: "user", text });
-            const reply = answerQuery(entry.state, text);
-            chat.push({ role: "graph", text: reply.text, hits: reply.hits });
+            chat.push({ role: "graph", text: "Asking this session…", pending: true, hits: [] });
             entry.state.chat = chat.slice(-50);
-            if (reply.hits?.[0]?.id) {
-              selectNode(entry.state, reply.hits[0].id);
-              entry.state.previewOpen = false;
-            }
+            broadcast(entry);
+            sendJson(res, 200, snapshot(entry.state));
+            const ask = entry.onChat;
+            Promise.resolve()
+              .then(() => (ask ? ask(text, entry.state) : answerQuery(entry.state, text)))
+              .then((reply) => {
+                const cur = Array.isArray(entry.state.chat) ? entry.state.chat : [];
+                const pending = [...cur].reverse().find((m) => m.role === "graph" && m.pending);
+                if (pending) {
+                  pending.text = reply.text || "No reply.";
+                  pending.hits = reply.hits || [];
+                  pending.pending = false;
+                } else {
+                  cur.push({ role: "graph", text: reply.text || "No reply.", hits: reply.hits || [] });
+                }
+                entry.state.chat = cur;
+                if (reply.hits?.[0]?.id) {
+                  selectNode(entry.state, reply.hits[0].id);
+                  entry.state.previewOpen = false;
+                }
+                broadcast(entry);
+              })
+              .catch((err) => {
+                const cur = Array.isArray(entry.state.chat) ? entry.state.chat : [];
+                const pending = [...cur].reverse().find((m) => m.role === "graph" && m.pending);
+                const msg = err instanceof Error ? err.message : String(err);
+                if (pending) {
+                  pending.text = `Session query failed: ${msg}`;
+                  pending.pending = false;
+                }
+                broadcast(entry);
+              });
+            return;
           }
         }
         broadcast(entry);

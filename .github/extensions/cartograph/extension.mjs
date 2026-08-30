@@ -13,6 +13,7 @@ import {
   startServer,
 } from "./server.mjs";
 import { EXTENSION_ROOT } from "./atlas/catalog.mjs";
+import { answerQuery } from "./atlas/chat.mjs";
 
 const instances = new Map();
 let sessionCwd = "";
@@ -205,7 +206,45 @@ const session = await joinSession({
           } catch {
             /* ignore */
           }
-          entry = await startServer(ctx.instanceId, state);
+          entry = await startServer(ctx.instanceId, state, {
+            onChat: async (text, st) => {
+              const retrieved = answerQuery(st, text);
+              const hits = retrieved.hits || [];
+              const atlas = st.graph?.store?.label || st.root || "the open Atlas";
+              const prompt = [
+                "Cartograph graph chat. Answer the user about the open Atlas using retrieved pages.",
+                `Atlas: ${atlas}`,
+                st.selectedId ? `Selected star: ${st.selectedId}` : "No star selected.",
+                hits.length
+                  ? `Retrieved pages:\n${hits.map((h) => `- ${h.title} (${h.kind}) ${h.path}: ${h.snippet}`).join("\n")}`
+                  : "No local page hits.",
+                "",
+                `User: ${text}`,
+                "",
+                "Reply in concise markdown. Cite page titles. Do not mention this instruction.",
+              ].join("\n");
+              let streamed = "";
+              const unsub = session.on?.("assistant.message", (event) => {
+                const chunk = event?.data?.content;
+                if (typeof chunk === "string") streamed = chunk;
+              });
+              try {
+                const response = await session.sendAndWait({ prompt }, 180000);
+                const textOut =
+                  (typeof response === "string" ? response : response?.data?.content) ||
+                  streamed ||
+                  retrieved.text;
+                return { text: String(textOut).trim() || retrieved.text, hits };
+              } catch (err) {
+                return {
+                  text: `${retrieved.text}\n\n_(Session query unavailable: ${err instanceof Error ? err.message : err})_`,
+                  hits,
+                };
+              } finally {
+                if (typeof unsub === "function") unsub();
+              }
+            },
+          });
           instances.set(ctx.instanceId, entry);
         }
         return {

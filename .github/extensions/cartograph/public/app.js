@@ -415,7 +415,12 @@ $("open-path").addEventListener("submit", (e) => {
 });
 $("search").addEventListener("input", (e) => post("query", { query: e.target.value }));
 $("chat-toggle").addEventListener("click", () => {
-  chatOpen = !chatOpen;
+  chatOpen = true;
+  renderChat();
+  $("chat-input")?.focus();
+});
+$("chat-close").addEventListener("click", () => {
+  chatOpen = false;
   renderChat();
 });
 $("chat-form").addEventListener("submit", (e) => {
@@ -465,7 +470,8 @@ function renderChat() {
   if (!log || !panel) return;
   panel.classList.toggle("hidden", !chatOpen);
   mapEl?.classList.toggle("chat-open", chatOpen);
-  $("chat-toggle").textContent = chatOpen ? "Close chat" : "Chat with the graph";
+  $("graph-chat")?.classList.toggle("chat-open", chatOpen);
+  $("chat-toggle").textContent = "Chat with the graph";
   const msgs = state.chat || [];
   log.innerHTML = msgs
     .map((m) => {
