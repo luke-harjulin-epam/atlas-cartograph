@@ -40,6 +40,33 @@ function post(action, payload = {}) {
   }).then((r) => r.json());
 }
 
+const NODE_LAYER_KEYS = ["experiences", "decisions", "work", "indexes", "other"];
+const NODE_LAYER_BUTTONS = ["experiences", "decisions", "work", "indexes"];
+
+function allNodeLayersOn(layers) {
+  return NODE_LAYER_BUTTONS.every((k) => layers?.[k] !== false);
+}
+
+function applyLayerClick(layers, key) {
+  const next = { ...layers };
+  if (key === "all") {
+    for (const k of NODE_LAYER_KEYS) next[k] = true;
+    return next;
+  }
+  if (key === "relations" || key === "sources") {
+    next[key] = layers?.[key] === false;
+    return next;
+  }
+  if (allNodeLayersOn(layers)) {
+    for (const k of NODE_LAYER_BUTTONS) next[k] = k === key;
+    next.other = false;
+    return next;
+  }
+  next[key] = layers?.[key] === false;
+  if (NODE_LAYER_BUTTONS.every((k) => next[k] === false)) next[key] = true;
+  return next;
+}
+
 function layerFor(kind) {
   if (kind === "experience" || kind === "raw") return "experiences";
   if (kind === "decision") return "decisions";
@@ -195,7 +222,8 @@ function renderMapChrome() {
   });
   document.querySelectorAll("[data-layer]").forEach((btn) => {
     const key = btn.getAttribute("data-layer");
-    btn.classList.toggle("active", state.layers?.[key] !== false);
+    const on = key === "all" ? allNodeLayersOn(state.layers) : state.layers?.[key] !== false;
+    btn.classList.toggle("active", on);
   });
   renderIslands();
 }
@@ -369,8 +397,8 @@ $("preview-backdrop").addEventListener("click", () => post("preview", { open: fa
 document.querySelectorAll("[data-layer]").forEach((btn) => {
   btn.addEventListener("click", () => {
     const key = btn.getAttribute("data-layer");
-    const next = { ...(state.layers || {}), [key]: state.layers?.[key] === false };
-    post("layers", { layers: { [key]: next[key] } });
+    const next = applyLayerClick(state.layers || {}, key);
+    post("layers", { layers: next });
   });
 });
 
