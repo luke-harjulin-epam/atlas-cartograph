@@ -23,7 +23,8 @@ const phases = {
   map: $("phase-map"),
 };
 
-let state = { phase: "crawl", stores: [], graph: null, root: "", query: "", selectedId: null, previewOpen: false, layers: {}, grouping: "layers", error: null, linkError: null, page: null };
+let state = { phase: "crawl", stores: [], graph: null, root: "", query: "", selectedId: null, previewOpen: false, layers: {}, grouping: "layers", error: null, linkError: null, page: null, chat: [] };
+let chatOpen = false;
 let map = null;
 
 function showPhase(name) {
@@ -303,6 +304,7 @@ function applyState(next) {
     m.setQuery(state.query || "");
     renderMapChrome();
     renderPreview();
+    renderChat();
   }
 }
 
@@ -412,6 +414,21 @@ $("open-path").addEventListener("submit", (e) => {
   if (root) openRoot(root);
 });
 $("search").addEventListener("input", (e) => post("query", { query: e.target.value }));
+$("chat-toggle").addEventListener("click", () => {
+  chatOpen = !chatOpen;
+  renderChat();
+});
+$("chat-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const input = $("chat-input");
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = "";
+  chatOpen = true;
+  post("chat", { text }).then((next) => {
+    if (next) applyState(next);
+  });
+});
 $("toggle-panel").addEventListener("click", () => $("panel").classList.toggle("hidden"));
 $("preview").addEventListener("click", onPreviewClick);
 document.addEventListener("click", (e) => {
@@ -440,6 +457,34 @@ $("panel").addEventListener("click", (e) => {
     post("layers", { layers: next });
   }
 });
+
+function renderChat() {
+  const log = $("chat-log");
+  const panel = $("chat-panel");
+  const mapEl = $("phase-map");
+  if (!log || !panel) return;
+  panel.classList.toggle("hidden", !chatOpen);
+  mapEl?.classList.toggle("chat-open", chatOpen);
+  $("chat-toggle").textContent = chatOpen ? "Close chat" : "Chat with the graph";
+  const msgs = state.chat || [];
+  log.innerHTML = msgs
+    .map((m) => {
+      const who = m.role === "user" ? "You" : "Graph";
+      const body = m.role === "graph" ? renderMarkdown(m.text || "") : escapeHtml(m.text || "");
+      const hits = (m.hits || [])
+        .map(
+          (h) =>
+            `<button type="button" class="hit" data-node="${escapeHtml(h.id)}">${escapeHtml(h.title)} · ${escapeHtml(h.kind)}</button>`,
+        )
+        .join("");
+      return `<div class="chat-msg ${escapeHtml(m.role)}"><span class="who">${who}</span><div class="bubble">${body}${hits}</div></div>`;
+    })
+    .join("");
+  log.querySelectorAll("[data-node]").forEach((btn) => {
+    btn.addEventListener("click", () => post("select", { nodeId: btn.getAttribute("data-node") }));
+  });
+  log.scrollTop = log.scrollHeight;
+}
 
 function applyGrouping(mode) {
   const grouping = mode === "proximity" ? "proximity" : "layers";

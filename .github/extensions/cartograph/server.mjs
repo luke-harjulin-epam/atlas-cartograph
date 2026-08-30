@@ -4,6 +4,7 @@ import { dirname, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defaultRoot, inspectRoot, listPresets, loadFullGraph, loadPage } from "./atlas/scan.mjs";
 import { normalizeLink } from "./atlas/parse.mjs";
+import { answerQuery } from "./atlas/chat.mjs";
 export { defaultRoot };
 
 const PUBLIC_DIR = join(dirname(fileURLToPath(import.meta.url)), "public");
@@ -40,6 +41,7 @@ export function freshState(cwd, input = {}) {
     error: null,
     linkError: null,
     grouping: input.grouping === "proximity" ? "proximity" : "layers",
+    chat: [],
     stores: [],
     openedAt: new Date().toISOString(),
   };
@@ -59,6 +61,7 @@ function snapshot(state) {
     linkError: state.linkError,
     stores: state.stores,
     grouping: state.grouping || "layers",
+    chat: state.chat || [],
     openedAt: state.openedAt,
   };
 }
@@ -276,6 +279,19 @@ export async function startServer(instanceId, state) {
           entry.state.grouping = body.grouping === "proximity" ? "proximity" : "layers";
         } else if (body.action === "preview") {
           entry.state.previewOpen = Boolean(body.open);
+        } else if (body.action === "chat") {
+          const text = String(body.text ?? "").trim();
+          if (text) {
+            const chat = Array.isArray(entry.state.chat) ? entry.state.chat : [];
+            chat.push({ role: "user", text });
+            const reply = answerQuery(entry.state, text);
+            chat.push({ role: "graph", text: reply.text, hits: reply.hits });
+            entry.state.chat = chat.slice(-50);
+            if (reply.hits?.[0]?.id) {
+              selectNode(entry.state, reply.hits[0].id);
+              entry.state.previewOpen = false;
+            }
+          }
         }
         broadcast(entry);
         sendJson(res, 200, snapshot(entry.state));

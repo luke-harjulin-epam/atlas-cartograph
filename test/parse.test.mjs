@@ -10,6 +10,7 @@ import {
 } from "../.github/extensions/cartograph/atlas/parse.mjs";
 import { loadFullGraph, inspectRoot, loadPage, defaultRoot } from "../.github/extensions/cartograph/atlas/scan.mjs";
 import { layoutUniverse } from "../.github/extensions/cartograph/atlas/universe.mjs";
+import { answerQuery } from "../.github/extensions/cartograph/atlas/chat.mjs";
 import { freshState, openAtlas, selectNode } from "../.github/extensions/cartograph/server.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -107,6 +108,15 @@ test("layoutUniverse parks each kind in its own island", () => {
   const dlon = Math.abs(work.lon - decision.lon);
   const sep = Math.min(dlon, Math.PI * 2 - dlon);
   assert.ok(sep > 0.7, `kind islands should be separated, got ${sep}`);
+});
+
+test("chat answers from the open atlas graph", () => {
+  const state = freshState(repo, { skipIntro: true });
+  openAtlas(state, fixture);
+  const reply = answerQuery(state, "copilot canvas");
+  assert.ok(reply.hits.length >= 1);
+  assert.ok(reply.hits.some((h) => /canvas|copilot/i.test(h.title)));
+  assert.match(reply.text, /page/i);
 });
 
 test("defaultRoot prefers an atlas in the session workspace", () => {

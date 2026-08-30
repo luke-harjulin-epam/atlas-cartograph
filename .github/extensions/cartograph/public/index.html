@@ -64,6 +64,16 @@
           </div>
         </div>
         <nav id="islands" class="islands" aria-label="Island navigation"></nav>
+        <div id="graph-chat" class="graph-chat">
+          <button id="chat-toggle" type="button">Chat with the graph</button>
+          <div id="chat-panel" class="chat-panel hidden">
+            <div id="chat-log" class="chat-log"></div>
+            <form id="chat-form" class="chat-form">
+              <input id="chat-input" autocomplete="off" placeholder="Ask this Atlas…" aria-label="Chat with the graph" />
+              <button type="submit">Send</button>
+            </form>
+          </div>
+        </div>
         <ul id="matches" class="matches hidden" style="position:absolute;top:4rem;left:50%;transform:translateX(-50%);width:min(28rem,90%);z-index:45"></ul>
         <aside id="panel" class="panel hidden">
           <p class="kicker">Options</p>
