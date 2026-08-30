@@ -10,7 +10,7 @@ import {
 } from "../.github/extensions/cartograph/atlas/parse.mjs";
 import { loadFullGraph, inspectRoot, loadPage, defaultRoot } from "../.github/extensions/cartograph/atlas/scan.mjs";
 import { layoutUniverse } from "../.github/extensions/cartograph/atlas/universe.mjs";
-import { answerQuery } from "../.github/extensions/cartograph/atlas/chat.mjs";
+import { answerQuery, pickGraphReply } from "../.github/extensions/cartograph/atlas/chat.mjs";
 import { freshState, openAtlas, selectNode } from "../.github/extensions/cartograph/server.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -108,6 +108,27 @@ test("layoutUniverse parks each kind in its own island", () => {
   const dlon = Math.abs(work.lon - decision.lon);
   const sep = Math.min(dlon, Math.PI * 2 - dlon);
   assert.ok(sep > 0.7, `kind islands should be separated, got ${sep}`);
+});
+
+test("pickGraphReply prefers the session answer over retrieved page listings", () => {
+  const listing = "**3** pages in Mini atlas:";
+  assert.equal(
+    pickGraphReply({
+      messages: ["**Mini atlas** is the fixture store."],
+      response: { data: { content: listing } },
+      summary: listing,
+    }),
+    "**Mini atlas** is the fixture store.",
+  );
+  assert.equal(
+    pickGraphReply({
+      messages: [],
+      response: undefined,
+      summary: "**Mini atlas** is the fixture store.",
+    }),
+    "**Mini atlas** is the fixture store.",
+  );
+  assert.equal(pickGraphReply({ messages: [], response: { data: { content: "" } } }), "");
 });
 
 test("chat answers from the open atlas graph", () => {

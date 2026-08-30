@@ -55,6 +55,24 @@ export function searchAtlas(state, query) {
   }));
 }
 
+export function asText(value) {
+  if (value == null) return "";
+  if (typeof value === "string") return value.trim();
+  if (Array.isArray(value)) return value.map(asText).filter(Boolean).join("\n\n").trim();
+  if (typeof value === "object") {
+    if (typeof value.content === "string") return value.content.trim();
+    if (typeof value.summary === "string") return value.summary.trim();
+    if (typeof value.text === "string") return value.text.trim();
+    if (value.data != null) return asText(value.data);
+  }
+  return "";
+}
+
+export function pickGraphReply({ messages = [], response, summary } = {}) {
+  const lastMessage = [...messages].reverse().map(asText).find(Boolean);
+  return lastMessage || asText(response) || asText(summary) || "";
+}
+
 export function answerQuery(state, query) {
   const q = String(query || "").trim();
   if (!q) return { text: "Ask something about this Atlas.", hits: [] };

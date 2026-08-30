@@ -302,10 +302,6 @@ export async function startServer(instanceId, state, options = {}) {
                   cur.push({ role: "graph", text: reply.text || "No reply.", hits: reply.hits || [] });
                 }
                 entry.state.chat = cur;
-                if (reply.hits?.[0]?.id) {
-                  selectNode(entry.state, reply.hits[0].id);
-                  entry.state.previewOpen = false;
-                }
                 broadcast(entry);
               })
               .catch((err) => {

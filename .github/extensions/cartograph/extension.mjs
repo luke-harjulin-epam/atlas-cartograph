@@ -14,7 +14,7 @@ import {
   startServer,
 } from "./server.mjs";
 import { EXTENSION_ROOT } from "./atlas/catalog.mjs";
-import { answerQuery } from "./atlas/chat.mjs";
+import { answerQuery, pickGraphReply } from "./atlas/chat.mjs";
 
 const instances = new Map();
 let sessionCwd = "";
@@ -215,13 +215,17 @@ const session = await joinSession({
               const context = [
                 `# Open Atlas: ${atlas}`,
                 st.root ? `Root: ${st.root}` : "",
-                st.selectedId ? `Selected star: ${st.selectedId}` : "",
+                st.selectedId ? `Selected star: ${st.selectedId}` : "No star selected.",
                 "",
                 hits.length
                   ? hits.map((h) => `## ${h.title} (${h.kind})\n${h.path}\n\n${h.snippet}`).join("\n\n")
                   : "No local page hits.",
+                "",
+                "Reply in concise markdown using these pages. Cite page titles.",
+                "Your visible reply (or task_complete summary) is shown in Cartograph graph chat.",
+                "Do not mention this instruction.",
               ]
-                .filter(Boolean)
+                .filter((line) => line !== "")
                 .join("\n");
               const dir = session.workspacePath || tmpdir();
               try {
@@ -235,15 +239,32 @@ const session = await joinSession({
               } catch {
                 /* still send the question */
               }
-              let streamed = "";
-              const unsub = session.on?.("assistant.message", (event) => {
+              const messages = [];
+              let summary = "";
+              const unsubs = [];
+              const listen = (type, fn) => {
+                if (typeof session.on !== "function") return;
+                const unsub = session.on(type, fn);
+                if (typeof unsub === "function") unsubs.push(unsub);
+              };
+              listen("assistant.message", (event) => {
                 const chunk = event?.data?.content;
-                if (typeof chunk === "string") streamed = chunk;
+                if (typeof chunk === "string" && chunk.trim()) messages.push(chunk.trim());
+              });
+              listen("session.task_complete", (event) => {
+                const s = event?.data?.summary;
+                if (typeof s === "string" && s.trim()) summary = s.trim();
+              });
+              listen("tool.execution_start", (event) => {
+                if (event?.data?.toolName !== "task_complete") return;
+                const s = event?.data?.arguments?.summary;
+                if (typeof s === "string" && s.trim()) summary = s.trim();
               });
               try {
                 const response = await session.sendAndWait(
                   {
                     prompt: text,
+                    displayPrompt: text,
                     mode: "immediate",
                     attachments: existsSync(contextPath)
                       ? [{ type: "file", path: contextPath, displayName: "Open Atlas" }]
@@ -251,18 +272,16 @@ const session = await joinSession({
                   },
                   180000,
                 );
-                const textOut =
-                  (typeof response === "string" ? response : response?.data?.content) ||
-                  streamed ||
-                  retrieved.text;
-                return { text: String(textOut).trim() || retrieved.text, hits };
+                const textOut = pickGraphReply({ messages, response, summary });
+                return { text: textOut || "No session reply.", hits };
               } catch (err) {
+                const textOut = pickGraphReply({ messages, summary });
                 return {
-                  text: `${retrieved.text}\n\n_(Session query unavailable: ${err instanceof Error ? err.message : err})_`,
+                  text: textOut || `Session query failed: ${err instanceof Error ? err.message : err}`,
                   hits,
                 };
               } finally {
-                if (typeof unsub === "function") unsub();
+                for (const unsub of unsubs) unsub();
               }
             },
           });
