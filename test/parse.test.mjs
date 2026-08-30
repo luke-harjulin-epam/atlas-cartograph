@@ -137,7 +137,9 @@ test("chat answers from the open atlas graph", () => {
   const reply = answerQuery(state, "copilot canvas");
   assert.ok(reply.hits.length >= 1);
   assert.ok(reply.hits.some((h) => /canvas|copilot/i.test(h.title)));
-  assert.match(reply.text, /page/i);
+  assert.match(reply.text, /\*\*/);
+  assert.match(reply.text, /\[/);
+  assert.doesNotMatch(reply.text, /\*\*\d+\*\* page/);
 });
 
 test("defaultRoot prefers an atlas in the session workspace", () => {

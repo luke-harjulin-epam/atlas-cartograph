@@ -1,9 +1,8 @@
 // Extension: cartograph
 // Cartograph Atlas knowledge-graph viewer as a Copilot App Canvas.
 
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
-import { tmpdir } from "node:os";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { joinSession, createCanvas, CanvasError } from "@github/copilot-sdk/extension";
 import {
   defaultRoot,
@@ -14,7 +13,7 @@ import {
   startServer,
 } from "./server.mjs";
 import { EXTENSION_ROOT } from "./atlas/catalog.mjs";
-import { answerQuery, pickGraphReply } from "./atlas/chat.mjs";
+import { answerQuery } from "./atlas/chat.mjs";
 
 const instances = new Map();
 let sessionCwd = "";
@@ -208,82 +207,7 @@ const session = await joinSession({
             /* ignore */
           }
           entry = await startServer(ctx.instanceId, state, {
-            onChat: async (text, st) => {
-              const retrieved = answerQuery(st, text);
-              const hits = retrieved.hits || [];
-              const atlas = st.graph?.store?.label || st.root || "the open Atlas";
-              const context = [
-                `# Open Atlas: ${atlas}`,
-                st.root ? `Root: ${st.root}` : "",
-                st.selectedId ? `Selected star: ${st.selectedId}` : "No star selected.",
-                "",
-                hits.length
-                  ? hits.map((h) => `## ${h.title} (${h.kind})\n${h.path}\n\n${h.snippet}`).join("\n\n")
-                  : "No local page hits.",
-                "",
-                "Reply in concise markdown using these pages. Cite page titles.",
-                "Your visible reply (or task_complete summary) is shown in Cartograph graph chat.",
-                "Do not mention this instruction.",
-              ]
-                .filter((line) => line !== "")
-                .join("\n");
-              const dir = session.workspacePath || tmpdir();
-              try {
-                mkdirSync(dir, { recursive: true });
-              } catch {
-                /* ignore */
-              }
-              const contextPath = join(dir, "cartograph-atlas-context.md");
-              try {
-                writeFileSync(contextPath, context, "utf8");
-              } catch {
-                /* still send the question */
-              }
-              const messages = [];
-              let summary = "";
-              const unsubs = [];
-              const listen = (type, fn) => {
-                if (typeof session.on !== "function") return;
-                const unsub = session.on(type, fn);
-                if (typeof unsub === "function") unsubs.push(unsub);
-              };
-              listen("assistant.message", (event) => {
-                const chunk = event?.data?.content;
-                if (typeof chunk === "string" && chunk.trim()) messages.push(chunk.trim());
-              });
-              listen("session.task_complete", (event) => {
-                const s = event?.data?.summary;
-                if (typeof s === "string" && s.trim()) summary = s.trim();
-              });
-              listen("tool.execution_start", (event) => {
-                if (event?.data?.toolName !== "task_complete") return;
-                const s = event?.data?.arguments?.summary;
-                if (typeof s === "string" && s.trim()) summary = s.trim();
-              });
-              try {
-                const response = await session.sendAndWait(
-                  {
-                    prompt: text,
-                    displayPrompt: text,
-                    mode: "immediate",
-                    attachments: existsSync(contextPath)
-                      ? [{ type: "file", path: contextPath, displayName: "Open Atlas" }]
-                      : [],
-                  },
-                  180000,
-                );
-                const textOut = pickGraphReply({ messages, response, summary });
-                return { text: textOut || "No session reply.", hits };
-              } catch (err) {
-                const textOut = pickGraphReply({ messages, summary });
-                return {
-                  text: textOut || `Session query failed: ${err instanceof Error ? err.message : err}`,
-                  hits,
-                };
-              } finally {
-                for (const unsub of unsubs) unsub();
-              }
-            },
+            onChat: async (text, st) => answerQuery(st, text),
           });
           instances.set(ctx.instanceId, entry);
         }

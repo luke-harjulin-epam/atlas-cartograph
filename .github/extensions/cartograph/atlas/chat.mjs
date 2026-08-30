@@ -73,26 +73,36 @@ export function pickGraphReply({ messages = [], response, summary } = {}) {
   return lastMessage || asText(response) || asText(summary) || "";
 }
 
+function firstSentence(text) {
+  const clean = String(text || "")
+    .replace(/\s+/g, " ")
+    .replace(/^#+\s*/, "")
+    .trim();
+  if (!clean) return "";
+  const m = clean.match(/^(.{20,280}?[.!?])(?:\s|$)/);
+  return (m ? m[1] : clean.slice(0, 240)).trim();
+}
+
 export function answerQuery(state, query) {
   const q = String(query || "").trim();
   if (!q) return { text: "Ask something about this Atlas.", hits: [] };
   if (!state.graph?.store?.available) {
     return { text: "No Atlas is open. Open a store first.", hits: [] };
   }
-  const hits = searchAtlas(state, q);
+  const hits = searchAtlas(state, q).slice(0, 3);
   if (!hits.length) {
     return {
       text: `No pages in **${state.graph.store.atlasId || state.graph.store.label}** matched “${q}”. Try a work_id, title, or kind.`,
       hits: [],
     };
   }
-  const lines = [
-    `**${hits.length}** page${hits.length === 1 ? "" : "s"} in ${state.graph.store.label || "this Atlas"}:`,
+  const lead = hits[0];
+  const page = state.root ? loadPage(state.root, lead.id, state.cwd) : null;
+  const leadText = firstSentence(page?.body || lead.snippet) || lead.path;
+  const text = [
+    `**${lead.title}** — ${leadText}`,
     "",
-    ...hits.map(
-      (h, i) =>
-        `${i + 1}. **${h.title}** (${h.kind})\n   ${h.snippet || h.path}`,
-    ),
-  ];
-  return { text: lines.join("\n"), hits };
+    ...hits.map((h) => `- [${h.title}](${h.path || h.id}) (${h.kind})`),
+  ].join("\n");
+  return { text, hits };
 }
