@@ -131,6 +131,16 @@ input { font: inherit; color: inherit; }
 }
 .zoom-bar button { width: 44px; height: 44px; border: 0; background: transparent; color: var(--color-fg); border-radius: 12px; }
 .zoom-bar button:hover { background: var(--color-elevated); }
+.islands {
+  position: absolute; left: 0.75rem; right: 0.75rem; bottom: 4.2rem; z-index: 41;
+  display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: center; pointer-events: none;
+}
+.islands button {
+  pointer-events: auto; border-radius: 999px; border: 1px solid var(--color-border);
+  background: rgba(12, 18, 28, 0.88); color: var(--color-fg); padding: 0.35rem 0.75rem;
+  font-size: 12px;
+}
+.islands button.active { border-color: var(--color-border-strong); background: var(--color-elevated); }
 .hint {
   position: absolute; left: 0.75rem; bottom: 0.9rem; z-index: 40; font-family: var(--font-mono); font-size: 12px;
   color: var(--color-muted); border: 1px solid var(--color-border); border-radius: 999px; padding: 0.25rem 0.75rem;

@@ -319,6 +319,7 @@ export function mountGraphCanvas(wrap, options) {
     cam: homeCam(), spin: null, hover: null, w: 800, h: 600, t: 0,
     reduce: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
     pointers: new Map(), pinch: null,
+    focusCluster: null, targetPivot: null, targetLook: null, aimed: false,
   };
 
   const zoomEl = wrap.querySelector("[data-zoom]");
@@ -337,22 +338,72 @@ export function mountGraphCanvas(wrap, options) {
       };
     });
     s.edges = edges;
-    if (!s.selectedId && s.sim.length) {
-      const R = globeR(s);
-      let x = 0;
-      let y = 0;
-      let z = 0;
-      for (const n of s.sim) {
-        const w = nodeWorld({ ...n, shell: n.targetShell || n.shell }, R);
-        x += w.x;
-        y += w.y;
-        z += w.z;
-      }
-      const n = s.sim.length;
-      s.cam.pivot = { x: x / n, y: y / n, z: z / n };
-      s.cam.yaw = Math.atan2(z / n, x / n);
-      s.cam.pitch = Math.atan2(y / n, Math.hypot(x / n, z / n));
+    if (!s.aimed && s.sim.length) {
+      flyTo(null);
+      s.aimed = true;
     }
+  }
+
+  function clusterMembers(label) {
+    if (!label) return s.sim;
+    return s.sim.filter((n) => (n.galaxyLabel || n.galaxy) === label);
+  }
+
+  function clusterWorld(label) {
+    const members = clusterMembers(label);
+    const R = globeR(s);
+    if (!members.length) return { x: 0, y: 0, z: 0 };
+    let x = 0, y = 0, z = 0;
+    for (const n of members) {
+      const w = nodeWorld({ ...n, shell: n.targetShell || n.shell }, R);
+      x += w.x; y += w.y; z += w.z;
+    }
+    const c = members.length;
+    return { x: x / c, y: y / c, z: z / c };
+  }
+
+  function flyTo(label) {
+    s.focusCluster = label;
+    const w = clusterWorld(label);
+    s.targetPivot = w;
+    s.targetLook = {
+      yaw: Math.atan2(w.z, w.x),
+      pitch: Math.atan2(w.y, Math.hypot(w.x, w.z)),
+    };
+    s.cam.targetK = label ? 1.45 : 1;
+    s.cam.vYaw = 0;
+    s.cam.vPitch = 0;
+    options.onCluster?.(label);
+  }
+
+  function clusters() {
+    const by = new Map();
+    for (const n of s.sim) {
+      const label = n.galaxyLabel || n.galaxy || n.kind;
+      if (!by.has(label)) by.set(label, { label, kind: n.kind, count: 0 });
+      by.get(label).count += 1;
+    }
+    return [...by.values()];
+  }
+
+  function clusterHits() {
+    const out = [];
+    const groups = new Map();
+    for (const n of s.sim) {
+      if (n.depth < 0.38) continue;
+      const label = n.galaxyLabel || n.galaxy || n.kind;
+      if (!groups.has(label)) groups.set(label, []);
+      groups.get(label).push(n);
+    }
+    for (const [label, members] of groups) {
+      let sx = 0, sy = 0;
+      for (const n of members) { sx += n.sx; sy += n.sy; }
+      sx /= members.length; sy /= members.length;
+      let spread = 0;
+      for (const n of members) spread = Math.max(spread, Math.hypot(n.sx - sx, n.sy - sy));
+      out.push({ label, sx, sy, r: Math.max(36, spread + 28) });
+    }
+    return out;
   }
 
   function resize() {
@@ -379,28 +430,23 @@ export function mountGraphCanvas(wrap, options) {
     }
     const R = globeR(s);
     const focus = s.selectedId ? s.sim.find((n) => n.id === s.selectedId) : undefined;
-    const ease = s.reduce ? 1 : 1 - Math.exp(-dt * 2.6);
-    const dest = focus
-      ? nodeWorld(focus, R)
-      : s.sim.reduce(
-          (acc, n) => {
-            const w = nodeWorld(n, R);
-            acc.x += w.x;
-            acc.y += w.y;
-            acc.z += w.z;
-            acc.n += 1;
-            return acc;
-          },
-          { x: 0, y: 0, z: 0, n: 0 },
-        );
-    if (dest.n) {
-      dest.x /= dest.n;
-      dest.y /= dest.n;
-      dest.z /= dest.n;
+    const ease = s.reduce ? 1 : 1 - Math.exp(-dt * 2.8);
+    if (focus) s.targetPivot = nodeWorld(focus, R);
+    if (s.targetPivot) {
+      s.cam.pivot.x += (s.targetPivot.x - s.cam.pivot.x) * ease;
+      s.cam.pivot.y += (s.targetPivot.y - s.cam.pivot.y) * ease;
+      s.cam.pivot.z += (s.targetPivot.z - s.cam.pivot.z) * ease;
+      if (Math.hypot(s.cam.pivot.x - s.targetPivot.x, s.cam.pivot.y - s.targetPivot.y, s.cam.pivot.z - s.targetPivot.z) < 2) {
+        s.targetPivot = null;
+      }
     }
-    s.cam.pivot.x += (dest.x - s.cam.pivot.x) * ease;
-    s.cam.pivot.y += (dest.y - s.cam.pivot.y) * ease;
-    s.cam.pivot.z += (dest.z - s.cam.pivot.z) * ease;
+    if (s.targetLook && !s.spin) {
+      s.cam.yaw += (s.targetLook.yaw - s.cam.yaw) * ease;
+      s.cam.pitch += (s.targetLook.pitch - s.cam.pitch) * ease;
+      if (Math.abs(s.cam.yaw - s.targetLook.yaw) < 0.01 && Math.abs(s.cam.pitch - s.targetLook.pitch) < 0.01) {
+        s.targetLook = null;
+      }
+    }
     s.cam.x += (0 - s.cam.x) * ease;
     s.cam.y += (0 - s.cam.y) * ease;
     if (s.cam.targetK != null) {
@@ -409,7 +455,6 @@ export function mountGraphCanvas(wrap, options) {
       syncZoom();
     }
     if (!s.spin) {
-      if (!s.reduce && !s.selectedId) s.cam.yaw += 0.16 * dt;
       s.cam.yaw += s.cam.vYaw; s.cam.pitch += s.cam.vPitch;
       s.cam.vYaw *= 0.92; s.cam.vPitch *= 0.92;
     }
@@ -461,14 +506,22 @@ export function mountGraphCanvas(wrap, options) {
       return;
     }
     const n = hit(p.x, p.y);
+    const island = !n && clusterHits().find((c) => Math.hypot(p.x - c.sx, p.y - c.sy) <= c.r);
     s.hover = n?.id ?? null;
-    wrap.style.cursor = n ? "pointer" : "grab";
+    wrap.style.cursor = n || island ? "pointer" : "grab";
   };
   const onUp = (ev) => {
     s.pointers.delete(ev.pointerId);
     const g = s.spin;
     if (g && g.pointerId === ev.pointerId) {
-      if (!g.moved) options.onSelect?.(g.hitId, { pointerType: ev.pointerType });
+      if (!g.moved) {
+        if (g.hitId) options.onSelect?.(g.hitId, { pointerType: ev.pointerType });
+        else {
+          const p = toLocal(ev.clientX, ev.clientY);
+          const island = clusterHits().find((c) => Math.hypot(p.x - c.sx, p.y - c.sy) <= c.r);
+          if (island) flyTo(island.label);
+        }
+      }
       s.spin = null;
     }
     wrap.style.cursor = "grab";
@@ -493,7 +546,7 @@ export function mountGraphCanvas(wrap, options) {
 
   wrap.querySelector("[data-zoom-in]")?.addEventListener("click", () => { applyZoom(s, s.cam.k * 1.25, s.w / 2, s.h / 2); syncZoom(); });
   wrap.querySelector("[data-zoom-out]")?.addEventListener("click", () => { applyZoom(s, s.cam.k / 1.25, s.w / 2, s.h / 2); syncZoom(); });
-  wrap.querySelector("[data-zoom-reset]")?.addEventListener("click", () => { s.cam = homeCam(); syncZoom(); });
+  wrap.querySelector("[data-zoom-reset]")?.addEventListener("click", () => { flyTo(null); syncZoom(); });
 
   return {
     setGraph,
@@ -502,6 +555,9 @@ export function mountGraphCanvas(wrap, options) {
       if (id && s.cam.k < 2) s.cam.targetK = Math.min(2.4, Math.max(s.cam.k * 1.15, 1.55));
     },
     setQuery(q) { s.query = q ?? ""; },
+    flyTo,
+    clusters,
+    focusCluster: () => s.focusCluster,
     destroy() {
       cancelAnimationFrame(raf);
       ro.disconnect();

@@ -107,6 +107,7 @@ function ensureMap() {
       post("select", { nodeId: id });
       if (id && meta?.pointerType !== "touch") post("preview", { open: true });
     },
+    onCluster: () => renderIslands(),
   });
   return map;
 }
@@ -195,6 +196,28 @@ function renderMapChrome() {
   document.querySelectorAll("[data-layer]").forEach((btn) => {
     const key = btn.getAttribute("data-layer");
     btn.classList.toggle("active", state.layers?.[key] !== false);
+  });
+  renderIslands();
+}
+
+function renderIslands() {
+  const nav = $("islands");
+  if (!nav || !map) return;
+  const items = map.clusters?.() ?? [];
+  const focus = map.focusCluster?.();
+  nav.innerHTML = `<button type="button" data-island="" class="${focus ? "" : "active"}">All</button>` +
+    items
+      .map(
+        (c) =>
+          `<button type="button" data-island="${escapeHtml(c.label)}" class="${focus === c.label ? "active" : ""}">${escapeHtml(c.label)} · ${c.count}</button>`,
+      )
+      .join("");
+  nav.querySelectorAll("button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const label = btn.getAttribute("data-island") || null;
+      map.flyTo(label || null);
+      renderIslands();
+    });
   });
 }
 
