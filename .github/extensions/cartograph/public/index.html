@@ -30,7 +30,7 @@
         <header class="welcome-header">
           <p class="kicker">Autogenesis</p>
           <h1>Open an Atlas</h1>
-          <p class="muted">Folders with SCHEMA.json — fixture or a mounted atlas/ root.</p>
+          <p class="muted">Atlases in this session worktree. Open one, then add more from the map.</p>
         </header>
         <p id="welcome-error" class="danger hidden"></p>
         <div id="store-grid" class="store-grid"></div>
@@ -85,9 +85,13 @@
         <ul id="matches" class="matches hidden" style="position:absolute;top:4rem;left:50%;transform:translateX(-50%);width:min(28rem,90%);z-index:45"></ul>
         <aside id="panel" class="panel hidden">
           <p class="kicker">Options</p>
+          <p class="muted" style="margin:0.5rem 0 0">Atlases</p>
+          <div id="open-atlases" class="open-atlases"></div>
+          <button id="add-atlas" class="btn-ghost btn" type="button" style="margin:0.5rem 0 0.75rem;width:100%">Add atlas</button>
           <p class="muted" style="margin:0.5rem 0 0">Grouping</p>
           <div class="layers" style="margin-bottom:0.75rem">
             <button class="layer active" data-grouping="layers" type="button">Layers</button>
+            <button class="layer" data-grouping="atlases" type="button">Atlases</button>
             <button class="layer" data-grouping="proximity" type="button">Proximity</button>
           </div>
           <p class="muted" style="margin:0.5rem 0 0">Layers</p>
@@ -108,6 +112,15 @@
           </dl>
         </aside>
         <p id="map-error" class="danger hidden" style="position:absolute;top:4.5rem;left:1rem;right:1rem;z-index:30"></p>
+        <div id="atlas-add" class="atlas-add hidden">
+          <div class="atlas-add-card">
+            <div class="chat-head">
+              <p class="kicker">Add an Atlas</p>
+              <button id="atlas-add-close" type="button">Close</button>
+            </div>
+            <div id="atlas-add-grid" class="store-grid" style="padding:0.75rem;max-height:50vh"></div>
+          </div>
+        </div>
         <button id="preview-backdrop" class="preview-backdrop hidden" type="button" aria-label="Dismiss preview"></button>
         <article id="preview" class="preview hidden">
           <div class="preview-handle" aria-hidden="true"></div>

@@ -109,6 +109,23 @@ input { font: inherit; color: inherit; }
 .matches button { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 0.5rem 0.75rem; color: var(--color-fg); }
 .matches button:hover { background: var(--color-elevated); }
 
+.open-atlases { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.45rem; }
+.open-atlas {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+  border: 1px solid var(--color-border); border-radius: 10px; padding: 0.35rem 0.55rem; font-size: 12px;
+}
+.open-atlas button {
+  border: 0; background: transparent; color: var(--color-muted); font-size: 11px; padding: 0.15rem 0.3rem;
+}
+.open-atlas button:disabled { opacity: 0.35; }
+.atlas-add {
+  position: absolute; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center;
+  background: rgba(5, 8, 14, 0.45); padding: 1rem;
+}
+.atlas-add-card {
+  width: min(28rem, 100%); max-height: 80%; overflow: auto;
+  border: 1px solid var(--color-border); border-radius: 16px; background: rgba(12, 18, 28, 0.92);
+}
 .panel {
   position: absolute; top: 4rem; inset-inline: 0.75rem; z-index: 50; max-height: min(70vh, 32rem); overflow: auto;
   border: 1px solid var(--color-border); border-radius: 16px; background: rgba(12, 18, 28, 0.9);

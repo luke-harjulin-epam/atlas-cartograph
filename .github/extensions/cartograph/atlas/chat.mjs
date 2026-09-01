@@ -1,4 +1,4 @@
-import { loadPage } from "./scan.mjs";
+import { loadPage, loadPageFromRoots } from "./scan.mjs";
 
 function tokens(q) {
   return String(q || "")
@@ -38,7 +38,8 @@ export function searchAtlas(state, query) {
   scored.sort((a, b) => b.score - a.score);
   const top = scored.slice(0, 8);
   for (const hit of top) {
-    const page = state.root ? loadPage(state.root, hit.node.id, state.cwd) : null;
+    const roots = state.roots?.length ? state.roots : state.root ? [state.root] : [];
+    const page = roots.length ? loadPageFromRoots(roots, hit.node.id, state.cwd) : loadPage(state.root, hit.node.id, state.cwd);
     const body = page?.body || "";
     for (const t of terms) {
       if (body.toLowerCase().includes(t)) hit.score += 2;

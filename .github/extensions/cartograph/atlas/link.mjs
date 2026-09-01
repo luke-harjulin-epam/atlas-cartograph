@@ -1,21 +1,48 @@
 import { normalizeLink } from "./parse.mjs";
+
+function addAlias(map, alias, node) {
+  if (!alias) return;
+  if (!map.has(alias)) map.set(alias, []);
+  map.get(alias).push(node);
+}
+
+function pickAlias(hits, source) {
+  if (!hits?.length) return null;
+  const same = hits.find((h) => (h.atlasKey || "") === (source.atlasKey || ""));
+  return (same || hits[0]).id;
+}
+
 function linkGraph(nodes) {
-  const aliasToId = /* @__PURE__ */ new Map();
+  const aliasToIds = new Map();
   for (const n of nodes) {
-    for (const a of n.aliases) {
-      if (!aliasToId.has(a)) aliasToId.set(a, n.id);
-    }
+    addAlias(aliasToIds, n.id, n);
+    addAlias(aliasToIds, n.localId, n);
+    for (const a of n.aliases || []) addAlias(aliasToIds, a, n);
   }
-  const resolveRef = (ref) => {
-    const n = normalizeLink(ref);
+  const resolveRef = (raw, source) => {
+    const n = normalizeLink(raw);
     if (!n) return null;
-    return aliasToId.get(n) ?? aliasToId.get(n.replace(/^\.\.\//, "")) ?? aliasToId.get(n.split("/").pop() ?? "") ?? null;
+    return (
+      pickAlias(aliasToIds.get(n), source) ||
+      pickAlias(aliasToIds.get(n.replace(/^\.\.\//, "")), source) ||
+      pickAlias(aliasToIds.get(n.split("/").pop() ?? ""), source)
+    );
   };
   const edges = [];
-  const seen = /* @__PURE__ */ new Set();
+  const seen = new Set();
   for (const n of nodes) {
-    for (const ref of n.refs) {
-      const tid = resolveRef(ref.raw);
+    for (const ref of n.refs || []) {
+      let tid = null;
+      if (ref.kind === "mesh" && ref.relKind) {
+        const path = normalizeLink(ref.raw);
+        const hit = nodes.find(
+          (o) =>
+            o.atlasKey === ref.relKind &&
+            (o.localId === path || normalizeLink(o.path || "") === path || (o.aliases || []).includes(path)),
+        );
+        tid = hit?.id ?? null;
+      }
+      if (!tid) tid = resolveRef(ref.raw, n);
       if (!tid || tid === n.id) continue;
       const key = `${ref.kind}:${n.id}->${tid}:${ref.relKind ?? ""}`;
       if (seen.has(key)) continue;
@@ -25,7 +52,7 @@ function linkGraph(nodes) {
         source: n.id,
         target: tid,
         kind: ref.kind,
-        relKind: ref.relKind
+        relKind: ref.relKind,
       });
     }
   }

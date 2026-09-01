@@ -193,6 +193,20 @@ function layoutLayers(nodes) {
   return packInHome(nodes, (n) => islandOf(n));
 }
 
+function layoutAtlases(nodes) {
+  const keys = [...new Set(nodes.map((n) => n.atlasKey || n.atlasLabel || n.atlasId || "Atlas"))].sort();
+  const homes = new Map();
+  keys.forEach((key, i) => {
+    const fib = fibonacciHome(i, Math.max(keys.length, 1));
+    const label = nodes.find((n) => (n.atlasKey || n.atlasLabel || n.atlasId || "Atlas") === key)?.atlasLabel || key;
+    homes.set(key, { ...fib, label, key });
+  });
+  return packInHome(nodes, (n) => {
+    const key = n.atlasKey || n.atlasLabel || n.atlasId || "Atlas";
+    return homes.get(key) || { lon: 0, lat: 1.2, shell: 0.7, label: n.atlasLabel || "Atlas", key };
+  });
+}
+
 function layoutProximity(nodes, edges) {
   const assigned = assignProximity(nodes, edges);
   const keys = [...new Set([...assigned.values()].map((c) => c.key))].sort();
@@ -210,5 +224,6 @@ function layoutProximity(nodes, edges) {
 
 export function layoutUniverse(nodes, edges, grouping = "layers") {
   if (grouping === "proximity") return layoutProximity(nodes, edges);
+  if (grouping === "atlases") return layoutAtlases(nodes);
   return layoutLayers(nodes);
 }

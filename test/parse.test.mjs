@@ -8,13 +8,14 @@ import {
   parseFrontmatter,
   relatesToOf,
 } from "../.github/extensions/cartograph/atlas/parse.mjs";
-import { loadFullGraph, inspectRoot, loadPage, defaultRoot } from "../.github/extensions/cartograph/atlas/scan.mjs";
+import { loadFullGraph, inspectRoot, loadPage, defaultRoot, listPresets, loadCombinedGraphs } from "../.github/extensions/cartograph/atlas/scan.mjs";
 import { layoutUniverse } from "../.github/extensions/cartograph/atlas/universe.mjs";
 import { answerQuery, pickGraphReply } from "../.github/extensions/cartograph/atlas/chat.mjs";
-import { freshState, openAtlas, selectNode } from "../.github/extensions/cartograph/server.mjs";
+import { addAtlas, freshState, openAtlas, selectNode } from "../.github/extensions/cartograph/server.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const fixture = resolve(repo, "fixtures/mini-atlas");
+const peer = resolve(repo, "fixtures/peer-atlas");
 
 test("parseFrontmatter reads relates_to objects", () => {
   const src = `---
@@ -145,5 +146,30 @@ test("chat answers from the open atlas graph", () => {
 test("defaultRoot prefers an atlas in the session workspace", () => {
   const root = defaultRoot(repo);
   assert.ok(root);
-  assert.ok(root.includes("mini-atlas") || root.endsWith("atlas"));
+  assert.ok(root.includes("mini-atlas") || root.includes("peer-atlas") || root.endsWith("atlas"));
+});
+
+test("listPresets finds atlases under the session worktree", () => {
+  const stores = listPresets(repo);
+  assert.ok(stores.some((s) => String(s.root).includes("mini-atlas")));
+  assert.ok(stores.some((s) => String(s.root).includes("peer-atlas")));
+});
+
+test("combining two atlases adds mesh edges between them", () => {
+  const graph = loadCombinedGraphs([fixture, peer], repo);
+  assert.ok(graph.store.available);
+  assert.ok(graph.nodes.length >= 6);
+  const mesh = graph.edges.filter((e) => e.kind === "mesh");
+  assert.ok(mesh.length >= 1, "expected a cross-atlas mesh edge");
+  const atlases = new Set(graph.nodes.map((n) => n.atlasKey).filter(Boolean));
+  assert.ok(atlases.size >= 2);
+});
+
+test("addAtlas keeps the first store and merges the second", () => {
+  const state = freshState(repo, { skipIntro: true });
+  openAtlas(state, fixture);
+  assert.equal(state.roots.length, 1);
+  addAtlas(state, peer);
+  assert.equal(state.roots.length, 2);
+  assert.ok(state.graph.edges.some((e) => e.kind === "mesh"));
 });

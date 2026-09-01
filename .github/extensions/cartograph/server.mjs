@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { dirname, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { defaultRoot, inspectRoot, listPresets, loadFullGraph, loadPage } from "./atlas/scan.mjs";
+import { defaultRoot, inspectRoot, listPresets, loadCombinedGraphs, loadFullGraph, loadPage, loadPageFromRoots } from "./atlas/scan.mjs";
 import { normalizeLink } from "./atlas/parse.mjs";
 import { answerQuery } from "./atlas/chat.mjs";
 export { defaultRoot };
@@ -24,6 +24,7 @@ export function freshState(cwd, input = {}) {
     cwd,
     phase: input.skipIntro ? (root ? "map" : "welcome") : root ? "jump" : "crawl",
     root,
+    roots: root ? [root] : [],
     query: "",
     selectedId: null,
     previewOpen: false,
@@ -51,6 +52,7 @@ function snapshot(state) {
   return {
     phase: state.phase,
     root: state.root,
+    roots: state.roots || (state.root ? [state.root] : []),
     query: state.query,
     selectedId: state.selectedId,
     previewOpen: state.previewOpen,
@@ -93,32 +95,71 @@ export function hydrateStores(state) {
   state.stores = listPresets(state.cwd).filter((s) => s.format === "atlas" || s.available);
 }
 
-export function openAtlas(state, root) {
+function normalizeRoots(state) {
+  const roots = Array.isArray(state.roots) ? state.roots.filter(Boolean) : [];
+  if (!roots.length && state.root) roots.push(state.root);
+  return [...new Set(roots)];
+}
+
+function applyGraph(state, graph, { jump = true } = {}) {
+  state.graph = graph;
+  if (!graph?.store?.available) {
+    state.error = graph?.store?.reason ?? "Store is not available.";
+    state.phase = "welcome";
+    return state;
+  }
+  state.error = null;
+  if (jump && (state.phase === "crawl" || state.phase === "welcome")) state.phase = "jump";
+  else if (state.phase !== "map" && state.phase !== "jump") state.phase = "jump";
+  if ((state.roots || []).length > 1 && state.grouping === "layers") state.grouping = "atlases";
+  return state;
+}
+
+export function openAtlas(state, root, { add = false } = {}) {
   const trimmed = String(root ?? "").trim();
-  state.root = trimmed;
   state.selectedId = null;
   state.previewOpen = false;
   state.page = null;
   state.error = null;
+  state.linkError = null;
+  const current = normalizeRoots(state);
+  let roots;
   if (!trimmed) {
+    roots = [];
+  } else if (add) {
+    roots = current.includes(trimmed) ? current : [...current, trimmed];
+  } else {
+    roots = [trimmed];
+  }
+  state.roots = roots;
+  state.root = roots[0] || "";
+  if (!roots.length) {
     state.graph = null;
     state.phase = "welcome";
     return state;
   }
-  const graph = loadFullGraph(trimmed, state.cwd);
-  state.graph = graph;
-  if (!graph.store.available) {
-    state.error = graph.store.reason ?? "Store is not available.";
+  const graph = loadCombinedGraphs(roots, state.cwd);
+  return applyGraph(state, graph, { jump: !add });
+}
+
+export function addAtlas(state, root) {
+  return openAtlas(state, root, { add: true });
+}
+
+export function dropAtlas(state, root) {
+  const trimmed = String(root ?? "").trim();
+  state.roots = normalizeRoots(state).filter((r) => r !== trimmed);
+  state.root = state.roots[0] || "";
+  state.selectedId = null;
+  state.previewOpen = false;
+  state.page = null;
+  if (!state.roots.length) {
+    state.graph = null;
     state.phase = "welcome";
-  } else {
-    state.phase = state.phase === "crawl" || state.phase === "welcome" ? "jump" : state.phase;
-    if (state.phase === "map" || state.phase === "jump") {
-      /* keep */
-    } else {
-      state.phase = "jump";
-    }
+    return state;
   }
-  return state;
+  if (state.roots.length === 1 && state.grouping === "atlases") state.grouping = "layers";
+  return applyGraph(state, loadCombinedGraphs(state.roots, state.cwd), { jump: false });
 }
 
 function resolveNodeId(state, raw) {
@@ -190,7 +231,8 @@ export function selectNode(state, nodeId) {
   }
   const id = resolveNodeId(state, nodeId);
   const inGraph = Boolean(state.graph?.nodes?.some((n) => n.id === id));
-  const loaded = state.root ? loadPage(state.root, id, state.cwd) : null;
+  const roots = normalizeRoots(state);
+  const loaded = roots.length ? loadPageFromRoots(roots, id, state.cwd) : null;
   if (!inGraph && !loaded) {
     state.linkError = `No page for “${nodeId}”.`;
     return state;
@@ -267,6 +309,11 @@ export async function startServer(instanceId, state, options = {}) {
         if (body.action === "open") {
           entry.state.phase = "jump";
           openAtlas(entry.state, body.root);
+        } else if (body.action === "add") {
+          addAtlas(entry.state, body.root);
+          if (entry.state.phase === "jump") entry.state.phase = "map";
+        } else if (body.action === "drop") {
+          dropAtlas(entry.state, body.root);
         } else if (body.action === "phase") {
           entry.state.phase = body.phase;
         } else if (body.action === "select") {
@@ -276,7 +323,8 @@ export async function startServer(instanceId, state, options = {}) {
         } else if (body.action === "layers") {
           entry.state.layers = { ...entry.state.layers, ...body.layers };
         } else if (body.action === "grouping") {
-          entry.state.grouping = body.grouping === "proximity" ? "proximity" : "layers";
+          entry.state.grouping =
+            body.grouping === "proximity" ? "proximity" : body.grouping === "atlases" ? "atlases" : "layers";
         } else if (body.action === "preview") {
           entry.state.previewOpen = Boolean(body.open);
         } else if (body.action === "chat") {
@@ -284,7 +332,7 @@ export async function startServer(instanceId, state, options = {}) {
           if (text) {
             const chat = Array.isArray(entry.state.chat) ? entry.state.chat : [];
             chat.push({ role: "user", text });
-            chat.push({ role: "graph", text: "Asking this session…", pending: true, hits: [] });
+            chat.push({ role: "graph", text: "Searching the Atlas…", pending: true, hits: [] });
             entry.state.chat = chat.slice(-50);
             broadcast(entry);
             sendJson(res, 200, snapshot(entry.state));

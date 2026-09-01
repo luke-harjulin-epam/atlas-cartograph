@@ -5,7 +5,6 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { joinSession, createCanvas, CanvasError } from "@github/copilot-sdk/extension";
 import {
-  defaultRoot,
   freshState,
   hydrateStores,
   openAtlas,
@@ -191,9 +190,8 @@ const session = await joinSession({
           const cwd = await resolveCwd(ctx);
           const state = freshState(cwd, input);
           hydrateStores(state);
-          const root = input.root || defaultRoot(state.cwd);
-          if (root) openAtlas(state, root);
-          if (state.graph?.store?.available) {
+          if (input.root) {
+            openAtlas(state, input.root);
             state.phase = input.skipIntro === false ? "jump" : "map";
           } else {
             state.phase = "welcome";

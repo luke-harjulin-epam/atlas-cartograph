@@ -1,0 +1,6 @@
+{
+  "schema_version": "1.0",
+  "atlas_id": "cartograph-peer",
+  "title": "Cartograph peer atlas",
+  "description": "Second fixture Atlas used to demo multi-atlas mesh links."
+}

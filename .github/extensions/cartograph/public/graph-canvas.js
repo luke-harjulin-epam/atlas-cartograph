@@ -260,9 +260,13 @@ function drawRay(ctx, a, b, kind, hi, faded, k) {
   const depth = (a.depth + b.depth) / 2;
   if (depth < 0.48 && !hi) return;
   ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy);
-  const alpha = faded ? 0.03 : hi ? 0.72 * Math.max(0.45, depth) : kind === "source" ? 0.1 * depth : kind === "relates" || kind === "mesh" ? 0.22 * depth : 0.16 * depth;
-  ctx.strokeStyle = hi ? "rgba(210, 235, 255, 0.95)" : `rgba(150, 200, 255, ${alpha})`;
-  ctx.lineWidth = (hi ? 2.4 : 1) / Math.max(k, 0.6);
+  const alpha = faded ? 0.03 : hi ? 0.72 * Math.max(0.45, depth) : kind === "source" ? 0.1 * depth : kind === "mesh" ? 0.38 * depth : kind === "relates" ? 0.22 * depth : 0.16 * depth;
+  ctx.strokeStyle = hi
+    ? "rgba(210, 235, 255, 0.95)"
+    : kind === "mesh"
+      ? `rgba(120, 230, 210, ${alpha})`
+      : `rgba(150, 200, 255, ${alpha})`;
+  ctx.lineWidth = (hi ? 2.4 : kind === "mesh" ? 1.6 : 1) / Math.max(k, 0.6);
   ctx.stroke();
 }
 function drawStar(ctx, n, sel, hov, faded, related, k, t) {

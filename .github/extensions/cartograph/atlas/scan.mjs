@@ -15,7 +15,7 @@ import {
   sourcesOf,
 } from "./parse.mjs";
 import { countKinds, linkGraph, withDegrees } from "./link.mjs";
-import { mergeGraphs } from "./merge.mjs";
+import { combineAtlases, mergeGraphs } from "./merge.mjs";
 
 const SKIP_DIRS = new Set([
   "log",
@@ -162,7 +162,7 @@ export function inspectRoot(rawRoot, cwd) {
   };
 }
 
-function parseFiles(storeRoot, files, format, atlasId) {
+function parseFiles(storeRoot, files, format, atlasId, atlasLabel) {
   const nodes = [];
   for (const file of files) {
     const rel = (isAbsolute(file) ? relative(storeRoot, file) : file).replace(/\\/g, "/");
@@ -200,6 +200,7 @@ function parseFiles(storeRoot, files, format, atlasId) {
     ];
     nodes.push({
       id: pageSlug(rel),
+      localId: pageSlug(rel),
       kind,
       title: displayTitle(meta, rel),
       type: type || kind,
@@ -209,6 +210,9 @@ function parseFiles(storeRoot, files, format, atlasId) {
       aliases: aliasesFor(rel),
       refs,
       atlasId,
+      atlasKey: atlasId || atlasLabel,
+      atlasLabel: atlasLabel || atlasId,
+      storeRoot,
       workId,
     });
   }
@@ -233,7 +237,7 @@ export function loadGraph(rawRoot, opts, cwd) {
   const limit = Math.max(1, Math.min(200, opts?.limit ?? STREAM_BATCH));
   const { files, complete: listedAll } = ensureListed(store.root);
   const slice = files.slice(offset, offset + limit);
-  const nodes = parseFiles(store.root, slice, store.format, store.atlasId);
+  const nodes = parseFiles(store.root, slice, store.format, store.atlasId, store.label);
   const edges = linkGraph(nodes);
   const next = offset + slice.length;
   const hasMore = next < files.length || !listedAll;
@@ -251,7 +255,9 @@ export function loadGraph(rawRoot, opts, cwd) {
 export function loadPage(rawRoot, nodeId, cwd) {
   const store = inspectRoot(rawRoot, cwd);
   if (!store.available) return null;
-  const id = normalizeLink(nodeId);
+  const raw = String(nodeId ?? "");
+  const slug = raw.includes("::") ? raw.split("::").slice(1).join("::") : raw;
+  const id = normalizeLink(slug);
   const stem = basename(id);
   const candidates = [
     join(store.root, id.endsWith(".md") ? id : `${id}.md`),
@@ -296,6 +302,29 @@ export function defaultRoot(cwd) {
     presets.find((s) => !String(s.root).includes("mini-atlas")) ||
     presets[0];
   return pick?.root ?? "";
+}
+
+export function loadPageFromRoots(roots, nodeId, cwd) {
+  const list = (roots || []).filter(Boolean);
+  const raw = String(nodeId ?? "");
+  const atlas = raw.includes("::") ? raw.split("::")[0] : "";
+  for (const root of list) {
+    const store = inspectRoot(root, cwd);
+    const key = store.atlasId || store.label;
+    if (atlas && key && atlas !== key && atlas !== store.label) continue;
+    const page = loadPage(root, raw, cwd);
+    if (page) return { ...page, atlasKey: key, storeRoot: store.root };
+  }
+  for (const root of list) {
+    const page = loadPage(root, raw, cwd);
+    if (page) return page;
+  }
+  return null;
+}
+
+export function loadCombinedGraphs(roots, cwd) {
+  const graphs = (roots || []).map((root) => loadFullGraph(root, cwd));
+  return combineAtlases(graphs);
 }
 
 export function loadFullGraph(rawRoot, cwd) {

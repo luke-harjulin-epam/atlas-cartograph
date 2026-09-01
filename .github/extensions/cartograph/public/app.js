@@ -110,22 +110,58 @@ function onPreviewClick(e) {
   }
 }
 
+function storeCard(s) {
+  return `<button class="store-card" data-root="${escapeHtml(s.root)}">
+        <h3>${escapeHtml(s.label)}</h3>
+        <div class="subtle">${escapeHtml(s.format || "atlas")}${s.atlasId ? ` · ${escapeHtml(s.atlasId)}` : ""}</div>
+        <div class="muted" style="margin-top:0.75rem">${s.pages ?? 0} pages · ${escapeHtml(s.root)}</div>
+      </button>`;
+}
+
+function openRoots() {
+  return state.roots?.length ? state.roots : state.root ? [state.root] : [];
+}
+
 function renderStores() {
   const grid = $("store-grid");
   const atlas = (state.stores || []).filter((s) => s.available);
   if (!atlas.length) {
-    grid.innerHTML = `<p class="muted">No Atlas stores found. Use the path field or add fixtures/mini-atlas.</p>`;
+    grid.innerHTML = `<p class="muted">No Atlas found in this session worktree. Paste a path below.</p>`;
     return;
   }
-  grid.innerHTML = atlas
-    .map(
-      (s) => `<button class="store-card" data-root="${escapeHtml(s.root)}">
-        <h3>${escapeHtml(s.label)}</h3>
-        <div class="subtle">${escapeHtml(s.format || "atlas")}${s.atlasId ? ` · ${escapeHtml(s.atlasId)}` : ""}</div>
-        <div class="muted" style="margin-top:0.75rem">${s.pages ?? 0} pages</div>
-      </button>`,
-    )
+  grid.innerHTML = atlas.map(storeCard).join("");
+}
+
+function renderOpenAtlases() {
+  const box = $("open-atlases");
+  if (!box) return;
+  const roots = openRoots();
+  const byRoot = new Map((state.stores || []).map((s) => [s.root, s]));
+  box.innerHTML = roots
+    .map((root) => {
+      const s = byRoot.get(root);
+      const label = s?.label || root.split("/").pop();
+      return `<div class="open-atlas"><span>${escapeHtml(label)}</span><button type="button" data-drop="${escapeHtml(root)}" ${roots.length < 2 ? "disabled" : ""}>Remove</button></div>`;
+    })
     .join("");
+  box.querySelectorAll("[data-drop]").forEach((btn) => {
+    btn.addEventListener("click", () => post("drop", { root: btn.getAttribute("data-drop") }));
+  });
+}
+
+function remainingStores() {
+  const open = new Set(openRoots());
+  return (state.stores || []).filter((s) => s.available && !open.has(s.root));
+}
+
+function renderAtlasAdd() {
+  const overlay = $("atlas-add");
+  const grid = $("atlas-add-grid");
+  if (!overlay || !grid) return;
+  const extra = remainingStores();
+  grid.innerHTML = extra.length
+    ? extra.map(storeCard).join("")
+    : `<p class="muted">No other Atlases in this session. Paste a path on the welcome screen.</p>`;
 }
 
 function ensureMap() {
@@ -207,7 +243,8 @@ function renderMapChrome() {
   $("stat-nodes").textContent = String(vis.nodes.length);
   $("stat-edges").textContent = String(vis.edges.length);
   $("stat-format").textContent = state.graph?.store?.format ?? "—";
-  $("stat-root").textContent = state.graph?.store?.atlasId || state.root || "No atlas";
+  $("stat-root").textContent = state.graph?.store?.label || state.graph?.store?.atlasId || state.root || "No atlas";
+  renderOpenAtlases();
   $("search").value = state.query || "";
   const q = (state.query || "").trim().toLowerCase();
   const matches = q
@@ -435,6 +472,18 @@ $("chat-form").addEventListener("submit", (e) => {
   });
 });
 $("toggle-panel").addEventListener("click", () => $("panel").classList.toggle("hidden"));
+$("add-atlas")?.addEventListener("click", () => {
+  renderAtlasAdd();
+  $("atlas-add")?.classList.remove("hidden");
+  $("panel")?.classList.add("hidden");
+});
+$("atlas-add-close")?.addEventListener("click", () => $("atlas-add")?.classList.add("hidden"));
+$("atlas-add-grid")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-root]");
+  if (!btn) return;
+  post("add", { root: btn.getAttribute("data-root") });
+  $("atlas-add")?.classList.add("hidden");
+});
 $("preview").addEventListener("click", onPreviewClick);
 document.addEventListener("click", (e) => {
   const a = e.target.closest("a");
@@ -499,7 +548,7 @@ function renderChat() {
 }
 
 function applyGrouping(mode) {
-  const grouping = mode === "proximity" ? "proximity" : "layers";
+  const grouping = mode === "proximity" ? "proximity" : mode === "atlases" ? "atlases" : "layers";
   state.grouping = grouping;
   if (map && state.graph) {
     const vis = visibleGraph();
