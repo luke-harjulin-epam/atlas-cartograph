@@ -2,10 +2,11 @@ import { createServer } from "node:http";
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { dirname, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { defaultRoot, inspectRoot, listPresets, loadCombinedGraphs, loadFullGraph, loadPage, loadPageFromRoots, pageIdentity, sanitizeRoot } from "./atlas/scan.mjs";
+import { defaultRoot, inspectRoot, listPresets, loadCombinedGraphs, loadFullGraph, loadPage, loadPageFromRoots, sanitizeRoot } from "./atlas/scan.mjs";
 import { DuplicateAtlasKeyError } from "./atlas/merge.mjs";
 import { allPresetSpecs, discoverAtlasPresets } from "./atlas/catalog.mjs";
 import { normalizeLink } from "./atlas/parse.mjs";
+import { createPageResolver, pageReference } from "./atlas/resolve.mjs";
 import { answerQuery } from "./atlas/chat.mjs";
 import { DEFAULT_DURATION_MS, validateDuration } from "./activity/model.mjs";
 import { createActivityService } from "./activity/service.mjs";
@@ -95,7 +96,7 @@ function snapshot(state) {
 }
 
 function broadcast(entry) {
-  entry.liveAtlas?.syncRoots();
+  entry.liveAtlas?.syncRoots({ retry: false });
   entry.activity.sync();
   const payload = `data: ${JSON.stringify(snapshot(entry.state))}\n\n`;
   for (const res of entry.clients) {
@@ -231,36 +232,38 @@ export function refreshAtlases(state) {
   return true;
 }
 
-function resolveNodeId(state, raw, sourceId = state.selectedId) {
-  const key = normalizeLink(String(raw ?? ""));
-  if (!key) return null;
+const pageResolvers = new WeakMap();
+
+function resolveNodeId(state, raw, sourceId = state.selectedId, options = {}) {
   const nodes = state.graph?.nodes ?? [];
-  const qualified = key.includes("::") || key.startsWith("atlas://");
-  if (qualified) {
-    const identity = pageIdentity(raw);
-    if (!identity) return null;
-    return nodes.find((node) => node.atlasKey === identity.atlas &&
-      (node.localId === identity.id || normalizeLink(node.path || "") === identity.id ||
-        (node.aliases ?? []).some((alias) => normalizeLink(alias) === identity.id)))?.id ?? key;
+  let resolve = pageResolvers.get(nodes);
+  if (!resolve) {
+    resolve = createPageResolver(nodes);
+    pageResolvers.set(nodes, resolve);
   }
-  const matches = nodes.filter(
-    (n) =>
-      n.id === raw ||
-      n.id === key ||
-      n.path === raw ||
-      n.path === `${key}.md` ||
-      (n.aliases ?? []).some((a) => normalizeLink(a) === key) ||
-      n.title.toLowerCase() === String(raw).trim().toLowerCase() ||
-      n.id.endsWith(`/${key}`) ||
-      n.id.endsWith(`/${key.split("/").pop()}`),
-  );
-  const selected = nodes.find((node) => node.id === sourceId);
-  const hit = (selected && matches.find((node) => node.atlasKey === selected.atlasKey)) || matches[0];
-  return hit?.id ?? key;
+  const source = nodes.find((node) => node.id === sourceId) ??
+    (sourceId === state.selectedId ? state.page : null);
+  const key = normalizeLink(String(raw ?? ""));
+  const relative = options.relative ?? (pageReference(raw, source)?.relative ||
+    !(source?.refs ?? []).some((ref) =>
+      (ref.kind === "source" || ref.kind === "relates") && normalizeLink(ref.raw) === key));
+  const hit = resolve(raw, source, { relative, titles: true });
+  if (hit) return hit.id;
+  const reference = pageReference(raw, source, { relative });
+  if (!reference || reference.relative) return null;
+  return reference.atlas === null ? reference.id : `${reference.atlas}::${reference.id}`;
 }
 
 function enrichPage(state, page, nodeId) {
   const node = state.graph?.nodes?.find((n) => n.id === nodeId);
+  const declaredPath = (path) => {
+    if (!node?.atlasKey || !pageReference(path, node)?.relative) return path;
+    const id = resolveNodeId(state, path, nodeId, { relative: false });
+    const target = state.graph.nodes.find((candidate) => candidate.id === id);
+    return target
+      ? `${target.atlasKey}::${target.localId || normalizeLink(target.path)}`
+      : `${node.atlasKey}::${normalizeLink(path)}`;
+  };
   const relatesTo = [];
   const seen = new Set();
   const addRelation = (path, kind) => {
@@ -270,12 +273,12 @@ function enrichPage(state, page, nodeId) {
     seen.add(key);
     relatesTo.push({ path, kind });
   };
-  for (const relation of page?.relatesTo ?? []) addRelation(relation.path, relation.kind);
+  for (const relation of page?.relatesTo ?? []) addRelation(declaredPath(relation.path), relation.kind);
   if (!relatesTo.length && node) {
     for (const r of node.refs ?? []) {
       if (r.kind !== "relates" && r.kind !== "mesh") continue;
       const path = r.kind === "mesh" && r.relKind ? `atlas://${r.relKind}/${r.raw}` : r.raw;
-      addRelation(path, r.relKind || r.kind);
+      addRelation(r.kind === "relates" ? declaredPath(path) : path, r.relKind || r.kind);
     }
   }
   for (const e of state.graph?.edges ?? []) {
@@ -286,9 +289,9 @@ function enrichPage(state, page, nodeId) {
     addRelation(other, e.relKind || e.kind);
   }
   const sources =
-    page?.sources?.length
+    (page?.sources?.length
       ? page.sources
-      : (node?.refs ?? []).filter((r) => r.kind === "source").map((r) => r.raw);
+      : (node?.refs ?? []).filter((r) => r.kind === "source").map((r) => r.raw)).map(declaredPath);
   if (!page) {
     return {
       id: nodeId,
@@ -415,9 +418,11 @@ export async function startServer(instanceId, state, options = {}) {
         const body = await readJsonBody(req);
         if (body.action === "open") {
           openAtlas(entry.state, body.root);
+          entry.liveAtlas.syncRoots();
           if (entry.state.graph?.store?.available) entry.state.phase = "jump";
         } else if (body.action === "add") {
           addAtlas(entry.state, body.root);
+          entry.liveAtlas.syncRoots();
           if (entry.state.phase === "jump") entry.state.phase = "map";
         } else if (body.action === "drop") {
           dropAtlas(entry.state, body.root);
@@ -501,7 +506,10 @@ export async function startServer(instanceId, state, options = {}) {
   const port = typeof address === "object" && address ? address.port : 0;
   entry.server = server;
   entry.url = `http://127.0.0.1:${port}/`;
-  entry.broadcast = () => broadcast(entry);
+  entry.broadcast = () => {
+    entry.liveAtlas.syncRoots();
+    broadcast(entry);
+  };
   entry.close = async () => {
     entry.liveAtlas.close();
     entry.activity.close();

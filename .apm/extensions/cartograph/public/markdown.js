@@ -34,7 +34,7 @@ function mdLink(label, href) {
     return `<a href="${escapeHtml(h)}" target="_blank" rel="noopener noreferrer">${escapeHtml(l)}</a>`;
   }
   if (!h || h.startsWith("#")) return escapeHtml(l);
-  return wikiButton(h.replace(/^\.\//, ""), l);
+  return wikiButton(h, l);
 }
 
 function inline(text) {

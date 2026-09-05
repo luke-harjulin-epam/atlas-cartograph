@@ -35,6 +35,9 @@
   relationship once. Chat completions must update their own request placeholder.
 - Exclude fenced and inline code before extracting graph links from Markdown
   bodies. Preserve frontmatter relationship kinds and the original preview text.
+- Resolve source-relative page links consistently in graph edges and preview
+  navigation before basename aliases, without crossing mount boundaries.
+- Keep zero-byte Markdown files as selectable graph nodes with filename titles.
 - Guard path-scanning and state-changing HTTP routes with the shared canvas
   request validation; do not rely on CORS or JSON parsing as authorization.
   Bootstrap and SSE snapshots need the same boundary. Native EventSource may
@@ -50,6 +53,8 @@
   never overwrite pending text or its caret with an older snapshot.
 - Stamp every full-state payload with a monotonic emission revision and discard
   older bootstrap, SSE and action snapshots before applying any fields or timers.
+- Order activity payloads independently across full-state and activity-only
+  transports so an older response cannot replace a newer collector observation.
 - Skip symlink loops during default discovery without hiding permission/I/O
   failures. Index layout labels and compress proximity parent chains.
 - Preserve receiver activity per lexical path, physical target and mount identity
@@ -59,6 +64,8 @@
 - Keep WebGL and 2D rendering on the same camera, playback and lifecycle clock;
   retain all edges, decorative labels and a working 2D fallback.
 - Keep WebGL and Canvas 2D activity behavior equivalent, including reduced motion.
+- Honour reduced motion in intro/welcome starfields as well as the graph, and
+  release their animation loops and preference listeners on phase transitions.
 - Keep adaptive 400/200/100/50 ms activity pacing in shared browser playback,
   never in filesystem operations or collector transport. Use queue depth and
   oldest waiting age, smooth speed changes, and at most one activation per frame.
@@ -107,6 +114,8 @@
 - Live scans must surface errors and retain the last valid graph rather than
   falsely interpreting permission/read failures as deletions. Preserve selection
   by file identity unless that file was deleted.
+- Explicit Atlas reopen/refresh must retry failed root and parent watchers even
+  for unchanged roots. Automatic status broadcasts must not create retry loops.
 - Copilot canvases default to the current CLI session's process tree, not the
   whole host application. Exclude the viewer subtree and fail closed on unknown
   ancestry; do not silently broaden process scope to make a demo light up.

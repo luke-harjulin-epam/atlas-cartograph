@@ -1,40 +1,7 @@
-import { normalizeLink } from "./parse.mjs";
-import { pageIdentity } from "./identity.mjs";
-
-function addAlias(map, alias, node) {
-  if (!alias) return;
-  if (!map.has(alias)) map.set(alias, []);
-  map.get(alias).push(node);
-}
-
-function pickAlias(hits, source) {
-  if (!hits?.length) return null;
-  const same = hits.find((h) => (h.atlasKey || "") === (source.atlasKey || ""));
-  return (same || hits[0]).id;
-}
+import { createPageResolver } from "./resolve.mjs";
 
 function linkGraph(nodes) {
-  const aliasToIds = new Map();
-  for (const n of nodes) {
-    addAlias(aliasToIds, n.id, n);
-    addAlias(aliasToIds, n.localId, n);
-    for (const a of n.aliases || []) addAlias(aliasToIds, a, n);
-  }
-  const resolveRef = (raw, source) => {
-    const n = normalizeLink(raw);
-    if (!n) return null;
-    if (n.startsWith("atlas://") || n.includes("::")) {
-      const identity = pageIdentity(raw);
-      return identity?.atlas
-        ? aliasToIds.get(identity.id)?.find((node) => node.atlasKey === identity.atlas)?.id ?? null
-        : null;
-    }
-    return (
-      pickAlias(aliasToIds.get(n), source) ||
-      pickAlias(aliasToIds.get(n.replace(/^\.\.\//, "")), source) ||
-      pickAlias(aliasToIds.get(n.split("/").pop() ?? ""), source)
-    );
-  };
+  const resolveRef = createPageResolver(nodes);
   const edges = [];
   const seen = new Set();
   for (const n of nodes) {
@@ -42,9 +9,9 @@ function linkGraph(nodes) {
       let tid = null;
       if (ref.kind === "mesh") {
         if (!ref.relKind) continue;
-        tid = resolveRef(`atlas://${ref.relKind}/${ref.raw}`, n);
+        tid = resolveRef(`atlas://${ref.relKind}/${ref.raw}`, n)?.id;
       } else {
-        tid = resolveRef(ref.raw, n);
+        tid = resolveRef(ref.raw, n, { relative: ref.kind === "link" })?.id;
       }
       if (!tid || tid === n.id) continue;
       const key = `${ref.kind}:${n.id}->${tid}:${ref.relKind ?? ""}`;

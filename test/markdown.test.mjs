@@ -2,6 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { renderMarkdown } from "../.apm/extensions/cartograph/public/markdown.js";
 
+test("Markdown navigation preserves explicit source-relative targets", () => {
+  for (const target of ["./task.md", "../work/task.md", "work/task.md"]) {
+    assert.ok(renderMarkdown(`[Task](${target})`).includes(`data-target="${target}"`), target);
+  }
+});
+
 test("lists immediately after paragraphs and headings start their own blocks", () => {
   for (const marker of ["-", "*", "+", "1."]) {
     const tag = marker === "1." ? "ol" : "ul";

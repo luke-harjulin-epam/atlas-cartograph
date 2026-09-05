@@ -28,9 +28,11 @@ const phases = {
   jump: $("phase-jump"),
   map: $("phase-map"),
 };
+const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
 
 let state = { phase: "crawl", stores: [], graph: null, root: "", query: "", selectedId: null, previewOpen: false, layers: {}, grouping: "layers", error: null, linkError: null, page: null, chat: [] };
 let latestStateRevision = null;
+let latestActivityRevision = null;
 let chatOpen = false;
 let map = null;
 const activityControls = mountActivityControls($("activity-controls"), applyActivity,
@@ -86,15 +88,33 @@ const nodeBrowser = mountNodeBrowser($("node-browser"), $("browse-nodes"), {
   clear: async () => applyState(await post("select", { nodeId: "" })),
 });
 
+function acceptActivity(activity) {
+  const revision = activity?.revision;
+  if (Number.isSafeInteger(revision) && revision >= 0) {
+    if (latestActivityRevision !== null && revision <= latestActivityRevision) return false;
+    latestActivityRevision = revision;
+  } else if (latestActivityRevision !== null) {
+    return false;
+  }
+  return true;
+}
+
 function applyActivity(activity) {
+  if (!acceptActivity(activity)) {
+    // Config controls may have staged a delayed HTTP result before this callback.
+    activityControls.setActivity(state.activity);
+    return false;
+  }
   state.activity = activity;
   map?.setActivity(activity);
   activityControls.setActivity(activity);
+  return true;
 }
 
 function showPhase(name) {
   for (const [key, el] of Object.entries(phases)) {
     el.classList.toggle("hidden", key !== name);
+    starfields[key]?.setActive(key === name);
   }
 }
 
@@ -365,8 +385,9 @@ function applyState(next) {
   const grouping = next.grouping || state.grouping || "layers";
   const layers = layerControls.snapshot(next.layers, next.layersRevision);
   const query = queryControls.snapshot(next.query, next.queryRevision);
+  const activity = Object.hasOwn(next, "activity") && acceptActivity(next.activity) ? next.activity : state.activity;
   state = { ...state, ...next, grouping, layers, layersRevision: layerControls.layersRevision,
-    query, queryRevision: queryControls.revision };
+    query, queryRevision: queryControls.revision, activity };
   activityControls.setActivity(state.activity);
   graphWatchControls.setWatch(state.graphWatch);
   if (!state.graph) map?.setGraph([], [], grouping, state.graphChanges, () => false);
@@ -399,14 +420,15 @@ function seedStars(canvas, warpFn) {
     return { x: Math.cos(a) * r, y: Math.sin(a) * r * 0.62, z: Math.random(), s: 0.4 + Math.random() * 1.4, hue: Math.random() };
   });
   let last = performance.now();
+  let active = false;
+  let frame = null;
   const tick = (now) => {
-    if (canvas.closest(".hidden")) {
-      requestAnimationFrame(tick);
-      return;
-    }
-    const dt = Math.min(0.05, (now - last) / 1000);
+    frame = null;
+    if (!active) return;
+    const reduced = motionPreference.matches;
+    const dt = reduced ? 0 : Math.min(0.05, (now - last) / 1000);
     last = now;
-    const { warp, flash } = warpFn(now);
+    const { warp, flash } = reduced ? { warp: 0, flash: 0 } : warpFn(now);
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
@@ -462,24 +484,50 @@ function seedStars(canvas, warpFn) {
       ctx.fillStyle = `rgba(236, 246, 255, ${0.55 * flash})`;
       ctx.fillRect(0, 0, w, h);
     }
-    requestAnimationFrame(tick);
+    if (!reduced) frame = requestAnimationFrame(tick);
   };
-  requestAnimationFrame(tick);
+  const stop = () => {
+    if (frame !== null) cancelAnimationFrame(frame);
+    frame = null;
+  };
+  const restart = () => {
+    stop();
+    if (!active) return;
+    last = performance.now();
+    if (motionPreference.matches) tick(last);
+    else frame = requestAnimationFrame(tick);
+  };
+  return {
+    setActive(next) {
+      if (active === next) return;
+      active = next;
+      if (active) {
+        motionPreference.addEventListener("change", restart);
+        restart();
+      } else {
+        motionPreference.removeEventListener("change", restart);
+        stop();
+      }
+    },
+  };
 }
 
 function smooth(t) { const x = Math.max(0, Math.min(1, t)); return x * x * (3 - 2 * x); }
 
 $("crawl-body").textContent = CRAWL_BODY;
-seedStars($("crawl-sky"), () => ({ warp: 0, flash: 0 }));
-seedStars($("welcome-sky"), () => ({ warp: 0, flash: 0 }));
 let jumpT0 = 0;
-seedStars($("jump-sky"), (now) => {
-  if (!jumpT0) jumpT0 = now;
-  const u = Math.min(1, (now - jumpT0) / 3400);
-  const warp = u < 0.16 ? smooth(u / 0.16) : u < 0.55 ? 1 : u < 0.88 ? 1 - smooth((u - 0.55) / 0.33) : 0;
-  const d = Math.abs(u - 0.8) / 0.07;
-  return { warp, flash: Math.max(0, 1 - d * d) };
-});
+const starfields = {
+  crawl: seedStars($("crawl-sky"), () => ({ warp: 0, flash: 0 })),
+  welcome: seedStars($("welcome-sky"), () => ({ warp: 0, flash: 0 })),
+  jump: seedStars($("jump-sky"), (now) => {
+    if (!jumpT0) jumpT0 = now;
+    const u = Math.min(1, (now - jumpT0) / 3400);
+    const warp = u < 0.16 ? smooth(u / 0.16) : u < 0.55 ? 1 : u < 0.88 ? 1 - smooth((u - 0.55) / 0.33) : 0;
+    const d = Math.abs(u - 0.8) / 0.07;
+    return { warp, flash: Math.max(0, 1 - d * d) };
+  }),
+};
+showPhase(state.phase);
 
 $("skip-crawl").addEventListener("click", () => post("phase", { phase: "welcome" }));
 $("skip-jump").addEventListener("click", () => post("phase", { phase: "map" }));
@@ -607,10 +655,9 @@ function applyGrouping(mode) {
   post("grouping", { grouping });
 }
 
-const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 setTimeout(() => {
   if (state.phase === "crawl") post("phase", { phase: "welcome" });
-}, reduce ? 0 : 22000);
+}, motionPreference.matches ? 0 : 22000);
 
 let jumpTimer = null;
 function armJump() {
@@ -618,7 +665,7 @@ function armJump() {
   jumpT0 = 0;
   jumpTimer = setTimeout(() => {
     if (state.phase === "jump") post("phase", { phase: "map" });
-  }, reduce ? 0 : 3400);
+  }, motionPreference.matches ? 0 : 3400);
 }
 
 const es = new EventSource("/events");

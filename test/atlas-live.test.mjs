@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import { mkdtempSync, mkdirSync, writeFileSync, renameSync, rmSync, chmodSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,6 +7,8 @@ import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
 import { addAtlas, dropAtlas, freshState, openAtlas, selectNode, startServer } from "../.apm/extensions/cartograph/server.mjs";
 import { graphChanges } from "../.apm/extensions/cartograph/atlas/live.mjs";
+import { loadFullGraph } from "../.apm/extensions/cartograph/atlas/scan.mjs";
+import { createFilesystemWatcher } from "../.apm/extensions/cartograph/atlas/watch.mjs";
 
 async function until(predicate, message) {
   const deadline = Date.now() + 5000;
@@ -17,7 +20,7 @@ function page(title, body = "") {
   return `---\ntype: work\ntitle: ${title}\n---\n\n# ${title}\n\n${body}\n`;
 }
 
-async function setup(t, { native = false } = {}) {
+async function setup(t, { native = false, watcherFactory: sourceFactory } = {}) {
   const temp = mkdtempSync(join(tmpdir(), "cartograph-live-"));
   const root = join(temp, "atlas");
   mkdirSync(root);
@@ -40,7 +43,7 @@ async function setup(t, { native = false } = {}) {
   };
   const entry = await startServer("live-test", state, {
     activity: { platform: "darwin" },
-    graphWatch: { ...(native ? {} : { watcherFactory }), debounceMs: 40, maxWaitMs: 200 },
+    graphWatch: { ...(native ? {} : { watcherFactory: sourceFactory ?? watcherFactory }), debounceMs: 40, maxWaitMs: 200 },
   });
   t.after(async () => { await entry.close(); rmSync(temp, { recursive: true, force: true }); });
   const node = (path) => state.graph?.nodes.find((item) => item.path === path);
@@ -118,6 +121,31 @@ test("debouncing coalesces atomic saves into an edit instead of delete/create", 
   assert.equal(state.graphChanges.revision, baseline + 1);
   assert.deepEqual(state.graphChanges.created, []);
   assert.deepEqual(state.graphChanges.deleted, []);
+});
+
+test("zero-byte Markdown pages are discovered, selected and retained through live edits", async (t) => {
+  const { state, root, temp, node, change } = await setup(t);
+  const path = join(root, "empty-page.md");
+  writeFileSync(path, "");
+  const scanned = loadFullGraph(root, temp);
+  assert.equal(scanned.nodes.length, scanned.total);
+  assert.equal(scanned.nodes.find((item) => item.path === "empty-page.md")?.title, "empty page");
+  change();
+  await until(() => node("empty-page.md"), "zero-byte creation reaches the graph");
+  assert.deepEqual(state.graphChanges.created.map((item) => item.path), ["empty-page.md"]);
+  selectNode(state, node("empty-page.md").id);
+  assert.equal(state.page.body, "");
+  assert.equal(state.page.title, "empty page");
+  writeFileSync(path, page("Written", "Now has content"));
+  change();
+  await until(() => state.page?.title === "Written", "selected empty page updates");
+  writeFileSync(path, "");
+  change();
+  await until(() => state.page?.body === "", "truncation leaves the selected page available");
+  assert.equal(node("empty-page.md").title, "empty page");
+  assert.deepEqual(state.graphChanges.created, []);
+  assert.deepEqual(state.graphChanges.deleted, []);
+  assert.equal(state.selectedId, node("empty-page.md").id);
 });
 
 test("multiple Atlases watch and reconcile independently, including colliding local IDs", async (t) => {
@@ -225,6 +253,43 @@ test("watcher failures are surfaced and pending refreshes cancel when the Atlas 
   await delay(100);
   assert.equal(state.graph, null);
   assert.equal(state.graphChanges.revision, revision);
+});
+
+test("reopening the same Atlas retries failed watchers through HTTP and canvas actions", async (t) => {
+  for (const mode of ["http", "canvas"]) {
+    await t.test(mode, async (t) => {
+      const opened = [];
+      const watcherFactory = (callbacks) => createFilesystemWatcher({
+        ...callbacks,
+        watchDirectory(path, options, notify) {
+          const handle = Object.assign(new EventEmitter(), { close() {} });
+          opened.push({ path, options, notify, handle });
+          return handle;
+        },
+      });
+      const { state, entry, root, node } = await setup(t, { watcherFactory });
+      opened.find((item) => item.path === root).handle.emit("error", new Error("Transient watch failure"));
+      assert.equal(state.graphWatch.status, "error");
+      await delay(90);
+      assert.equal(opened.length, 2, "automatic publication must not restart failed handles");
+      if (mode === "http") {
+        const response = await fetch(new URL("/api/ui", entry.url), {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Cartograph-Client": "canvas" },
+          body: JSON.stringify({ action: "open", root }),
+        });
+        assert.equal(response.status, 200);
+      } else {
+        openAtlas(state, root);
+        entry.broadcast();
+      }
+      assert.equal(state.graphWatch.status, "live");
+      assert.equal(opened.length, 3);
+      writeFileSync(join(root, "after-retry.md"), page("After retry"));
+      opened.at(-1).notify("change", "after-retry.md");
+      await until(() => node("after-retry.md"), "subsequent saves reach the recovered watcher");
+    });
+  }
 });
 
 test("filesystem watching detects nested create, edit, delete, and root recreation", async (t) => {

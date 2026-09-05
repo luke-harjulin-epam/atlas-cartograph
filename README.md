@@ -149,12 +149,16 @@ for normally accessible directories. New nodes and relationships glow green
 for 2000 ms, fading back to their default colour. Deleted nodes and relationships
 leave non-interactive red ghosts that fade out over 2000 ms. These effects stay
 separate from the read-activation path, including links between existing nodes.
+Empty Markdown files also appear immediately, using their filenames as titles.
 
 Edits refresh node metadata, relationships, and the selected page without
 resetting search, layers, or grouping. Camera following is independently
 switchable and does not change the layout. Folder watching works even
 when read highlighting is paused or no read collector is running. See
 [live-update behavior and limits](docs/usage.md#live-graph-updates).
+If folder watching reports an error, reopen the same Atlas to retry failed
+watchers. Unreadable scans retain the last valid graph rather than treating
+unreadable files as deletions.
 
 ## Repository
 

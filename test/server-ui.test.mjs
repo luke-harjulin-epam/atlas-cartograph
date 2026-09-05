@@ -1,14 +1,13 @@
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { request } from "node:http";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { setImmediate as nextTurn } from "node:timers/promises";
 import test from "node:test";
 import { addAtlas, dropAtlas, freshState, openAtlas, refreshAtlases, selectNode, setQuery, startServer } from "../.apm/extensions/cartograph/server.mjs";
 
 function fixture(t) {
-  const cwd = realpathSync(mkdtempSync(join(tmpdir(), "cartograph-ui-")));
+  const cwd = realpathSync(mkdtempSync(resolve("test/.cartograph-ui-")));
   let entry;
   t.after(async () => { await entry?.close(); rmSync(cwd, { recursive: true, force: true }); });
   const roots = ["one", "two"].map((id) => {
@@ -56,6 +55,116 @@ test("unqualified links prefer the currently selected Atlas; explicit IDs overri
   selectNode(state, "");
   selectNode(state, "shared");
   assert.equal(state.selectedId, "one::work/shared", "no current selection preserves first-match behavior");
+});
+
+test("preview navigation and graph links agree on ambiguous source-relative pages", async (t) => {
+  const { state, roots, start } = fixture(t);
+  mkdirSync(join(roots[1], "first"));
+  writeFileSync(join(roots[1], "first/shared.md"), "# Decoy");
+  mkdirSync(join(roots[1], "nested"));
+  writeFileSync(join(roots[1], "nested/source.md"), "# Source\n[Sibling](./shared.md)\n[[shared]]");
+  writeFileSync(join(roots[1], "nested/shared.md"), "# Sibling");
+  openAtlas(state, roots[0]);
+  addAtlas(state, roots[1]);
+  const source = "two::nested/source";
+  assert.deepEqual(state.graph.edges.filter((edge) => edge.source === source)
+    .map((edge) => edge.target), ["two::nested/shared"]);
+  const entry = await start();
+  for (const target of ["./shared.md", "shared"]) {
+    selectNode(state, source);
+    const response = await fetch(new URL("/api/ui", entry.url), {
+      method: "POST",
+      headers: { "X-Cartograph-Client": "canvas", "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "select", nodeId: target }),
+    });
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    assert.equal(result.selectedId, "two::nested/shared", target);
+    assert.equal(result.page.body, "# Sibling");
+  }
+});
+
+test("relative preview links resolve parent paths but cannot escape or fall back on missing targets", (t) => {
+  const { state, roots } = fixture(t);
+  mkdirSync(join(roots[1], "nested/deep"), { recursive: true });
+  writeFileSync(join(roots[1], "nested/deep/source.md"), "# Source");
+  writeFileSync(join(roots[1], "nested/shared.md"), "# Parent");
+  openAtlas(state, roots[0]);
+  addAtlas(state, roots[1]);
+  const source = "two::nested/deep/source";
+  for (const target of ["../shared.md", "../deep/../shared.md", "..\\shared.md"]) {
+    selectNode(state, source);
+    selectNode(state, target);
+    assert.equal(state.selectedId, "two::nested/shared", target);
+    assert.equal(state.page.body, "# Parent");
+  }
+  for (const target of [
+    "./shared.md", "./missing/shared.md", "../../shared.md", "../../../shared.md",
+    "/work/shared.md", "C:/work/shared.md", "atlas://two/../work/shared",
+    "./unique.md", "atlas://missing/work/shared", "atlas://two/missing/shared",
+  ]) {
+    selectNode(state, source);
+    const previous = state.page;
+    selectNode(state, target);
+    assert.equal(state.selectedId, source, target);
+    assert.equal(state.page, previous, target);
+    assert.match(state.linkError, /No page/, target);
+  }
+});
+
+test("relative navigation preserves explicit root paths and frontmatter relationship targets", (t) => {
+  const { state, roots } = fixture(t);
+  mkdirSync(join(roots[1], "nested/work"), { recursive: true });
+  writeFileSync(join(roots[1], "nested/work/shared.md"), "# Nested path decoy");
+  writeFileSync(join(roots[1], "nested/shared.md"), "# Sibling");
+  writeFileSync(join(roots[1], "nested/source.md"), [
+    "---", "sources:", "  - work/shared",
+    "relates_to:", "  - path: atlas://one/work/unique", "    kind: depends-on", "---",
+    "[Root](work/shared.md)", "[Sibling](./shared.md)",
+  ].join("\n"));
+  openAtlas(state, roots[0]);
+  addAtlas(state, roots[1]);
+  const source = "two::nested/source";
+  for (const [target, expected] of [
+    ["work/shared.md", "two::work/shared"],
+    ["./shared.md", "two::nested/shared"],
+    ["atlas://one/work/shared", "one::work/shared"],
+  ]) {
+    selectNode(state, source);
+    selectNode(state, target);
+    assert.equal(state.selectedId, expected, target);
+  }
+  selectNode(state, source);
+  assert.deepEqual(state.page.sources, ["work/shared"]);
+  assert.deepEqual(state.page.relatesTo.find((relation) => relation.kind === "depends-on"),
+    { path: "atlas://one/work/unique", kind: "depends-on" });
+  selectNode(state, state.page.sources[0]);
+  assert.equal(state.selectedId, "two::work/shared");
+});
+
+test("preview keeps explicit body paths relative beside matching root frontmatter references", (t) => {
+  const { state, roots } = fixture(t);
+  mkdirSync(join(roots[1], "nested/work"), { recursive: true });
+  writeFileSync(join(roots[1], "nested/work/shared.md"), "# Nested target");
+  writeFileSync(join(roots[1], "nested/source.md"), [
+    "---", "sources:", "  - work/shared",
+    "relates_to:", "  - path: ./work/shared", "    kind: depends-on", "---",
+    "[Nested](./work/shared.md)",
+  ].join("\n"));
+  openAtlas(state, roots[0]);
+  addAtlas(state, roots[1]);
+  const source = "two::nested/source";
+  selectNode(state, source);
+  const sources = state.page.sources;
+  const relation = state.page.relatesTo.find((item) => item.kind === "depends-on");
+  selectNode(state, "./work/shared.md");
+  assert.equal(state.selectedId, "two::nested/work/shared", "body link uses the source directory");
+  selectNode(state, source);
+  selectNode(state, sources[0]);
+  assert.equal(state.selectedId, "two::work/shared", "source chip remains root-oriented");
+  selectNode(state, source);
+  selectNode(state, relation.path);
+  assert.equal(state.selectedId, "two::work/shared", "relative-looking frontmatter stays root-oriented");
 });
 
 test("explicit Atlas page selection works with a single mounted store", (t) => {

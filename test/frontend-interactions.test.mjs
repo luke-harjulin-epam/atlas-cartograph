@@ -31,7 +31,7 @@ function controlsFixture(layersRevision = 0) {
   return { controls, calls, changes };
 }
 
-function appFixture() {
+function appFixture({ reducedMotion = false, phase = "map" } = {}) {
   const document = frontendDocument(html);
   const calls = [];
   const opened = [];
@@ -39,16 +39,47 @@ function appFixture() {
   const graphs = [];
   const streams = [];
   const timers = [];
+  const activities = [];
+  const activityStatuses = [];
+  const frames = new Map();
+  const drawings = new Map();
+  const motionListeners = new Set();
+  const motion = {
+    matches: reducedMotion,
+    addEventListener(type, listener) { if (type === "change") motionListeners.add(listener); },
+    removeEventListener(type, listener) { if (type === "change") motionListeners.delete(listener); },
+  };
+  let clock = 0;
+  let frameId = 0;
+  for (const canvas of document.querySelectorAll("canvas")) {
+    canvas.clientWidth = 800;
+    canvas.clientHeight = 600;
+    const drawing = { frames: 0, arcs: [] };
+    drawings.set(canvas.id, drawing);
+    canvas.getContext = () => ({
+      setTransform() { drawing.frames++; },
+      fillRect() {}, save() {}, restore() {}, beginPath() {}, fill() {},
+      moveTo() {}, lineTo() {}, stroke() {},
+      arc(...args) { drawing.arcs.push(args); },
+      createRadialGradient: () => ({ addColorStop() {} }),
+      createLinearGradient: () => ({ addColorStop() {} }),
+    });
+  }
   const bootstrap = deferred();
   const context = vm.createContext({
     document, allNodeLayersOn, createLayerControls, createStateControls, handleContentClick, mountNodeBrowser, escapeHtml, renderMarkdown,
-    window: { matchMedia: () => ({ matches: false }), open: (...args) => opened.push(args) },
-    performance: { now: () => 0 }, requestAnimationFrame() {},
+    window: { matchMedia: () => motion, open: (...args) => opened.push(args) },
+    performance: { now: () => clock },
+    requestAnimationFrame(callback) { frames.set(++frameId, callback); return frameId; },
+    cancelAnimationFrame(id) { frames.delete(id); },
     setTimeout(callback) { timers.push(callback); return timers.length; }, clearTimeout() {},
-    mountActivityControls: () => ({ setActivity() {}, autoFocusEnabled: () => true, setPlayback() {} }),
+    mountActivityControls: () => ({ setActivity(activity) { activityStatuses.push(activity); }, autoFocusEnabled: () => true, setPlayback() {} }),
     mountGraphWatchControls: () => ({ setWatch() {} }),
-    mountGraphCanvas: () => ({ setGraph(nodes) { graphs.push(nodes); }, setSelected() {}, setQuery(query) { queries.push(query); }, setActivity() {}, clusters: () => [] }),
-    EventSource: class { constructor() { streams.push(this); } addEventListener() {} },
+    mountGraphCanvas: () => ({ setGraph(nodes) { graphs.push(nodes); }, setSelected() {}, setQuery(query) { queries.push(query); }, setActivity(activity) { activities.push(activity); }, clusters: () => [] }),
+    EventSource: class {
+      constructor() { streams.push(this); this.listeners = new Map(); }
+      addEventListener(type, listener) { this.listeners.set(type, listener); }
+    },
     fetch: (url, options) => {
       if (url === "/api/bootstrap") return bootstrap.promise;
       const request = deferred();
@@ -58,7 +89,7 @@ function appFixture() {
   });
   vm.runInContext(app.replace(/^import .*;\n/gm, ""), context);
   const initial = {
-    phase: "map", root: "/atlas", roots: ["/atlas"], layers: all, layersRevision: 0, grouping: "layers",
+    phase, root: "/atlas", roots: ["/atlas"], layers: all, layersRevision: 0, grouping: "layers",
     query: "", queryRevision: 0,
     graph: { nodes: [{ id: "node", title: "Node", kind: "experience", path: "node.md", storeRoot: "/atlas" }], edges: [], store: {} },
     selectedId: "node", previewOpen: true, page: {
@@ -69,11 +100,130 @@ function appFixture() {
   function apply(next) { return vm.runInContext(`applyState(${JSON.stringify(next)})`, context); }
   apply(initial);
   return {
-    document, calls, opened, queries, graphs, timers, bootstrap, apply,
+    document, calls, opened, queries, graphs, timers, bootstrap, apply, activities, activityStatuses,
+    frames, drawings, motionListeners,
+    frame() {
+      clock += 16;
+      const queued = [...frames.values()];
+      frames.clear();
+      for (const callback of queued) callback(clock);
+    },
+    setReducedMotion(matches) {
+      motion.matches = matches;
+      for (const listener of [...motionListeners]) listener({ matches });
+    },
+    applyActivity: (activity) => vm.runInContext(`applyActivity(${JSON.stringify(activity)})`, context),
+    receiveActivity: (activity) => streams[0].listeners.get("activity")({ data: JSON.stringify(activity) }),
     receive: (next) => streams[0].onmessage({ data: JSON.stringify(next) }),
     state: () => JSON.parse(vm.runInContext("JSON.stringify(state)", context)),
   };
 }
+
+function activity(revision, overrides = {}) {
+  return { revision, enabled: true, durationMs: 5000, nodes: [], edges: [],
+    collector: { status: "live", message: "Receiving accesses." }, ...overrides };
+}
+
+test("newer collector SSE survives delayed full HTTP snapshots without dropping graph updates or errors", async () => {
+  const { bootstrap, receiveActivity, apply, state, activities, activityStatuses } = appFixture();
+  const old = activity(1, { durationMs: 1000 });
+  const latest = activity(2, {
+    durationMs: 9000, nodes: [{ id: "node", accessedAt: 10000, expiresAt: 19000, sequence: 1, count: 1, firstSequence: 1 }],
+    collector: { status: "error", message: "Collector failed." },
+  });
+  apply({ stateRevision: 1, activity: old });
+  receiveActivity(latest);
+  bootstrap.resolve({ ok: true, json: async () => ({ state: {
+    stateRevision: 2, activity: old, graph: { nodes: [], edges: [] },
+    selectedId: null, previewOpen: false, error: "Graph refresh failed.",
+  } }) });
+  await settle();
+  assert.deepEqual(state().activity, latest);
+  assert.equal(state().stateRevision, 2);
+  assert.equal(state().graph.nodes.length, 0);
+  assert.equal(state().error, "Graph refresh failed.");
+  assert.deepEqual(JSON.parse(JSON.stringify(activities.at(-1))), latest);
+  assert.deepEqual(JSON.parse(JSON.stringify(activityStatuses.at(-1))), latest);
+});
+
+test("activity ordering is independent of state, observation and root revisions across resets", () => {
+  const { receiveActivity, applyActivity, apply, state, activities } = appFixture();
+  const latest = activity(8, { nodes: [{ id: "node", sequence: 20 }] });
+  apply({ stateRevision: 100, activity: latest });
+  const rendered = activities.length;
+  for (const stale of [activity(7), activity(8), { enabled: false }, null]) {
+    assert.equal(applyActivity(stale), false);
+  }
+  assert.equal(activities.length, rendered, "stale direct/config replies never reach playback");
+  assert.deepEqual(state().activity, latest);
+  apply({ stateRevision: 101, activity: activity(8, { enabled: false }), grouping: "atlases" });
+  assert.deepEqual(state().activity, latest);
+  assert.equal(state().grouping, "atlases");
+  apply({ stateRevision: 99, activity: activity(1000) });
+  assert.deepEqual(state().activity, latest, "rejected full states cannot advance the activity clock");
+  const paused = activity(9, { enabled: false });
+  receiveActivity(paused);
+  assert.deepEqual(state().activity, paused);
+  apply({ stateRevision: 102, root: "", roots: [], graph: null, phase: "welcome", activity: activity(10) });
+  assert.equal(state().activity.revision, 10);
+  const restarted = activity(11, { nodes: [{ id: "other", sequence: 1 }] });
+  apply({ stateRevision: 103, root: "/other", roots: ["/other"], phase: "map",
+    graph: { nodes: [{ id: "other", kind: "experience", path: "other.md", storeRoot: "/other" }], edges: [] },
+    activity: restarted });
+  receiveActivity(activity(9, { enabled: false }));
+  assert.deepEqual(state().activity, restarted);
+  assert.equal(state().root, "/other");
+  assert.equal(state().stateRevision, 103);
+});
+
+test("reduced-motion intro and welcome draw static skies with no animation frames", () => {
+  const { apply, frames, drawings, frame } = appFixture({ reducedMotion: true, phase: "crawl" });
+  assert.equal(frames.size, 0);
+  assert.equal(drawings.get("crawl-sky").frames, 1);
+  frame();
+  assert.equal(drawings.get("crawl-sky").frames, 1);
+  apply({ phase: "welcome" });
+  assert.equal(drawings.get("welcome-sky").frames, 1);
+  assert.equal(frames.size, 0);
+  apply({ phase: "welcome", error: "No stores" });
+  assert.equal(drawings.get("welcome-sky").frames, 1, "ordinary snapshots do not redraw static skies");
+  apply({ phase: "jump" });
+  assert.equal(drawings.get("jump-sky").frames, 1);
+  assert.equal(drawings.get("jump-sky").arcs.length, 420, "reduced jump draws dots rather than warp trails");
+  assert.equal(frames.size, 0);
+});
+
+test("star animation responds to motion changes and cleans up RAF and media handlers on phase changes", () => {
+  const { apply, frames, drawings, motionListeners, setReducedMotion, frame } = appFixture({ phase: "welcome" });
+  assert.equal(frames.size, 1, "only the visible phase animates");
+  assert.equal(motionListeners.size, 1);
+  frame();
+  const first = drawings.get("welcome-sky").arcs.slice(-420);
+  frame();
+  assert.notDeepEqual(drawings.get("welcome-sky").arcs.slice(-420), first, "normal stars continue moving");
+  setReducedMotion(true);
+  assert.equal(frames.size, 0);
+  const staticFrames = drawings.get("welcome-sky").frames;
+  frame();
+  assert.equal(drawings.get("welcome-sky").frames, staticFrames);
+  setReducedMotion(false);
+  assert.equal(frames.size, 1);
+  apply({ phase: "jump" });
+  assert.equal(frames.size, 1, "phase changes replace rather than stack loops");
+  assert.equal(motionListeners.size, 1);
+  frame();
+  assert.equal(drawings.get("welcome-sky").frames, staticFrames);
+  assert.equal(drawings.get("jump-sky").frames, 1);
+  apply({ phase: "map" });
+  assert.equal(frames.size, 0);
+  assert.equal(motionListeners.size, 0);
+  setReducedMotion(true);
+  assert.equal(frames.size, 0);
+  apply({ phase: "welcome" });
+  assert.equal(drawings.get("welcome-sky").frames, staticFrames + 1);
+  assert.equal(frames.size, 0, "a newly visible phase reads the current preference");
+  assert.equal(motionListeners.size, 1);
+});
 
 test("older bootstrap, action replies and SSE cannot resurrect deleted graph or preview state", async () => {
   const { document, calls, bootstrap, receive, apply, state, graphs, timers } = appFixture();

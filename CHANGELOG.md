@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Retry failed root and parent watchers when the same Atlas is reopened, without
+  replacing healthy handles or retrying continuously on status broadcasts.
+- Include zero-byte Markdown pages in initial and live graphs with filename
+  titles, keeping previews available when a file is emptied.
+- Preserve newer activity across delayed full-state and activity-only responses.
+- Resolve relative page links consistently in graph edges and preview navigation.
+- Stop intro/welcome star motion when reduced motion is requested and respond
+  to preference changes without leaking animation frames or listeners.
 - Ignore fenced and inline Markdown code when deriving graph relationships,
   while preserving links in prose and declared frontmatter relationships.
 - Reject stale full-state snapshots so delayed bootstrap/action replies cannot

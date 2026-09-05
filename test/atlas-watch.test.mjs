@@ -98,6 +98,86 @@ test("runtime errors close failed watcher handles and stop claiming Live", () =>
   f.watcher.close();
 });
 
+test("unchanged roots retry failed handles without replacing healthy watchers", () => {
+  const f = fixture();
+  f.watcher.setRoots(["/parent/atlas"]);
+  const [parent, root] = f.opened;
+  root.handle.emit("error", new Error("Root failure"));
+  f.watcher.setRoots(["/parent/atlas"]);
+  assert.equal(f.opened.length, 3);
+  assert.equal(parent.handle.closeCount, 0);
+  assert.equal(f.statuses.at(-1).status, "live");
+  parent.handle.emit("error", new Error("Parent failure"));
+  f.watcher.setRoots(["/parent/atlas"]);
+  assert.equal(f.opened.length, 4);
+  assert.equal(f.opened[2].handle.closeCount, 0);
+  assert.equal(f.statuses.at(-1).status, "live");
+  const notifications = f.events.length;
+  root.notify("change", "late.md");
+  parent.notify("rename", "atlas");
+  parent.handle.emit("error", new Error("Late parent failure"));
+  assert.equal(f.events.length, notifications);
+  assert.equal(f.statuses.at(-1).status, "live");
+  f.watcher.setRoots(["/parent/atlas"]);
+  assert.equal(f.opened.length, 4);
+  f.watcher.close();
+  assert.ok(f.opened.every((item) => item.handle.closeCount === 1));
+});
+
+test("unchanged roots retry initial attachment failures", () => {
+  let denied = true;
+  const statuses = [];
+  let opened = 0;
+  const watcher = createFilesystemWatcher({
+    onChange() {},
+    onStatus: (status) => statuses.push(status),
+    stat: () => ({ dev: 1, ino: 1, isDirectory: () => true }),
+    watchDirectory() {
+      if (denied) throw new Error("Access denied");
+      opened++;
+      return Object.assign(new EventEmitter(), { close() {} });
+    },
+  });
+  watcher.setRoots(["/parent/atlas"]);
+  assert.equal(statuses.at(-1).status, "error");
+  denied = false;
+  watcher.setRoots(["/parent/atlas"]);
+  assert.equal(statuses.at(-1).status, "live");
+  assert.equal(opened, 2);
+  watcher.close();
+});
+
+test("explicit sync retries unchanged roots without an automatic error retry loop", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const entry = { state: { cwd: "/", roots: ["/atlas"], graph: { nodes: [] } } };
+  let source;
+  let sets = 0;
+  let scans = 0;
+  const live = createLiveAtlas(entry, () => { scans++; return false; },
+    () => live.syncRoots({ retry: false }), {
+      debounceMs: 10,
+      watcherFactory(callbacks) {
+        source = callbacks;
+        return {
+          setRoots() { sets++; source.onStatus({ status: "live", message: "Watching" }); },
+          close() {},
+        };
+      },
+    });
+  t.after(() => live.close());
+  live.syncRoots();
+  t.mock.timers.tick(10);
+  await Promise.resolve();
+  source.onStatus({ status: "error", message: "Watch failed" });
+  await Promise.resolve();
+  assert.equal(sets, 1, "status publication must not automatically retry");
+  live.syncRoots();
+  assert.equal(sets, 2, "explicit same-root sync reattaches the source");
+  assert.equal(entry.state.graphWatch.status, "live");
+  t.mock.timers.tick(10);
+  assert.equal(scans, 2, "retry reconciles files changed while the source was unavailable");
+});
+
 test("debounce has a maximum wait, suppresses late callbacks and releases the replacement source", (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const entry = { state: { cwd: "/", roots: ["/atlas"], graph: { nodes: [] } } };

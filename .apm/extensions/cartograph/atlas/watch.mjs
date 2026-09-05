@@ -35,7 +35,7 @@ export function createFilesystemWatcher({ onChange, onStatus, watchDirectory = w
       entry.watcher?.close();
       entry.watcher = null;
       const watcher = watchDirectory(entry.root, { recursive: true, persistent: false }, (_event, filename) => {
-        if (!current(entry)) return;
+        if (!current(entry) || entry.watcher !== watcher) return;
         if (filename && isIgnoredAtlasPath(String(filename))) return;
         attach(entry);
         onChange(entry.root);
@@ -59,21 +59,23 @@ export function createFilesystemWatcher({ onChange, onStatus, watchDirectory = w
     status();
   }
 
-  function add(root) {
-    const entry = { root, watcher: null, parent: null, identity: "", error: "", parentError: "" };
-    roots.set(root, entry);
+  function attachParent(entry) {
+    if (!current(entry) || entry.parent) return;
+    const { root } = entry;
     const parent = dirname(root);
     if (parent !== root) {
       try {
         // A root's inode can disappear on rename/delete. Its parent lets us reattach on recreation.
-        entry.parent = watchDirectory(parent, { persistent: false }, (_event, filename) => {
-          if (!current(entry) || (filename && String(filename) !== basename(root))) return;
+        const watcher = watchDirectory(parent, { persistent: false }, (_event, filename) => {
+          if (!current(entry) || entry.parent !== watcher || (filename && String(filename) !== basename(root))) return;
           attach(entry);
           onChange(root);
         });
-        entry.parent.on("error", (error) => {
-          if (!current(entry)) return;
-          entry.parent.close();
+        entry.parent = watcher;
+        entry.parentError = "";
+        watcher.on("error", (error) => {
+          if (!current(entry) || entry.parent !== watcher) return;
+          watcher.close();
           entry.parent = null;
           entry.parentError = `Cannot monitor recreation of ${root}: ${error.message}`;
           status();
@@ -82,6 +84,12 @@ export function createFilesystemWatcher({ onChange, onStatus, watchDirectory = w
         entry.parentError = `Cannot monitor recreation of ${root}: ${error.message}`;
       }
     }
+  }
+
+  function add(root) {
+    const entry = { root, watcher: null, parent: null, identity: "", error: "", parentError: "" };
+    roots.set(root, entry);
+    attachParent(entry);
     attach(entry);
   }
 
@@ -95,7 +103,14 @@ export function createFilesystemWatcher({ onChange, onStatus, watchDirectory = w
         entry.watcher?.close();
         entry.parent?.close();
       }
-      for (const root of wanted) if (!roots.has(root)) add(root);
+      for (const root of wanted) {
+        const entry = roots.get(root);
+        if (!entry) add(root);
+        else {
+          attachParent(entry);
+          attach(entry);
+        }
+      }
       status();
     },
     close() {

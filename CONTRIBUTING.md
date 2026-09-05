@@ -56,6 +56,9 @@ requests, accept empty queries and later external changes, and cover both HTTP
 and canvas query revisions. All-layer state must include unnamed categories.
 Exercise full-state transport reordering across bootstrap, SSE and action
 replies, including deleted nodes, previews, phase timers and late failures.
+Order activity-only events against activity embedded in full-state responses,
+without discarding unrelated newer graph state. Cover reduced-motion changes
+and animation/listener cleanup on both intro and welcome screens.
 Discovery tests must distinguish symlink loops from permission/I/O failures.
 Use operation-count bounds for long-chain, many-Atlas and disconnected layouts,
 and preserve grouping labels and positions.
@@ -69,6 +72,8 @@ Cover duplicate mount rejection and recovery, missing explicit Atlas targets,
 single-store URI navigation, and unique edge IDs/degrees. Chat regressions must
 exercise overlapping success/failure replies and pending entries trimmed from
 history. Markdown blocks must work without blank lines around headings or quotes.
+Relative-link cases must use duplicate basenames and confirm that graph edges
+and preview navigation resolve the same source-directory target.
 Use fake clocks to cover normal 400 ms spacing and adaptive 200/100/50 ms targets,
 queue-age pressure, smooth acceleration/recovery, full displayed lifetimes,
 repeat coalescing, endpoint pulse expiry, and pending-event cancellation.
@@ -92,6 +97,9 @@ bounded critically damped motion, zoom-in hysteresis and manual-angle restoratio
 Backend watcher changes require a server/extension restart, unlike browser-only
 changes. A reopened canvas has a new read-collector command; ordinary graph
 watching starts automatically without that collector.
+Cover explicit same-root recovery after root or parent watcher failure, late
+callbacks from replaced handles, and the absence of automatic retry loops.
+Zero-byte page creation, selection and truncation must retain graph nodes.
 Collector tests should use synthetic OS records and temporary Atlas fixtures,
 not privileged monitoring of other users' files.
 

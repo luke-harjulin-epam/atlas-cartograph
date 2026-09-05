@@ -19,6 +19,7 @@ import {
 import { countKinds, linkGraph, withDegrees } from "./link.mjs";
 import { combineAtlases, mergeGraphs } from "./merge.mjs";
 import { pageIdentity } from "./identity.mjs";
+import { referenceKey } from "./resolve.mjs";
 export { pageIdentity } from "./identity.mjs";
 
 const SKIP_DIRS = new Set([
@@ -208,7 +209,6 @@ function parseFiles(storeRoot, files, format, atlasId, atlasLabel, strict = fals
       if (strict && !["ENOENT", "ENOTDIR", "ELOOP"].includes(error.code)) throw error;
       continue;
     }
-    if (!text) continue;
     const { meta, body } = parseFrontmatter(text);
     const type = typeof meta.type === "string" && meta.type ? meta.type : "";
     const workId = typeof meta.work_id === "string" ? meta.work_id : "";
@@ -217,7 +217,7 @@ function parseFiles(storeRoot, files, format, atlasId, atlasLabel, strict = fals
     const relates = relatesToOf(meta);
     const declaredRefs = new Set([...sources, ...relates.map((r) => normalizeLink(r.path))]);
     const prose = stripMarkdownCode(body);
-    const links = [...extractWikilinks(prose), ...extractMarkdownLinks(prose)].map(normalizeLink);
+    const links = [...extractWikilinks(prose), ...extractMarkdownLinks(prose)];
     const mesh = extractAtlasUris(prose)
       .filter((m) => !declaredRefs.has(normalizeLink(`atlas://${m.atlasId}/${m.path}`)));
     const refs = [
@@ -228,7 +228,7 @@ function parseFiles(storeRoot, files, format, atlasId, atlasLabel, strict = fals
         relKind: r.kind,
       })),
       ...links
-        .filter((raw) => !raw.startsWith("atlas://") && !declaredRefs.has(raw))
+        .filter((raw) => !raw.startsWith("atlas://") && !declaredRefs.has(referenceKey(raw, { path: rel })))
         .map((raw) => ({ raw, kind: "link" })),
       ...mesh.map((m) => ({
         raw: m.path,

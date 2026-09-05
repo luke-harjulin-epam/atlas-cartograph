@@ -42,6 +42,8 @@ export function createActivityService(entry, sendJson, {
   });
   let collector = { status: "waiting", message: provider.waitingMessage };
   let lastHeartbeat = null;
+  let revision = Number.isSafeInteger(entry.state.activity?.revision) && entry.state.activity.revision >= 0
+    ? entry.state.activity.revision : 0;
 
   function sync() {
     model.setGraph(entry.state.graph);
@@ -51,7 +53,7 @@ export function createActivityService(entry, sendJson, {
         ? { status: "unsupported", message: availability.message }
         : collector;
     entry.state.activity = {
-      ...model.snapshot(), provider: monitorMetadata(provider),
+      ...model.snapshot(), revision: ++revision, provider: monitorMetadata(provider),
       scope: { ...scope, excludePids: [...scope.excludePids] }, collector: status,
     };
     return entry.state.activity;

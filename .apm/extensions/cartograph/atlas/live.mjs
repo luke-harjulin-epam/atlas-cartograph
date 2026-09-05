@@ -110,18 +110,21 @@ export function createLiveAtlas(entry, refresh, publish, {
   });
 
   return {
-    syncRoots() {
+    syncRoots({ retry = true } = {}) {
       if (closed) return;
       const roots = [...new Set((entry.state.roots ?? []).map((root) => resolve(entry.state.cwd || ".", root)))];
       const key = JSON.stringify(roots);
-      if (key === rootKey) return;
-      rootKey = key;
-      watchedRoots = new Set(roots);
-      cancel();
-      refreshError = "";
+      const changed = key !== rootKey;
+      if (!changed && !retry) return;
+      if (changed) {
+        rootKey = key;
+        watchedRoots = new Set(roots);
+        cancel();
+        refreshError = "";
+      }
       watcher.setRoots(roots);
       updateStatus();
-      // Reconcile once after subscribing to cover changes between the initial load and attachment.
+      // Explicit retries also reconcile changes missed while a watcher was unavailable.
       if (roots.length) schedule();
     },
     close() {

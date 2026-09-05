@@ -3,6 +3,8 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSyn
 import { join, resolve } from "node:path";
 import test from "node:test";
 import { answerQuery, searchAtlas } from "../.apm/extensions/cartograph/atlas/chat.mjs";
+import { linkGraph } from "../.apm/extensions/cartograph/atlas/link.mjs";
+import { referenceKey } from "../.apm/extensions/cartograph/atlas/resolve.mjs";
 import {
   clearListing,
   loadCombinedGraphs,
@@ -71,6 +73,114 @@ test("ordinary page IDs, Markdown links and basename aliases still load", (t) =>
   assert.equal(graph.complete, true);
   assert.equal(graph.nodes.length, 2);
   assert.ok(graph.edges.some((edge) => edge.source === "index" && edge.target === "work/task"));
+});
+
+test("body links prefer source-directory pages over ambiguous basename aliases", (t) => {
+  const cwd = workspace(t);
+  const root = store(cwd, "local");
+  page(root, "one/task.md", "First task");
+  page(root, "two/task.md", "Sibling task");
+  page(root, "two/source.md", "Source", "[Task](./task.md)\n[[task]]");
+  const graph = loadFullGraph(root, cwd);
+  assert.deepEqual(graph.edges.map(({ source, target }) => ({ source, target })), [
+    { source: "two/source", target: "two/task" },
+  ]);
+  assert.ok(graph.nodes.find((node) => node.id === "two/source").refs.some((ref) => ref.raw === "./task.md"));
+});
+
+test("explicit relative links are confined exact paths, never missing-target aliases", (t) => {
+  const cwd = workspace(t);
+  const first = store(cwd, "one");
+  const second = store(cwd, "two");
+  page(first, "work/task.md", "Decoy");
+  page(first, "work/missing.md", "Missing decoy");
+  page(first, "nested/task.md", "Sibling");
+  page(first, "nested/deep/source.md", "Source", [
+    "[Parent](../task.md)",
+    "[Internal dots](../deep/../task.md)",
+    "[Missing sibling](./task.md)",
+    "[Missing folder](./missing/task.md)",
+    "[Missing parent](../../missing.md)",
+    "[Escape](../../../task.md)",
+    "[Absolute](/work/task.md)",
+    "[Drive](C:/work/task.md)",
+    "[Missing remote sibling](./remote.md)",
+  ].join("\n"));
+  page(second, "nested/deep/remote.md", "Remote decoy");
+  const graph = loadCombinedGraphs([first, second], cwd);
+  assert.deepEqual(graph.edges.filter((edge) => edge.source === "one::nested/deep/source")
+    .map((edge) => edge.target), ["one::nested/task"]);
+});
+
+test("raw graph references resolve confined parent paths without relying on scan normalization", () => {
+  const paths = ["one/task", "two/task", "two/deep/source", "two/deep/child/task", "work/task"];
+  const nodes = paths.map((id) => ({
+    id, localId: id, path: `${id}.md`, atlasKey: "local",
+    aliases: [id, id.split("/").at(-1)], refs: [],
+  }));
+  const source = nodes.find((node) => node.id === "two/deep/source");
+  source.refs = [
+    ...["../task.md", "../deep/../task.md", "./child/task.md", "child/task.md",
+      "./task.md", "./missing/task.md", "missing/task.md", "../../../task.md",
+      "/work/task.md", "C:/work/task.md", "atlas://local/../work/task"]
+      .map((raw) => ({ raw, kind: "link" })),
+    { raw: "work/task", kind: "source" },
+  ];
+  assert.deepEqual(linkGraph(nodes).map(({ target, kind }) => ({ target, kind })), [
+    { target: "two/task", kind: "link" },
+    { target: "two/deep/child/task", kind: "link" },
+    { target: "work/task", kind: "source" },
+  ]);
+});
+
+test("relative comparison keys distinguish nested body links from root frontmatter references", () => {
+  const source = { path: "two/source.md", atlasKey: "local" };
+  assert.equal(referenceKey("./work/task.md", source), "two/work/task");
+  assert.equal(referenceKey("../work/task.md", source), "work/task");
+  assert.equal(referenceKey("work/task.md", source), "work/task");
+  assert.equal(referenceKey("atlas://other/work/task", source), "atlas://other/work/task");
+});
+
+test("frontmatter root references do not suppress distinct explicit relative body links", (t) => {
+  const cwd = workspace(t);
+  const root = store(cwd, "local");
+  page(root, "work/task.md", "Root task");
+  page(root, "two/work/task.md", "Relative task");
+  page(root, "two/source.md", "Source");
+  writeFileSync(join(root, "two/source.md"), [
+    "---", "sources:", "  - work/task", "---",
+    "[Sibling directory](./work/task.md)", "[Root duplicate](../work/task.md)",
+  ].join("\n"));
+  const graph = loadFullGraph(root, cwd);
+  assert.deepEqual(graph.edges.map(({ target, kind }) => ({ target, kind })), [
+    { target: "work/task", kind: "source" },
+    { target: "two/work/task", kind: "link" },
+  ]);
+});
+
+test("root paths and frontmatter relationships keep their identity beside relative body links", (t) => {
+  const cwd = workspace(t);
+  const first = store(cwd, "one");
+  const second = store(cwd, "two");
+  for (const path of ["task.md", "work/task.md", "nested/task.md", "nested/work/task.md", "nested/local.md"]) {
+    page(first, path, path);
+  }
+  page(second, "work/remote.md", "Remote");
+  page(first, "nested/source.md", "Source");
+  writeFileSync(join(first, "nested/source.md"), [
+    "---", "sources:", "  - task", "relates_to:", "  - path: work/task",
+    "    kind: depends-on", "---",
+    "[Root path](work/task.md)", "[Sibling](./local.md)",
+    "[Remote](atlas://two/work/remote)", "[Missing remote](atlas://two/missing/remote)",
+  ].join("\n"));
+  const graph = loadCombinedGraphs([first, second], cwd);
+  assert.deepEqual(graph.edges.filter((edge) => edge.source === "one::nested/source")
+    .map(({ target, kind, relKind }) => ({ target, kind, relKind })), [
+      { target: "one::task", kind: "source", relKind: undefined },
+      { target: "one::work/task", kind: "relates", relKind: "depends-on" },
+      { target: "one::nested/local", kind: "link", relKind: undefined },
+      { target: "two::work/remote", kind: "mesh", relKind: "two" },
+    ]);
 });
 
 test("page reads and scans reject outside symlinks but allow internal aliases and symlink mounts", (t) => {
