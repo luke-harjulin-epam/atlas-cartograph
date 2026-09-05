@@ -1,0 +1,6 @@
+{
+  "schema_version": "1.0",
+  "atlas_id": "cartograph-mini",
+  "title": "Cartograph mini atlas",
+  "description": "Small fixture Atlas for the Copilot canvas viewer. Not process memory."
+}

@@ -7,6 +7,11 @@
   "engines": { "node": ">=22" },
   "scripts": {
     "start": "node .apm/extensions/cartograph/dev.mjs",
+    "demo:lifecycle": "node scripts/dev/lifecycle-demo.mjs",
+    "demo:mixed": "node scripts/dev/mixed-activity-demo.mjs",
+    "demo:stress": "node scripts/dev/stress-scenario.mjs",
+    "demo:server": "node scripts/dev/adaptive-preview-server.mjs",
+    "demo:adaptive": "node scripts/dev/adaptive-preview-exercise.mjs",
     "test": "node --test test/*.test.mjs",
     "check:syntax": "node scripts/check-syntax.mjs",
     "check:version": "node scripts/check-version.mjs",

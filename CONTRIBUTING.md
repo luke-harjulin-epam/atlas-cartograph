@@ -5,8 +5,21 @@ Use Node.js 22 or later. There are no npm dependencies to install.
 Keep runtime code in `.apm/extensions/cartograph/` and documentation in `docs/`.
 There is no generated duplicate of this source. Tests use Node's built-in runner
 under `test/`; run `npm test` or a targeted `node --test` invocation.
-Start a development server with `npm start` for workspace `.atlas/` mounts, or
-`npm start -- ./.apm/extensions/cartograph/fixtures/mini-atlas` for the sample.
+Start a development server with `npm start` for both tracked `.atlas/local/`
+development stores, or `npm start -- .atlas/local/mini-atlas` for only the sample.
+The stress store has 505 baseline nodes and 1508 relationships; opening it does
+not start load or monitoring. Keep synthetic data tracked in the repository,
+not in session directories. See [.atlas/README.md](.atlas/README.md).
+Keep the local mini Atlas and the self-contained packaged sample byte-identical.
+Changes to these fixtures require `node --test test/development-atlases.test.mjs`.
+Do not copy private Atlas content, collector logs or connection tokens into them.
+Keep reusable scenarios in `scripts/dev/`, with offline dry-run defaults,
+matching-fixture preflight and cleanup restricted to exclusively owned temporary
+files. Use `node --test test/development-atlases.test.mjs test/development-scenarios.test.mjs`
+for fixture/runner changes; integration coverage uses isolated copies, not load
+against an active user's canvas. Run privileged/real-read scenarios only as an
+explicit manual exercise. The synthetic preview must remain labelled and isolated
+from real collector endpoints.
 
 To exercise the Copilot canvas, reload project extensions. Select the
 `project:cartograph` provider if a user-installed copy also exists. Do not copy

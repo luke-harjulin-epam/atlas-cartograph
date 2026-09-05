@@ -20,11 +20,14 @@ npm start
 
 The viewer opens all recognized Atlas stores under the current project's
 `.atlas/`, including nested mounts such as `.atlas/github.com/owner/store`.
-An explicit path overrides discovery. If no mounts exist, it shows the picker,
-not the demonstration graph. To open the sample explicitly:
+An explicit path overrides discovery. This repository includes tracked development
+stores under `.atlas/local/`: the 5-node mini Atlas and the 505-node stress Atlas.
+They open together on a fresh clone; opening them does not start a stress workload
+or OS collector. In projects without mounts, the viewer shows the picker instead.
+To open only the sample:
 
 ```sh
-npm start -- ./.apm/extensions/cartograph/fixtures/mini-atlas
+npm start -- .atlas/local/mini-atlas
 ```
 
 Open the printed local URL. In Copilot App, reload extensions and open the
@@ -32,6 +35,13 @@ Open the printed local URL. In Copilot App, reload extensions and open the
 is a development shim for `.apm/extensions/cartograph/extension.mjs`.
 The installed user extension is left unchanged.
 If both extensions are listed, select `project:cartograph` explicitly.
+
+See [development Atlases](.atlas/README.md) for dataset contents and safe usage.
+These datasets ship with the repository, not with installations into consumers'
+`.atlas/`. The small sample remains separately bundled inside the APM runtime.
+Reusable `demo:lifecycle`, `demo:mixed`, `demo:stress`, `demo:server` and
+`demo:adaptive` npm commands default to offline dry-runs; actual activity always
+requires an explicit `--run`.
 
 Mounted stores must have distinct `atlas_id` values (or distinct labels when
 no ID is declared). A duplicate key is rejected with both conflicting paths,

@@ -1,0 +1,6 @@
+{
+  "schema_version": "1.0",
+  "atlas_id": "cartograph-stress-test",
+  "title": "Cartograph stress test atlas",
+  "description": "Synthetic 505-node development fixture for activity and lifecycle exercises. Not process memory."
+}
