@@ -34,6 +34,11 @@
 - Handle preview/wiki navigation through one delegated click path. Preserve
   rapid layer intent with serialised updates and revisioned server snapshots,
   without blocking later authoritative changes from another client.
+- Use the shared revision-aware state controller for search and layers. Query
+  mutations from HTTP and canvas actions must both advance the server revision;
+  never overwrite pending text or its caret with an older snapshot.
+- Preserve receiver activity per lexical path, physical target and mount identity
+  when graph IDs change. Never copy one alias's counts onto another alias.
 - Keep all graph nodes reachable through native keyboard controls with bounded
   pages, Atlas/path labels and focus preservation during live updates.
 - Keep WebGL and 2D rendering on the same camera, playback and lifecycle clock;

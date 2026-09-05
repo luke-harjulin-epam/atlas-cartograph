@@ -5,6 +5,8 @@ Open one or more Atlas stores, explore their relationships, and watch recent
 external file accesses illuminate the graph.
 Use **Browse nodes** for keyboard-accessible filtering and selection across
 every open Atlas, including nodes on hidden layers.
+Graph search updates immediately while serialising edits, so delayed replies
+cannot replace newer typed text.
 
 ## Run
 

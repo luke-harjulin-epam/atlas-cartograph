@@ -58,7 +58,8 @@
         <div class="toolbar">
           <button id="toggle-panel" class="icon-btn" type="button" aria-label="Show options">☰</button>
           <div class="search field">
-            <input id="search" placeholder="Search stars" aria-label="Search graph" />
+            <input id="search" placeholder="Search stars" aria-label="Search graph" aria-describedby="search-error" />
+            <p id="search-error" class="danger hidden" role="alert"></p>
           </div>
           <button id="browse-nodes" class="btn btn-ghost browse-toggle" type="button" aria-expanded="false" aria-controls="node-browser">Browse nodes</button>
           <button id="chat-toggle" class="icon-btn" type="button" aria-label="Chat with the graph" aria-pressed="false" title="Chat with the graph">

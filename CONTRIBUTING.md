@@ -51,6 +51,11 @@ activity POST routes. Chunked oversized input must receive 413 before EOF.
 Check that a preview relation, wiki link or external anchor acts exactly once,
 including after a snapshot rerender. Exercise rapid layer edits, delayed
 acknowledgements, stale snapshot revisions, errors and later external changes.
+Search regressions must retain the newest typed text and caret through delayed
+requests, accept empty queries and later external changes, and cover both HTTP
+and canvas query revisions. All-layer state must include unnamed categories.
+Receiver graph refreshes must preserve divergent lexical-alias observations
+one-to-one, retain inactive aliases, and discard ambiguous or retargeted identities.
 Keyboard browsing must reach every node through bounded pages, distinguish
 same-title Atlas nodes, preserve focus on live updates and return from previews.
 Renderer coverage must exercise the production mount, more than 5,000 edges,

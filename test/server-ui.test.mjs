@@ -5,7 +5,7 @@ import { request } from "node:http";
 import { join } from "node:path";
 import { setImmediate as nextTurn } from "node:timers/promises";
 import test from "node:test";
-import { addAtlas, dropAtlas, freshState, openAtlas, selectNode, startServer } from "../.apm/extensions/cartograph/server.mjs";
+import { addAtlas, dropAtlas, freshState, openAtlas, selectNode, setQuery, startServer } from "../.apm/extensions/cartograph/server.mjs";
 
 function fixture(t) {
   const cwd = realpathSync(mkdtempSync(join(tmpdir(), "cartograph-ui-")));
@@ -392,6 +392,31 @@ test("layer mutations have monotonic revisions shared by HTTP replies and snapsh
     if (index > 0) assert.equal(state.layers.sources, false);
     assert.equal((await bootstrap()).layersRevision, state.layersRevision);
   }
+});
+
+test("query updates share monotonic revisions across HTTP, canvas mutations and snapshots", async (t) => {
+  const { start } = fixture(t);
+  const entry = await start();
+  const headers = { "X-Cartograph-Client": "canvas", "Content-Type": "application/json" };
+  const bootstrap = async () => (await (await fetch(new URL("/api/bootstrap", entry.url), { headers })).json()).state;
+  assert.equal((await bootstrap()).queryRevision, 0);
+  setQuery(entry.state, "canvas");
+  entry.broadcast();
+  assert.equal((await bootstrap()).queryRevision, 1);
+  for (const [index, query] of ["typed", ""].entries()) {
+    const response = await fetch(new URL("/api/ui", entry.url), {
+      method: "POST", headers, body: JSON.stringify({ action: "query", query }),
+    });
+    assert.equal(response.status, 200);
+    const state = await response.json();
+    assert.equal(state.query, query);
+    assert.equal(state.queryRevision, index + 2);
+    const snapshot = await bootstrap();
+    assert.equal(snapshot.query, query);
+    assert.equal(snapshot.queryRevision, state.queryRevision);
+  }
+  const extension = readFileSync(new URL("../.apm/extensions/cartograph/extension.mjs", import.meta.url), "utf8");
+  assert.match(extension, /setQuery\(entry\.state, ctx\.input\.query\)/, "canvas actions must use the same query mutation");
 });
 
 test("canvas POST routes accept exactly one MiB and reject larger byte payloads", async (t) => {

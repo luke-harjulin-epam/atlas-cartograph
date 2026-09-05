@@ -3,10 +3,11 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
 import { allNodeLayersOn, applyLayerClick, createLayerControls } from "../.apm/extensions/cartograph/public/layer-controls.js";
+import { createStateControls } from "../.apm/extensions/cartograph/public/state-controls.js";
 import { handleContentClick } from "../.apm/extensions/cartograph/public/content-navigation.js";
 import { mountNodeBrowser } from "../.apm/extensions/cartograph/public/node-browser.js";
 import { escapeHtml, renderMarkdown } from "../.apm/extensions/cartograph/public/markdown.js";
-import { frontendDocument } from "./helpers/frontend-dom.mjs";
+import { FrontendEvent, frontendDocument } from "./helpers/frontend-dom.mjs";
 
 const html = readFileSync(new URL("../.apm/extensions/cartograph/public/index.html", import.meta.url), "utf8");
 const app = readFileSync(new URL("../.apm/extensions/cartograph/public/app.js", import.meta.url), "utf8");
@@ -34,13 +35,14 @@ function appFixture() {
   const document = frontendDocument(html);
   const calls = [];
   const opened = [];
+  const queries = [];
   const context = vm.createContext({
-    document, allNodeLayersOn, createLayerControls, handleContentClick, mountNodeBrowser, escapeHtml, renderMarkdown,
+    document, allNodeLayersOn, createLayerControls, createStateControls, handleContentClick, mountNodeBrowser, escapeHtml, renderMarkdown,
     window: { matchMedia: () => ({ matches: false }), open: (...args) => opened.push(args) },
     performance: { now: () => 0 }, requestAnimationFrame() {}, setTimeout() {}, clearTimeout() {},
     mountActivityControls: () => ({ setActivity() {}, autoFocusEnabled: () => true, setPlayback() {} }),
     mountGraphWatchControls: () => ({ setWatch() {} }),
-    mountGraphCanvas: () => ({ setGraph() {}, setSelected() {}, setQuery() {}, setActivity() {}, clusters: () => [] }),
+    mountGraphCanvas: () => ({ setGraph() {}, setSelected() {}, setQuery(query) { queries.push(query); }, setActivity() {}, clusters: () => [] }),
     EventSource: class { addEventListener() {} },
     fetch: (url, options) => {
       const request = deferred();
@@ -51,6 +53,7 @@ function appFixture() {
   vm.runInContext(app.replace(/^import .*;\n/gm, ""), context);
   const initial = {
     phase: "map", root: "/atlas", roots: ["/atlas"], layers: all, layersRevision: 0, grouping: "layers",
+    query: "", queryRevision: 0,
     graph: { nodes: [{ id: "node", title: "Node", kind: "experience", path: "node.md", storeRoot: "/atlas" }], edges: [], store: {} },
     selectedId: "node", previewOpen: true, page: {
       body: "[[other|Wiki]]\n\n[External](https://example.com)\n\n[Mail](mailto:hello@example.com)",
@@ -60,7 +63,7 @@ function appFixture() {
   function apply(next) { vm.runInContext(`applyState(${JSON.stringify(next)})`, context); }
   apply(initial);
   return {
-    document, calls, opened, apply,
+    document, calls, opened, queries, apply,
     state: () => JSON.parse(vm.runInContext("JSON.stringify(state)", context)),
   };
 }
@@ -76,6 +79,104 @@ test("layer solo, additive, all and relationship semantics are preserved", () =>
   const noRelations = applyLayerClick(added, "relations");
   assert.equal(noRelations.relations, false);
   assert.deepEqual(applyLayerClick(noRelations, "all"), { ...all, relations: false });
+});
+
+test("All remains inactive until the other node layer is restored", () => {
+  let layers = applyLayerClick(all, "experiences");
+  for (const key of ["decisions", "work", "indexes"]) layers = applyLayerClick(layers, key);
+  assert.equal(layers.other, false);
+  assert.equal(allNodeLayersOn(layers), false);
+  const { document, apply } = appFixture();
+  apply({ layers, layersRevision: 1 });
+  assert.equal(document.querySelector('[data-layer="all"]').getAttribute("aria-pressed"), "false");
+  layers = applyLayerClick(layers, "all");
+  assert.equal(layers.other, true);
+  assert.equal(allNodeLayersOn(layers), true);
+  apply({ layers, layersRevision: 2 });
+  assert.equal(document.querySelector('[data-layer="all"]').getAttribute("aria-pressed"), "true");
+  assert.equal(allNodeLayersOn({ ...all, sources: false, relations: false }), true);
+});
+
+test("rapid search typing coalesces requests and keeps input, caret and map on latest intent", async () => {
+  const { document, calls, queries, apply, state } = appFixture();
+  const input = document.getElementById("search");
+  let value = input.value;
+  let writes = 0;
+  Object.defineProperty(input, "value", {
+    get: () => value,
+    set: (next) => { value = next; writes++; input.selectionStart = next.length; },
+  });
+  for (const query of ["n", "no", "node"]) {
+    input.value = query;
+    input.dispatchEvent(new FrontendEvent("input"));
+  }
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].query, "n");
+  assert.equal(state().query, "node");
+  assert.equal(queries.at(-1), "node");
+  assert.equal(input.getAttribute("aria-busy"), "true");
+  input.selectionStart = 2;
+  writes = 0;
+  apply({ query: "", queryRevision: 0, grouping: "atlases" });
+  calls[0].resolve({ ok: true, json: async () => ({ query: "n", queryRevision: 1 }) });
+  await settle();
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1].query, "node");
+  apply({ query: "n", queryRevision: 1, selectedId: null });
+  assert.equal(input.value, "node");
+  calls[1].resolve({ ok: true, json: async () => ({ query: "node", queryRevision: 2 }) });
+  await settle();
+  apply({ query: "n", queryRevision: 1 });
+  assert.equal(state().query, "node");
+  assert.equal(state().queryRevision, 2);
+  assert.equal(state().grouping, "atlases");
+  assert.equal(state().selectedId, null);
+  assert.equal(queries.at(-1), "node");
+  assert.equal(writes, 0, "interim snapshots must not rewrite the edited input");
+  assert.equal(input.selectionStart, 2);
+  assert.equal(input.getAttribute("aria-busy"), "false");
+  apply({ query: "remote", queryRevision: 3 });
+  assert.equal(input.value, "remote", "later external changes are still accepted");
+  assert.equal(queries.at(-1), "remote");
+});
+
+test("query failure rolls back visibly and clearing the search remains a valid edit", async () => {
+  const { document, calls, queries, apply, state } = appFixture();
+  const input = document.getElementById("search");
+  const type = (query) => { input.value = query; input.dispatchEvent(new FrontendEvent("input")); };
+  apply({ query: "confirmed", queryRevision: 1 });
+  type("failed");
+  calls[0].resolve({ ok: false, status: 503, json: async () => ({ error: "Unavailable" }) });
+  await settle();
+  assert.equal(input.value, "confirmed");
+  assert.equal(queries.at(-1), "confirmed");
+  assert.match(document.getElementById("search-error").textContent, /Unavailable.*Last confirmed view restored/);
+  assert.equal(document.getElementById("search-error").classList.contains("hidden"), false);
+  apply({ query: "remote", queryRevision: 2 });
+  type("");
+  assert.equal(calls[1].query, "");
+  calls[1].resolve({ ok: true, json: async () => ({ query: "", queryRevision: 3 }) });
+  await settle();
+  assert.equal(state().query, "");
+  assert.equal(input.value, "");
+  assert.equal(queries.at(-1), "");
+  assert.equal(document.getElementById("search-error").classList.contains("hidden"), true);
+  assert.equal(input.getAttribute("aria-busy"), "false");
+});
+
+test("newer remote query snapshots beat delayed acknowledgements after pending typing ends", async () => {
+  const { document, calls, apply, state } = appFixture();
+  const input = document.getElementById("search");
+  input.value = "local";
+  input.dispatchEvent(new FrontendEvent("input"));
+  apply({ query: "remote", queryRevision: 2 });
+  assert.equal(input.value, "local");
+  calls[0].resolve({ ok: true, json: async () => ({ query: "local", queryRevision: 1 }) });
+  await settle();
+  assert.equal(input.value, "remote");
+  assert.equal(state().queryRevision, 2);
+  apply({ query: "local", queryRevision: 1 });
+  assert.equal(input.value, "remote");
 });
 
 test("rapid layer clicks serialize and coalesce against local intent, not interim or late SSE", async () => {
@@ -294,7 +395,7 @@ test("actual layer wiring updates buttons immediately, keeps grouping/SSE data, 
   document.querySelector('[data-layer="decisions"]').click();
   assert.equal(calls.length, 1);
   assert.equal(document.querySelector('[data-layer="decisions"]').getAttribute("aria-pressed"), "true");
-  apply({ layers: all, layersRevision: 0, grouping: "atlases", query: "new", selectedId: null });
+  apply({ layers: all, layersRevision: 0, grouping: "atlases", query: "new", queryRevision: 1, selectedId: null });
   assert.equal(state().layers.work, false);
   calls[0].resolve({ ok: true, json: async () => ({ layers: calls[0].layers, layersRevision: 1, grouping: "layers" }) });
   await settle();

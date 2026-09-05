@@ -13,7 +13,8 @@ hand-authored; there is no generated marketplace site or documentation generator
 | `atlas/live.mjs` | Debounced rescans, watcher status and explicit creation/deletion deltas |
 | `public/` | Browser UI, graph layout, WebGL and Canvas 2D renderers |
 | `public/universe.js` | Canonical universe layout; `atlas/universe.mjs` re-exports it for Node |
-| `public/layer-controls.js` | Serialised optimistic layer edits and revision-aware reconciliation |
+| `public/state-controls.js` | Shared serialised/coalesced optimistic state edits and revision-aware reconciliation |
+| `public/layer-controls.js` | Node/relationship layer semantics using the shared state controller |
 | `public/content-navigation.js` | Single delegated preview/wiki/external click handling |
 | `public/node-browser.js` | Filtered, paginated native node controls and live focus preservation |
 | `http.mjs` | Shared request authorisation and bounded JSON object parsing |
@@ -53,13 +54,20 @@ Copilot canvases additionally filter to the current CLI session's process tree,
 excluding the viewer subtree. The provider supplies bounded process ancestry;
 the shared receiver checks that scope independently of file-to-node mapping.
 Background reads from unrelated host-app processes cannot activate the graph.
+Receiver graph rebuilds preserve each alias's own activity record, keyed by its
+lexical path, canonical target and Atlas mount. Exact node identities survive
+first; unique matching identities allow single/multi-Atlas ID qualification.
+New aliases never inherit activity, and ambiguous renames or changed targets
+discard the old record rather than copying observations between instances.
 All JSON POST routes share a one-MiB streamed byte limit, including chunked
 uploads. Oversized input receives 413 before the upload ends; malformed, empty
 or non-object JSON receives 400 without changing state. Origin/Host validation
 and collector authentication still run before body parsing.
-Full-state snapshots and UI acknowledgements include `layersRevision`, incremented
-for each layer update. The client serialises/coalesces optimistic edits and uses
-these revisions to reject stale layers while still accepting later external edits.
+Full-state snapshots and UI acknowledgements include `layersRevision` and
+`queryRevision`, incremented for their respective updates. HTTP and canvas query
+actions share `setQuery`. The client serialises/coalesces optimistic edits and
+uses these revisions to reject stale values while still accepting later external
+edits. Search snapshots do not rewrite unchanged input, preserving its caret.
 
 Activity updates have their own SSE event and do not resend/rebuild the graph.
 Raw observation expiry runs server-side. The browser coalesces repeated

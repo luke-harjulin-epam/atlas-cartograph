@@ -32,6 +32,7 @@ export function freshState(cwd, input = {}) {
     root,
     roots: root ? [root] : [],
     query: "",
+    queryRevision: 0,
     selectedId: null,
     previewOpen: false,
     layers: {
@@ -71,6 +72,7 @@ function snapshot(state) {
     root: state.root,
     roots: state.roots || (state.root ? [state.root] : []),
     query: state.query,
+    queryRevision: state.queryRevision ?? 0,
     selectedId: state.selectedId,
     previewOpen: state.previewOpen,
     layers: state.layers,
@@ -101,6 +103,11 @@ function broadcast(entry) {
 function sendJson(res, code, body) {
   res.writeHead(code, { "Content-Type": "application/json; charset=utf-8" });
   res.end(JSON.stringify(body));
+}
+
+export function setQuery(state, query) {
+  state.query = String(query ?? "");
+  state.queryRevision = (state.queryRevision ?? 0) + 1;
 }
 
 export function hydrateStores(state, options) {
@@ -416,7 +423,7 @@ export async function startServer(instanceId, state, options = {}) {
         } else if (body.action === "select") {
           selectNode(entry.state, body.nodeId);
         } else if (body.action === "query") {
-          entry.state.query = String(body.query ?? "");
+          setQuery(entry.state, body.query);
         } else if (body.action === "layers") {
           entry.state.layers = { ...entry.state.layers, ...body.layers };
           entry.state.layersRevision = (entry.state.layersRevision ?? 0) + 1;

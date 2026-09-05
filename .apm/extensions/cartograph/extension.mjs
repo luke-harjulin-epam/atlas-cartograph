@@ -11,6 +11,7 @@ import {
   openAtlases,
   openDefaultAtlases,
   selectNode,
+  setQuery,
   startServer,
 } from "./server.mjs";
 import { EXTENSION_ROOT } from "./atlas/catalog.mjs";
@@ -166,9 +167,9 @@ const session = await joinSession({
           },
           handler: async (ctx) => {
             const entry = requireEntry(ctx.instanceId);
-            entry.state.query = String(ctx.input.query ?? "");
+            setQuery(entry.state, ctx.input.query);
             entry.broadcast();
-            return { ok: true, query: entry.state.query };
+            return { ok: true, query: entry.state.query, queryRevision: entry.state.queryRevision };
           },
         },
         {
@@ -181,6 +182,7 @@ const session = await joinSession({
               phase: entry.state.phase,
               root: entry.state.root,
               query: entry.state.query,
+              queryRevision: entry.state.queryRevision,
               selectedId: entry.state.selectedId,
               error: entry.state.error,
               activity: entry.activity.sync(),

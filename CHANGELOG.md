@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Preserve independent activity counts, timestamps and sequences for file aliases
+  during graph rebuilds and ID qualification, without activating newly added aliases.
+- Preserve search intent during rapid typing, delayed replies and snapshots,
+  with serialised/coalesced edits, shared query revisions and visible rollback.
+- Report the All layer control as active only when every node layer is enabled,
+  including the otherwise unnamed node categories.
 - Reject duplicate Atlas mount keys without changing the active graph, keep
   explicit Atlas references scoped to their target, and emit mesh edges once.
   Support `atlas://` page navigation with a single store open.

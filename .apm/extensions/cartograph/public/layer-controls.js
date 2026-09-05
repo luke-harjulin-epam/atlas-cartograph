@@ -1,9 +1,11 @@
+import { createStateControls } from "./state-controls.js";
+
 const NODE_LAYER_KEYS = ["experiences", "decisions", "work", "indexes", "other"];
 const NODE_LAYER_BUTTONS = ["experiences", "decisions", "work", "indexes"];
 const LAYER_KEYS = [...NODE_LAYER_KEYS, "relations", "sources"];
 
 export function allNodeLayersOn(layers) {
-  return NODE_LAYER_BUTTONS.every((key) => layers?.[key] !== false);
+  return NODE_LAYER_KEYS.every((key) => layers?.[key] !== false);
 }
 
 export function applyLayerClick(layers, key) {
@@ -31,69 +33,17 @@ function normalize(layers) {
 }
 
 export function createLayerControls(send, onChange) {
-  let confirmed = normalize({});
-  let desired = confirmed;
-  let layersRevision = null;
-  let sending = false;
-  let intentRevision = 0;
-
-  function accept(layers, revision, acknowledgement = false) {
-    if (!layers || typeof layers !== "object") return;
-    if (Number.isSafeInteger(revision) && revision >= 0) {
-      if (layersRevision !== null && revision <= layersRevision) return;
-      layersRevision = revision;
-    } else {
-      // Legacy servers cannot order snapshots. Protect in-flight intent, but
-      // resume idle synchronization. Never downgrade a versioned connection.
-      if (layersRevision !== null || (sending && !acknowledgement)) return;
-    }
-    confirmed = normalize(layers);
-  }
-
-  async function flush() {
-    if (sending) return;
-    sending = true;
-    for (;;) {
-      const sent = { ...desired };
-      const sentRevision = intentRevision;
-      let error = null;
-      try {
-        const next = await send(sent);
-        if (!next?.layers || typeof next.layers !== "object") throw new Error("Missing layer confirmation");
-        accept(next.layers, next.layersRevision, true);
-      } catch (cause) {
-        error = `Could not save layers: ${cause.message || cause}.`;
-      }
-      if (intentRevision === sentRevision) {
-        desired = confirmed;
-        sending = false;
-        onChange({ ...desired }, {
-          pending: false,
-          error: error ? `${error} Last confirmed view restored; try again.` : null,
-        });
-        return;
-      }
-      onChange({ ...desired }, { pending: true, error });
-    }
-  }
-
-  function update(transform) {
-    desired = normalize(transform(desired));
-    intentRevision++;
-    onChange({ ...desired }, { pending: true, error: null });
-    void flush();
-  }
+  const control = createStateControls({
+    field: "layers", initial: {}, normalize,
+    isValid: (value) => value !== null && typeof value === "object" && !Array.isArray(value),
+  }, send, onChange);
 
   return {
-    get layersRevision() { return layersRevision; },
-    snapshot(layers, revision) {
-      accept(layers, revision);
-      if (!sending) desired = confirmed;
-      return { ...desired };
-    },
-    click(key) { update((layers) => applyLayerClick(layers, key)); },
+    get layersRevision() { return control.revision; },
+    snapshot: control.snapshot,
+    click(key) { control.update((layers) => applyLayerClick(layers, key)); },
     reveal(key) {
-      if (desired[key] === false) update((layers) => ({ ...layers, [key]: true }));
+      if (control.value[key] === false) control.update((layers) => ({ ...layers, [key]: true }));
     },
   };
 }

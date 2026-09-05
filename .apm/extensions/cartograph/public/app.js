@@ -3,6 +3,7 @@ import { escapeHtml, renderMarkdown } from "./markdown.js";
 import { mountActivityControls } from "./activity-controls.js";
 import { mountGraphWatchControls } from "./graph-watch-controls.js";
 import { allNodeLayersOn, createLayerControls } from "./layer-controls.js";
+import { createStateControls } from "./state-controls.js";
 import { handleContentClick } from "./content-navigation.js";
 import { mountNodeBrowser } from "./node-browser.js";
 
@@ -34,6 +35,18 @@ let map = null;
 const activityControls = mountActivityControls($("activity-controls"), applyActivity,
   (enabled) => map?.setAutoFocus(enabled));
 const graphWatchControls = mountGraphWatchControls($("activity-controls"));
+const queryControls = createStateControls({
+  field: "query", initial: "", normalize: (value) => value,
+  isValid: (value) => typeof value === "string",
+}, (query) => post("query", { query }), (query, { pending, error }) => {
+  state.query = query;
+  state.queryRevision = queryControls.revision;
+  $("search").setAttribute("aria-busy", String(pending));
+  $("search-error").textContent = error || "";
+  $("search-error").classList.toggle("hidden", !error);
+  map?.setQuery(query);
+  renderMapChrome();
+});
 const layerControls = createLayerControls(
   (layers) => post("layers", { layers }),
   (layers, { pending, error }) => {
@@ -251,7 +264,7 @@ function renderMapChrome() {
   $("stat-format").textContent = state.graph?.store?.format ?? "—";
   $("stat-root").textContent = state.graph?.store?.label || state.graph?.store?.atlasId || state.root || "No atlas";
   renderOpenAtlases();
-  $("search").value = state.query || "";
+  if ($("search").value !== (state.query || "")) $("search").value = state.query || "";
   const q = (state.query || "").trim().toLowerCase();
   const matches = q
     ? vis.nodes.filter((n) => n.title.toLowerCase().includes(q) || n.id.toLowerCase().includes(q)).slice(0, 8)
@@ -332,7 +345,9 @@ function renderIslands() {
 function applyState(next) {
   const grouping = next.grouping || state.grouping || "layers";
   const layers = layerControls.snapshot(next.layers, next.layersRevision);
-  state = { ...state, ...next, grouping, layers, layersRevision: layerControls.layersRevision };
+  const query = queryControls.snapshot(next.query, next.queryRevision);
+  state = { ...state, ...next, grouping, layers, layersRevision: layerControls.layersRevision,
+    query, queryRevision: queryControls.revision };
   activityControls.setActivity(state.activity);
   graphWatchControls.setWatch(state.graphWatch);
   if (!state.graph) map?.setGraph([], [], grouping, state.graphChanges, () => false);
@@ -465,7 +480,7 @@ $("open-path").addEventListener("submit", (e) => {
   const root = $("path-input").value.trim();
   if (root) openRoot(root);
 });
-$("search").addEventListener("input", (e) => post("query", { query: e.target.value }));
+$("search").addEventListener("input", (e) => queryControls.update(() => e.target.value));
 $("chat-toggle").addEventListener("click", () => {
   chatOpen = !chatOpen;
   renderChat();

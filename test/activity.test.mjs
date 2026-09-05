@@ -280,3 +280,213 @@ test("one observation shares its sequence across physical-file aliases without a
     assert.equal(node.firstSequence, 1);
   }
 });
+
+function aliasFixture(t) {
+  const base = fixture(t);
+  const physical = join(base.root, "physical");
+  mkdirSync(physical);
+  writeFileSync(join(physical, "a.md"), "# Shared");
+  const aliases = ["first", "second", "third"].map((id) => {
+    const storeRoot = join(base.root, id);
+    symlinkSync(physical, storeRoot);
+    return { id, atlasKey: id, storeRoot, path: "a.md" };
+  });
+  const graph = {
+    nodes: aliases.slice(0, 2),
+    edges: [{ id: "aliases", source: "first", target: "second" }],
+  };
+  base.model.setGraph(graph);
+  return {
+    ...base, graph, aliases, physical,
+    read: (id, pid = 99, kind = "read") => base.model.record({
+      path: join(base.root, id, "a.md"), pid, kind,
+    }),
+  };
+}
+
+test("lexical alias reads retain distinct counts, timestamps and sequences through reordered rebuilds", (t) => {
+  const { model, graph, read, advance } = aliasFixture(t);
+  read("first");
+  assert.deepEqual(model.snapshot().nodes.map(({ id }) => id), ["first"]);
+  advance(100);
+  read("second", 100, "write");
+  advance(100);
+  read("first", 101, "write");
+  const before = model.snapshot();
+  assert.deepEqual(before.nodes, [
+    { id: "first", pid: 101, kind: "write", accessedAt: 1200, expiresAt: 6200, sequence: 3, count: 2, firstSequence: 1 },
+    { id: "second", pid: 100, kind: "write", accessedAt: 1100, expiresAt: 6100, sequence: 2, count: 1, firstSequence: 2 },
+  ]);
+  for (const nodes of [[...graph.nodes].reverse(), graph.nodes]) {
+    const rebuilt = { ...graph, nodes };
+    assert.equal(model.setGraph(rebuilt), true);
+    assert.deepEqual(model.snapshot().nodes, nodes.map(({ id }) => before.nodes.find((node) => node.id === id)));
+    assert.deepEqual(model.snapshot().edges, before.edges);
+    assert.equal(model.setGraph(rebuilt), false);
+    assert.equal(model.sequence, 3);
+  }
+  advance(100);
+  read("second", 102);
+  assert.deepEqual(model.snapshot().nodes, [
+    before.nodes[0],
+    { ...before.nodes[1], pid: 102, kind: "read", accessedAt: 1300, expiresAt: 6300, sequence: 4, count: 2 },
+  ]);
+});
+
+test("retained inactive and newly mounted lexical aliases never inherit active records", (t) => {
+  const { model, graph, aliases, read, physical } = aliasFixture(t);
+  read("first");
+  read("first");
+  const before = model.snapshot().nodes;
+  model.setGraph({ ...graph });
+  assert.deepEqual(model.snapshot().nodes, before);
+  model.setGraph({ nodes: aliases, edges: [] });
+  assert.deepEqual(model.snapshot().nodes, before);
+  model.setGraph({ nodes: aliases.slice(1), edges: [] });
+  assert.deepEqual(model.snapshot().nodes, []);
+  assert.equal(read("first"), false);
+  model.setGraph({ nodes: aliases, edges: [] });
+  assert.deepEqual(model.snapshot().nodes, []);
+  read("third");
+  assert.deepEqual(model.snapshot().nodes.map(({ id, count, firstSequence, sequence }) => ({
+    id, count, firstSequence, sequence,
+  })), [{ id: "third", count: 1, firstSequence: 3, sequence: 3 }]);
+  model.record({ path: realpathSync(join(physical, "a.md")), pid: 99, kind: "read" });
+  const all = model.snapshot().nodes;
+  assert.deepEqual(all.map(({ id, count }) => [id, count]).sort(), [["first", 1], ["second", 1], ["third", 2]]);
+  assert.ok(all.every(({ sequence }) => sequence === 4));
+});
+
+test("ID qualification preserves each lexical alias even without mount metadata", (t) => {
+  const { model, graph, read, advance } = aliasFixture(t);
+  const local = { ...graph, nodes: graph.nodes.map(({ atlasKey, ...node }) => node) };
+  model.setGraph(local);
+  read("first");
+  advance(100);
+  read("first");
+  advance(100);
+  read("second");
+  const before = model.snapshot().nodes;
+  const qualified = {
+    nodes: local.nodes.map((node) => ({ ...node, id: `${node.id}::a` })).reverse(),
+    edges: [],
+  };
+  model.setGraph(qualified);
+  assert.deepEqual(model.snapshot().nodes, before.map((node) => ({ ...node, id: `${node.id}::a` })).reverse());
+  model.setGraph(local);
+  assert.deepEqual(model.snapshot().nodes, before);
+});
+
+test("same-path mount identities survive single/multi qualification without spreading state to new aliases", (t) => {
+  const { model, aliases, read, advance } = aliasFixture(t);
+  const first = { ...aliases[0], id: "a" };
+  const second = { ...first, atlasKey: "other" };
+  const combined = {
+    nodes: [{ ...first, id: "first::a" }, { ...second, id: "other::a" }],
+    edges: [],
+  };
+  model.setGraph({ nodes: [first], edges: [] });
+  read("first");
+  advance(100);
+  read("first");
+  const [before] = model.snapshot().nodes;
+  model.setGraph(combined);
+  assert.deepEqual(model.snapshot().nodes, [{ ...before, id: "first::a" }]);
+  model.setGraph({ ...combined, nodes: [...combined.nodes].reverse() });
+  assert.deepEqual(model.snapshot().nodes, [{ ...before, id: "first::a" }]);
+  advance(100);
+  read("first");
+  const survivor = model.snapshot().nodes.find(({ id }) => id === "other::a");
+  assert.equal(survivor.count, 1);
+  assert.equal(survivor.firstSequence, 3);
+  assert.equal(model.snapshot().nodes.find(({ id }) => id === "first::a").count, 3);
+  model.setGraph({ nodes: [second], edges: [] });
+  assert.deepEqual(model.snapshot().nodes, [{ ...survivor, id: "a" }]);
+  advance(100);
+  read("first");
+  const [updated] = model.snapshot().nodes;
+  assert.equal(updated.count, 2);
+  assert.equal(updated.firstSequence, 3);
+  model.setGraph(combined);
+  assert.deepEqual(model.snapshot().nodes, [{ ...updated, id: "other::a" }]);
+});
+
+test("same-path aliases without mount metadata retain exact IDs but never guess an ambiguous rename", (t) => {
+  const { model, aliases, read } = aliasFixture(t);
+  const { atlasKey, ...first } = aliases[0];
+  const second = { ...first, id: "second" };
+  model.setGraph({ nodes: [first], edges: [] });
+  read("first");
+  const before = model.snapshot().nodes;
+  model.setGraph({ nodes: [second, first], edges: [] });
+  assert.deepEqual(model.snapshot().nodes, before);
+  model.setGraph({ nodes: [first, second], edges: [] });
+  assert.deepEqual(model.snapshot().nodes, before);
+  model.setGraph({ nodes: [{ ...first, id: "renamed" }], edges: [] });
+  assert.deepEqual(model.snapshot().nodes, []);
+  read("first");
+  assert.equal(model.snapshot().nodes[0].count, 1);
+  assert.equal(model.snapshot().nodes[0].firstSequence, 2);
+});
+
+test("changing a lexical alias or its mount key does not transfer the same physical file's record", (t) => {
+  const { model, aliases, read } = aliasFixture(t);
+  for (const replacement of [
+    { ...aliases[0], storeRoot: aliases[2].storeRoot },
+    { ...aliases[0], atlasKey: "replacement" },
+  ]) {
+    model.setGraph({ nodes: aliases.slice(0, 2), edges: [] });
+    read("first");
+    read("second");
+    const before = model.snapshot().nodes.find(({ id }) => id === "second");
+    model.setGraph({ nodes: [replacement, aliases[1]], edges: [] });
+    assert.deepEqual(model.snapshot().nodes, [before]);
+  }
+});
+
+test("retargeting a symlink invalidates only that alias even when its ID and lexical path are unchanged", (t) => {
+  const { model, graph, root, read, advance } = aliasFixture(t);
+  read("first");
+  advance(100);
+  read("second");
+  const before = model.snapshot().nodes.find(({ id }) => id === "second");
+  const replacement = join(root, "replacement");
+  mkdirSync(replacement);
+  writeFileSync(join(replacement, "a.md"), "# Replacement");
+  rmSync(join(root, "first"));
+  symlinkSync(replacement, join(root, "first"));
+  model.setGraph({ ...graph });
+  assert.deepEqual(model.snapshot().nodes, [before]);
+  advance(100);
+  read("first");
+  const fresh = model.snapshot().nodes.find(({ id }) => id === "first");
+  assert.equal(fresh.count, 1);
+  assert.equal(fresh.sequence, 3);
+  assert.equal(fresh.firstSequence, 3);
+  assert.equal(fresh.accessedAt, 1200);
+  assert.equal(model.files.get("first"), realpathSync(join(replacement, "a.md")));
+  assert.deepEqual(model.snapshot().nodes.find(({ id }) => id === "second"), before);
+});
+
+test("rebuilding and qualifying aliases expire their distinct intervals independently", (t) => {
+  const { model, graph, read, advance } = aliasFixture(t);
+  read("first");
+  advance(3000);
+  read("second");
+  const before = model.snapshot().nodes.find(({ id }) => id === "second");
+  advance(2000);
+  model.setGraph({ ...graph, nodes: [...graph.nodes].reverse() });
+  assert.deepEqual(model.snapshot().nodes, [before]);
+  model.setGraph({
+    nodes: graph.nodes.map((node) => ({ ...node, id: `${node.id}::a` })),
+    edges: [],
+  });
+  assert.deepEqual(model.snapshot().nodes, [{ ...before, id: "second::a" }]);
+  advance(3000);
+  model.setGraph({ ...graph });
+  assert.deepEqual(model.snapshot().nodes, []);
+  read("first");
+  assert.equal(model.snapshot().nodes[0].sequence, 3);
+  assert.equal(model.snapshot().nodes[0].count, 1);
+  assert.equal(model.snapshot().nodes[0].firstSequence, 3);
+});

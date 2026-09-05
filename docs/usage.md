@@ -58,6 +58,13 @@ focused entry and filter text; deleting that entry moves focus to the filter.
 Layer buttons update immediately and serialise rapid changes. A saving message
 remains until acknowledgement; failures restore the last confirmed view and show
 an error. Versioned snapshots prevent delayed responses undoing newer changes.
+**All** restores every node category, including those without a dedicated layer
+button, and is only shown as active when all those categories are enabled.
+
+**Search graph** also updates immediately and coalesces rapid typing. Older
+snapshots cannot replace pending text or move its caret. A failed request shows
+an error beside the input and restores the last confirmed query; clear the input
+to remove the filter.
 
 The map uses WebGL where available, with the same labels, camera and controls
 as its 2D fallback. If WebGL is interrupted, rendering continues in 2D with a
