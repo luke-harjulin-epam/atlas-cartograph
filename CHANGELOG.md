@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Ignore fenced and inline Markdown code when deriving graph relationships,
+  while preserving links in prose and declared frontmatter relationships.
 - Reject stale full-state snapshots so delayed bootstrap/action replies cannot
   restore deleted nodes, old previews or earlier navigation phases.
 - Skip self-referential symlink entries during default Atlas discovery while

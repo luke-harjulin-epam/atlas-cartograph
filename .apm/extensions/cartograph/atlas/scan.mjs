@@ -14,6 +14,7 @@ import {
   parseFrontmatter,
   relatesToOf,
   sourcesOf,
+  stripMarkdownCode,
 } from "./parse.mjs";
 import { countKinds, linkGraph, withDegrees } from "./link.mjs";
 import { combineAtlases, mergeGraphs } from "./merge.mjs";
@@ -215,8 +216,9 @@ function parseFiles(storeRoot, files, format, atlasId, atlasLabel, strict = fals
     const sources = sourcesOf(meta);
     const relates = relatesToOf(meta);
     const declaredRefs = new Set([...sources, ...relates.map((r) => normalizeLink(r.path))]);
-    const links = [...extractWikilinks(body), ...extractMarkdownLinks(body)].map(normalizeLink);
-    const mesh = extractAtlasUris(body)
+    const prose = stripMarkdownCode(body);
+    const links = [...extractWikilinks(prose), ...extractMarkdownLinks(prose)].map(normalizeLink);
+    const mesh = extractAtlasUris(prose)
       .filter((m) => !declaredRefs.has(normalizeLink(`atlas://${m.atlasId}/${m.path}`)));
     const refs = [
       ...sources.map((raw) => ({ raw, kind: "source" })),

@@ -33,6 +33,8 @@
 - Reject duplicate mount keys before changing the mounted graph or selection.
   Explicit Atlas links must not fall back to another store; generate each mesh
   relationship once. Chat completions must update their own request placeholder.
+- Exclude fenced and inline code before extracting graph links from Markdown
+  bodies. Preserve frontmatter relationship kinds and the original preview text.
 - Guard path-scanning and state-changing HTTP routes with the shared canvas
   request validation; do not rely on CORS or JSON parsing as authorization.
   Bootstrap and SSE snapshots need the same boundary. Native EventSource may

@@ -279,6 +279,50 @@ test("frontmatter Atlas URIs retain relationship kinds without generating duplic
   assert.equal(graph.nodes.find((node) => node.id === "one::index").degree, 2);
 });
 
+test("code examples create no graph links while prose and frontmatter retain theirs", (t) => {
+  const cwd = workspace(t);
+  const first = store(cwd, "one");
+  const second = store(cwd, "two");
+  for (const name of ["code-wiki", "code-md", "prose-wiki", "prose-md", "source"]) {
+    page(first, `work/${name}.md`, name);
+  }
+  for (const name of ["code-uri", "prose-uri", "related"]) {
+    page(second, `knowledge/${name}.md`, name);
+  }
+  const example = "[[work/code-wiki]] [Example](work/code-md.md) atlas://two/knowledge/code-uri";
+  const body = [
+    "[[work/prose-wiki]] [Prose](work/prose-md.md) atlas://two/knowledge/prose-uri",
+    "",
+    `Example: \`${example}\`.`,
+    "",
+    "```markdown", example, "```",
+    "",
+    "~~~markdown", example, "~~~",
+    "",
+    "````markdown", "```", example, "```", "````",
+    "",
+    `Double delimiter: \`\`one \` ${example} \` two\`\`.`,
+  ].join("\n");
+  writeFileSync(join(first, "index.md"), [
+    "---", "sources:", "  - work/source",
+    "relates_to:", "  - path: atlas://two/knowledge/related", "    kind: depends-on",
+    "---", body,
+  ].join("\n"));
+  const single = loadFullGraph(first, cwd);
+  assert.deepEqual(single.edges.map((edge) => edge.target).sort(), [
+    "work/prose-md", "work/prose-wiki", "work/source",
+  ]);
+  const graph = loadCombinedGraphs([first, second], cwd);
+  assert.deepEqual(graph.edges.map((edge) => edge.target).sort(), [
+    "one::work/prose-md", "one::work/prose-wiki", "one::work/source",
+    "two::knowledge/prose-uri", "two::knowledge/related",
+  ]);
+  assert.equal(graph.edges.find((edge) => edge.kind === "relates").relKind, "depends-on");
+  assert.equal(graph.nodes.find((node) => node.id === "one::index").degree, 5);
+  assert.ok(graph.nodes.filter((node) => node.localId.includes("code-")).every((node) => node.degree === 0));
+  assert.equal(loadPage(first, "index", cwd).body, body);
+});
+
 test("URI-valued frontmatter lists are scalars, not YAML mapping entries", (t) => {
   const cwd = workspace(t);
   const root = store(cwd, "one");

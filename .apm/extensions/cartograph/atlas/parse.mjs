@@ -1,6 +1,65 @@
-const WIKILINK_RE = /\[\[([^\]]+)\]\]/g;
-const MD_LINK_RE = /\[([^\]]+)\]\(([^)]+)\)/g;
-const ATLAS_URI_RE = /atlas:\/\/([A-Za-z0-9._-]+)\/([^\s)\]"'<>]+)/g;
+const WIKILINK_RE = /\[\[([^\]\0|]+)(?:\|[^\]]*)?\]\]/g;
+const MD_LINK_RE = /\[([^\]]+)\]\(([^)\0]+)\)/g;
+const ATLAS_URI_RE = /atlas:\/\/([A-Za-z0-9._-]+)\/([^\s)\]"'<>\0]+)/g;
+
+function stripCodeSpans(text) {
+  const runs = [...text.matchAll(/`+/g)];
+  const next = new Map();
+  // Index equal-length closers once, including unmatched and differently sized runs.
+  for (let i = runs.length - 1; i >= 0; i -= 1) {
+    runs[i].closer = next.get(runs[i][0].length);
+    runs[i].escapedCloser = next.get(runs[i][0].length - 1);
+    next.set(runs[i][0].length, i);
+  }
+  const out = [];
+  let start = 0;
+  for (let i = 0; i < runs.length; i += 1) {
+    const run = runs[i];
+    let escapes = 0;
+    for (let j = run.index - 1; j >= 0 && text[j] === "\\"; j -= 1) escapes += 1;
+    const escaped = escapes % 2;
+    const closeIndex = escaped ? run.escapedCloser : run.closer;
+    if (closeIndex === undefined) continue;
+    const closer = runs[closeIndex];
+    out.push(text.slice(start, run.index + escaped), "\0");
+    start = closer.index + closer[0].length;
+    i = closeIndex;
+  }
+  return out.join("") + text.slice(start);
+}
+
+function stripMarkdownCode(text) {
+  const out = [];
+  let prose = [];
+  let fence = "";
+  const flush = () => {
+    if (prose.length) out.push(stripCodeSpans(prose.join("\n")));
+    prose = [];
+  };
+  for (const line of text.replace(/\r\n?/g, "\n").split("\n")) {
+    const marker = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+    if (fence) {
+      if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length && !marker[2].trim()) {
+        fence = "";
+      }
+      continue;
+    }
+    if (marker && (marker[1][0] === "~" || !marker[2].includes("`"))) {
+      flush();
+      // A non-path sentinel prevents new links from forming across removed code.
+      out.push("\0");
+      fence = marker[1];
+    } else if (!line.trim()) {
+      flush();
+      out.push(line);
+    } else {
+      prose.push(line);
+    }
+  }
+  flush();
+  return out.join("\n");
+}
+
 function parseFrontmatter(text) {
   if (!text.startsWith("---")) return { meta: {}, body: text };
   const end = text.indexOf("\n---", 3);
@@ -198,5 +257,6 @@ export {
   pageSlug,
   parseFrontmatter,
   relatesToOf,
-  sourcesOf
+  sourcesOf,
+  stripMarkdownCode
 };
