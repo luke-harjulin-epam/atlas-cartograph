@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## [0.1.0] - 2026-09-05
+## 0.1.0 - 2026-09-05
 
 - Preserve the selected monitor provider when recreating an activity service
   from its public snapshot; fail explicitly if that provider is unavailable.
