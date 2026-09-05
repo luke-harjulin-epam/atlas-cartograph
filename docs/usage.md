@@ -3,19 +3,42 @@
 ## Open the viewer
 
 Use Node.js 22 or later. `npm start -- /absolute/path/to/atlas` starts a
-loopback-only development server and prints its URL. `npm start` opens the
-store picker. Stop it with Ctrl+C.
+loopback-only development server and prints its URL. Without a path, `npm start`
+opens recognized Atlas stores below the current project's `.atlas/`, including
+nested mounts. If none exist, it opens the store picker. Stop it with Ctrl+C.
 
 For a Copilot canvas, reload project extensions and open `cartograph` from
 `project:cartograph`. The entry point under `.github/extensions/` imports
-`src/extension.mjs`; all implementation files remain in `src/`. The SDK is
+`.apm/extensions/cartograph/extension.mjs`; that directory owns all runtime code
+and assets. In APM consumer projects, `.github/extensions/cartograph/` contains
+the deployed runtime itself, not this repository's development shim. The SDK is
 provided by Copilot, not an npm dependency. A separately installed user
 Cartograph can coexist; choose the project provider to run this source.
 
 An Atlas root contains `SCHEMA.json` or `index.md`. The bundled demonstration
-store is `src/fixtures/mini-atlas`. Use the map's Atlas controls to add another
+store is `.apm/extensions/cartograph/fixtures/mini-atlas` in this source repository.
+It is available as an explicit choice, never the automatic default. Use the map's Atlas controls to add another
 store; both appear in the same graph. Selection, search, layers, previews, and
 grouping continue to work during activity.
+
+Opening the canvas without a root follows the same `.atlas/` discovery behavior
+as the standalone server. An explicit canvas `root` overrides it. The search is
+relative to the consumer workspace, not the extension installation directory.
+For example, `.atlas/github.com/team/one` and `.atlas/github.com/team/two` can
+open together. Atlas Markdown and schema files are graph data; the extension
+does not execute code from those mounts.
+
+Automatic discovery recognizes `SCHEMA.json`, `SCHEMA.md`, or `index.md` and
+stops at each store boundary. Symlink aliases are deduplicated and cycles are
+ignored. Discovery is bounded to 8 levels and 4096 directories; exceeding a
+limit or encountering unreadable content reports an error rather than silently
+opening a partial graph. Existing environment presets remain picker choices,
+not automatic mounts.
+
+See [APM installation](../README.md#install-with-apm) for experimental canvas
+enablement and package approval. Reloading extensions after an APM install
+loads the deployed canvas. The OS read collector is still separately started
+by the user; installing the package does not elevate privileges.
 
 ## Live graph updates
 

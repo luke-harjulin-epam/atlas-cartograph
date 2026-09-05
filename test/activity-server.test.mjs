@@ -3,9 +3,9 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
-import { freshState, openAtlas, startServer } from "../src/server.mjs";
+import { freshState, openAtlas, startServer } from "../.apm/extensions/cartograph/server.mjs";
 
-const root = fileURLToPath(new URL("../src/fixtures/mini-atlas", import.meta.url));
+const root = fileURLToPath(new URL("../.apm/extensions/cartograph/fixtures/mini-atlas", import.meta.url));
 const canvasHeaders = { "X-Cartograph-Client": "canvas" };
 
 async function fixture(t, activityOptions = {}) {
@@ -30,7 +30,7 @@ test("connection tokens require a same-origin canvas request and never enter sna
   assert.equal((await request("/api/activity/targets")).status, 401);
   assert.equal((await request("/api/activity/targets", { headers: { Authorization: "Bearer wrong" } })).status, 401);
   assert.match(connection.command, /^sudo \/usr\/bin\/eslogger open close \| CARTOGRAPH_ACTIVITY_TOKEN=/);
-  assert.match(connection.command, / \/usr\/bin\/env node '[^']+\/src\/activity\/collector\.mjs' --url /);
+  assert.match(connection.command, / \/usr\/bin\/env node '[^']+\/\.apm\/extensions\/cartograph\/activity\/collector\.mjs' --url /);
   assert.ok(!connection.command.includes(process.execPath));
   const boot = await (await request("/api/bootstrap")).text();
   assert.ok(!boot.includes(connection.token));

@@ -4,12 +4,12 @@ import { createServer } from "node:http";
 import { PassThrough } from "node:stream";
 import { spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
-import { createActivityService } from "../src/activity/service.mjs";
-import { esloggerProvider } from "../src/activity/providers/eslogger.mjs";
+import { createActivityService } from "../.apm/extensions/cartograph/activity/service.mjs";
+import { esloggerProvider } from "../.apm/extensions/cartograph/activity/providers/eslogger.mjs";
 import {
   CollectorError, LIMITATIONS, filterTargetEvents, parseCollectorArgs,
   parseEsloggerLine, parseTargets, runCollector, validateCollectorUrl,
-} from "../src/activity/collector.mjs";
+} from "../.apm/extensions/cartograph/activity/collector.mjs";
 
 const TARGET = "/atlas/notes/example.md";
 const PRIVATE = "/unrelated/private/secret.txt";
@@ -401,7 +401,7 @@ test("CLI SIGINT and SIGTERM shut down cleanly with terminal status", async (t) 
       h.abort.abort();
       await h.running;
       const count = h.posts.length;
-      const child = spawn(process.execPath, ["src/activity/collector.mjs", "--url", h.url], {
+      const child = spawn(process.execPath, [".apm/extensions/cartograph/activity/collector.mjs", "--url", h.url], {
         cwd: new URL("..", import.meta.url),
         env: { PATH: process.env.PATH, CARTOGRAPH_ACTIVITY_TOKEN: "test-token" },
         stdio: ["pipe", "pipe", "pipe"],
@@ -420,7 +420,7 @@ test("CLI SIGINT and SIGTERM shut down cleanly with terminal status", async (t) 
 });
 
 test("CLI missing-token guidance never prints token arguments or starts collection", async () => {
-  const child = spawn(process.execPath, ["src/activity/collector.mjs", "--token", "sensitive-test-token"], {
+  const child = spawn(process.execPath, [".apm/extensions/cartograph/activity/collector.mjs", "--token", "sensitive-test-token"], {
     cwd: new URL("..", import.meta.url), env: { PATH: process.env.PATH }, stdio: ["ignore", "pipe", "pipe"],
   });
   let output = "";

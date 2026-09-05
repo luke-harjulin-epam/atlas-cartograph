@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ActivityPlayback, ACTIVITY_SPACING_MS, MIN_ACTIVITY_SPACING_MS, activitySpacing } from "../src/public/activity-playback.js";
-import { AccessActivity } from "../src/activity/model.mjs";
+import { ActivityPlayback, ACTIVITY_SPACING_MS, MIN_ACTIVITY_SPACING_MS, activitySpacing } from "../.apm/extensions/cartograph/public/activity-playback.js";
+import { AccessActivity } from "../.apm/extensions/cartograph/activity/model.mjs";
 
 const nodes = ["a", "b", "c"].map((id) => ({ id, storeRoot: "/atlas", path: `${id}.md` }));
 const edges = [

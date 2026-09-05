@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
-import { addAtlas, dropAtlas, freshState, openAtlas, selectNode, startServer } from "../src/server.mjs";
-import { graphChanges } from "../src/atlas/live.mjs";
+import { addAtlas, dropAtlas, freshState, openAtlas, selectNode, startServer } from "../.apm/extensions/cartograph/server.mjs";
+import { graphChanges } from "../.apm/extensions/cartograph/atlas/live.mjs";
 
 async function until(predicate, message) {
   const deadline = Date.now() + 5000;

@@ -2,13 +2,40 @@
 
 Use Node.js 22 or later. There are no npm dependencies to install.
 
-Keep code in `src/` and documentation in `docs/`. Tests use Node's built-in
-runner under `test/`; run `npm test` or a targeted `node --test` invocation.
-Start a development server with `npm start -- ./src/fixtures/mini-atlas`.
+Keep runtime code in `.apm/extensions/cartograph/` and documentation in `docs/`.
+There is no generated duplicate of this source. Tests use Node's built-in runner
+under `test/`; run `npm test` or a targeted `node --test` invocation.
+Start a development server with `npm start` for workspace `.atlas/` mounts, or
+`npm start -- ./.apm/extensions/cartograph/fixtures/mini-atlas` for the sample.
 
 To exercise the Copilot canvas, reload project extensions. Select the
 `project:cartograph` provider if a user-installed copy also exists. Do not copy
 changes into another user's or another session's installed extension.
+
+`apm.yml` declares only the self-contained canvas directory. Keep its version,
+the runtime `package.json` and root `package.json` aligned. Application imports,
+browser assets, collectors and fixtures must resolve within the bundle.
+The repository discovery shim is not distribution source; do not run a
+first-party APM deployment over that locally authored shim.
+
+After dependency changes, run `apm lock --target copilot`. Use
+`npm run pack:apm -- --dry-run` to inspect the bundle or `npm run pack:apm` to
+create it under ignored `build/`. APM's plugin format preserves canvas assets;
+the legacy `--format apm` path is not suitable for this canvas-only package
+with APM 0.29.0. Packing may generate `.github/plugin/plugin.json` metadata.
+For installation testing, use a disposable consumer and an isolated APM home
+(set both `HOME` and `APM_HOME`; `APM_HOME` alone does not isolate config in 0.29.0),
+enable the experimental `canvas` flag there, and approve only this package.
+Never change user-wide executable trust or install globally as part of tests.
+With APM 0.29.0, source dependency approval must use its exact dependency key
+under `executables.allow`: the repository reference for remote installs, or the
+literal dependency path for local installs. The offline plugin-bundle installer
+instead reads `allowExecutables` keyed by bundle name; keep that legacy
+compatibility setting confined to disposable bundle consumers. Do not grant
+other executable types to silence unrelated APM warnings.
+Keep lockfiles and canonical `.apm/` source; do not commit `apm_modules/`, built
+archives or local browser artifacts. A license has not been declared for this
+package; do not add an SPDX license without an explicit licensing decision.
 
 For renderer changes, inspect both WebGL and Canvas 2D paths, reduced-motion
 behavior, selection, and the return to baseline after activity expires.

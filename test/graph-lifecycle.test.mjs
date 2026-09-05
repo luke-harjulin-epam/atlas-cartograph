@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { GraphLifecycle, GRAPH_LIFECYCLE_DURATION_MS, lifecyclePoints, lifecycleNodeOpacity, lifecycleEdgeOpacity, lifecycleEdgeGlows } from "../src/public/graph-lifecycle.js";
-import { ActivityPlayback, ACTIVITY_SPACING_MS } from "../src/public/activity-playback.js";
-import { GRAPH_WATCH_HELP, graphWatchStatus, mountGraphWatchControls } from "../src/public/graph-watch-controls.js";
-import { GraphGL } from "../src/public/graph-gl.js";
+import { GraphLifecycle, GRAPH_LIFECYCLE_DURATION_MS, lifecyclePoints, lifecycleNodeOpacity, lifecycleEdgeOpacity, lifecycleEdgeGlows } from "../.apm/extensions/cartograph/public/graph-lifecycle.js";
+import { ActivityPlayback, ACTIVITY_SPACING_MS } from "../.apm/extensions/cartograph/public/activity-playback.js";
+import { GRAPH_WATCH_HELP, graphWatchStatus, mountGraphWatchControls } from "../.apm/extensions/cartograph/public/graph-watch-controls.js";
+import { GraphGL } from "../.apm/extensions/cartograph/public/graph-gl.js";
 
 const start = 1800000000000;
 const nodes = ["a", "b", "c"].map((id, i) => ({

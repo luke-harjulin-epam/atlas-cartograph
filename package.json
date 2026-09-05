@@ -6,7 +6,8 @@
   "description": "Atlas knowledge-graph viewer as a GitHub Copilot canvas",
   "engines": { "node": ">=22" },
   "scripts": {
-    "start": "node src/dev.mjs",
-    "test": "node --test test/*.test.mjs"
+    "start": "node .apm/extensions/cartograph/dev.mjs",
+    "test": "node --test test/*.test.mjs",
+    "pack:apm": "apm pack --format plugin"
   }
 }

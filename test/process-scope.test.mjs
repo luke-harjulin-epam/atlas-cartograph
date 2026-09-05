@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { eventInProcessScope, ProcessAncestryTracker, validateProcessScope } from "../src/activity/process-scope.mjs";
-import { validAccessEvent } from "../src/activity/protocol.mjs";
-import { createEsloggerParser, esloggerProvider, parseEsloggerLine, parseProcessSnapshot } from "../src/activity/providers/eslogger.mjs";
+import { eventInProcessScope, ProcessAncestryTracker, validateProcessScope } from "../.apm/extensions/cartograph/activity/process-scope.mjs";
+import { validAccessEvent } from "../.apm/extensions/cartograph/activity/protocol.mjs";
+import { createEsloggerParser, esloggerProvider, parseEsloggerLine, parseProcessSnapshot } from "../.apm/extensions/cartograph/activity/providers/eslogger.mjs";
 
 const ROOT = 41529;
 const HOST = 745;

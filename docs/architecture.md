@@ -1,6 +1,7 @@
 # Architecture
 
-All executable implementation lives under `src/`. Documentation here is
+All runtime implementation lives under `.apm/extensions/cartograph/`.
+The component paths below are relative to that directory. Documentation here is
 hand-authored; there is no generated marketplace site or documentation generator.
 
 | Component | Responsibility |
@@ -173,5 +174,16 @@ Only `macos-eslogger` is shipped; it remains the default without fallback or
 automatic switching. Multiple providers can be registered, with one selected
 per canvas.
 
-The `.github/extensions/cartograph/extension.mjs` discovery entry point imports
-the source tree. It is not a second implementation or generated copy.
+The repository's `.github/extensions/cartograph/extension.mjs` discovery shim
+imports the canonical `.apm/extensions/cartograph/extension.mjs`. APM distributes
+the canonical directory itself, so the installed entry point never imports
+application code from outside its own bundle. Runtime package metadata keeps
+browser JavaScript as ES modules even in a non-ESM consumer repository.
+Node built-ins and the runtime-provided Copilot SDK are the only external
+code dependencies; there is no compilation step or second implementation.
+
+Without an explicit root, initialization discovers the consumer workspace's
+`.atlas/` stores and opens them together. This intentionally traverses the
+normally hidden mount directory, not installed package caches or extension
+fixtures. When no mounts are found, initialization shows the picker.
+These external files supply graph data, never executable module imports.

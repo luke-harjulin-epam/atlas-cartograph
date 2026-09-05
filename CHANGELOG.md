@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Move canonical runtime source into `.apm/extensions/cartograph/` and add an
+  APM manifest, lockfile and self-contained runtime metadata for distribution.
+  Preserve the repository development shim without shipping it to consumers.
+- Open recognized Atlas mounts beneath the consumer workspace's `.atlas/` by
+  default, including nested/multiple stores. Explicit paths override discovery;
+  absent mounts show the picker instead of automatically opening the sample.
 - Keep automatic framing active during manual camera rotation, yielding only
   automatic orientation for five seconds after release. Turn toward the active
   surface, hold stable angles for dispersed activity, and soften pan/zoom/orbit
@@ -37,7 +43,7 @@
   operations or collector delivery. Start each displayed highlight's lifetime
   when it appears, coalesce repeated pending accesses, and synchronize pulses
   to the displayed endpoints.
-- Import the installed Cartograph implementation into `src/`, with documentation
+- Import the installed Cartograph implementation into this repository, with documentation
   under `docs/` and a project-local Copilot discovery entry point.
 - Add opt-in external file-open/write activity using an explicitly authorized
   macOS collector and scoped, authenticated loopback ingestion.

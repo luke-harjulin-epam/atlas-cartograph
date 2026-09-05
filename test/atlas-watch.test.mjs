@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import test from "node:test";
-import { createFilesystemWatcher } from "../src/atlas/watch.mjs";
-import { createLiveAtlas } from "../src/atlas/live.mjs";
+import { createFilesystemWatcher } from "../.apm/extensions/cartograph/atlas/watch.mjs";
+import { createLiveAtlas } from "../.apm/extensions/cartograph/atlas/live.mjs";
 
 function fixture() {
   const opened = [];

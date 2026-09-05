@@ -8,7 +8,7 @@ remains five seconds.
 
 ## Boundaries
 
-Provider-specific responsibilities live in `src/activity/providers/`:
+Provider-specific responsibilities live in `.apm/extensions/cartograph/activity/providers/`:
 
 - Public identity, supported operations, permission requirements, and setup text.
 - Platform availability and explicit connection instructions.
@@ -28,7 +28,7 @@ line-stream collector or producing any `eslogger`-shaped data.
 
 ## Provider interface
 
-`MonitorProvider` is documented in `src/activity/providers/index.mjs`. A provider
+`MonitorProvider` is documented in `.apm/extensions/cartograph/activity/providers/index.mjs`. A provider
 exports an object with:
 
 | Member | Contract |

@@ -1,1 +1,1 @@
-import "../../../src/extension.mjs";
+import "../../../.apm/extensions/cartograph/extension.mjs";

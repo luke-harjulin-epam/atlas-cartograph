@@ -3,6 +3,7 @@ import { readFileSync, existsSync, statSync } from "node:fs";
 import { dirname, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defaultRoot, inspectRoot, listPresets, loadCombinedGraphs, loadFullGraph, loadPage, loadPageFromRoots, sanitizeRoot } from "./atlas/scan.mjs";
+import { allPresetSpecs, discoverAtlasPresets } from "./atlas/catalog.mjs";
 import { normalizeLink } from "./atlas/parse.mjs";
 import { answerQuery } from "./atlas/chat.mjs";
 import { DEFAULT_DURATION_MS, validateDuration } from "./activity/model.mjs";
@@ -109,8 +110,27 @@ function sendJson(res, code, body) {
   res.end(JSON.stringify(body));
 }
 
-export function hydrateStores(state) {
-  state.stores = listPresets(state.cwd).filter((s) => s.format === "atlas" || s.available);
+export function hydrateStores(state, options) {
+  try {
+    state.stores = listPresets(state.cwd, options).filter((s) => s.format === "atlas" || s.available);
+    if (state.error?.startsWith("Cannot list Atlas stores:")) state.error = null;
+  } catch (error) {
+    state.error = `Cannot list Atlas stores: ${error.message ?? error}`;
+  }
+}
+
+export function openDefaultAtlases(state, input = {}) {
+  try {
+    const explicit = sanitizeRoot(input.root, state.cwd);
+    const mounts = explicit ? null : discoverAtlasPresets(state.cwd);
+    openAtlases(state, explicit ? [explicit] : mounts.map((store) => store.root), { strict: true });
+    state.phase = state.graph?.store?.available ? (input.skipIntro === false ? "jump" : "map") : "welcome";
+    hydrateStores(state, mounts ? { specs: allPresetSpecs(state.cwd, { mounts }) } : undefined);
+  } catch (error) {
+    state.error = `Cannot open Atlas stores: ${error.message ?? error}`;
+    if (!state.graph?.store?.available) state.phase = "welcome";
+  }
+  return state;
 }
 
 function normalizeRoots(state) {
@@ -133,23 +153,15 @@ function applyGraph(state, graph, { jump = true } = {}) {
   return state;
 }
 
-export function openAtlas(state, root, { add = false } = {}) {
+export function openAtlases(state, roots, { jump = true, strict = false } = {}) {
+  roots = [...new Set(roots.map((root) => sanitizeRoot(root, state.cwd)).filter(Boolean))];
+  const graph = roots.length ? loadCombinedGraphs(roots, state.cwd, { strict }) : null;
   state.graphChanges = mountGraphChanges(state.graphChanges);
-  const trimmed = sanitizeRoot(root, state.cwd);
   state.selectedId = null;
   state.previewOpen = false;
   state.page = null;
   state.error = null;
   state.linkError = null;
-  const current = normalizeRoots(state);
-  let roots;
-  if (!trimmed) {
-    roots = [];
-  } else if (add) {
-    roots = current.includes(trimmed) ? current : [...current, trimmed];
-  } else {
-    roots = [trimmed];
-  }
   state.roots = roots;
   state.root = roots[0] || "";
   if (!roots.length) {
@@ -157,8 +169,13 @@ export function openAtlas(state, root, { add = false } = {}) {
     state.phase = "welcome";
     return state;
   }
-  const graph = loadCombinedGraphs(roots, state.cwd);
-  return applyGraph(state, graph, { jump: !add });
+  return applyGraph(state, graph, { jump });
+}
+
+export function openAtlas(state, root, { add = false } = {}) {
+  const trimmed = sanitizeRoot(root, state.cwd);
+  const roots = trimmed ? (add ? [...normalizeRoots(state), trimmed] : [trimmed]) : [];
+  return openAtlases(state, roots, { jump: !add });
 }
 
 export function addAtlas(state, root) {
@@ -331,7 +348,7 @@ export async function startServer(instanceId, state, options = {}) {
         hydrateStores(entry.state);
         entry.activity.sync();
         sendJson(res, 200, {
-          defaultRoot: defaultRoot(entry.state.cwd),
+          defaultRoot: defaultRoot(entry.state.cwd, entry.state.stores),
           presets: entry.state.stores,
           state: snapshot(entry.state),
         });

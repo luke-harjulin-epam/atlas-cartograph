@@ -1,7 +1,16 @@
 # Repository guidance
 
-- Implement Cartograph in `src/`; `.github/extensions/cartograph/extension.mjs`
-  is only the Copilot discovery entry point.
+- Implement Cartograph in `.apm/extensions/cartograph/`, the canonical,
+  self-contained runtime source. Do not keep a second copy in `src/`.
+  `.github/extensions/cartograph/extension.mjs` is only the development shim;
+  APM distributes the real entry point and sibling assets, not that shim.
+- Keep `apm.yml` and the runtime package metadata aligned with the root package
+  version. Do not add a license declaration without an established license.
+  Do not import application code outside the runtime bundle; Node built-ins and
+  the host-provided Copilot SDK are the only external runtime code dependencies.
+- With no explicit root, open recognized Atlas mounts under the consumer
+  workspace's `.atlas/`. Atlas content is external data, never executable code.
+  Do not auto-open the sample or scan installed extension/package caches.
 - Keep hand-authored documentation under `docs/`. This repository is not an APM
   marketplace and has no generated documentation or package catalog.
 - Do not edit an installed user extension or the main checkout when working in
@@ -57,7 +66,7 @@
   whole host application. Exclude the viewer subtree and fail closed on unknown
   ancestry; do not silently broaden process scope to make a demo light up.
 - Isolate monitor-specific parsing, permissions and setup in
-  `src/activity/providers/`. Use the shared normalized event protocol; do not
+  `.apm/extensions/cartograph/activity/providers/`. Use the shared normalized event protocol; do not
   couple the model, renderers or transport to a particular OS logger.
 - Keep `macos-eslogger` as the default unless a default change is explicitly
   requested. Alternative implementations belong behind the provider registry,

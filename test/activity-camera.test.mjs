@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   ActivityCamera, activationCameraTarget, activationFocusNodes, activationSurfaceAngle, angleDelta, dampCameraValue,
-} from "../src/public/activity-camera.js";
+} from "../.apm/extensions/cartograph/public/activity-camera.js";
 
 const cam = () => ({ x: 25, y: -10, k: 1.2 });
 const point = (id, sx, sy, extra = {}) => ({ id, title: id, sx, sy, ...extra });

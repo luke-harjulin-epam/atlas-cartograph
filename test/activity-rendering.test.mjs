@@ -4,13 +4,13 @@ import { readFileSync } from "node:fs";
 import {
   DEFAULT_ACTIVITY_DURATION_MS, activityFrame, activityNodeStyle, activityEdgeOpacity,
   activityPulse, indexActivityGraph, retainActivity,
-} from "../src/public/activity-rendering.js";
-import { activityDuration, activityScopeLabel, activityStatus, playbackStatus, requestActivity, mountActivityControls } from "../src/public/activity-controls.js";
-import { GraphGL } from "../src/public/graph-gl.js";
-import { mountGraphCanvas } from "../src/public/graph-canvas.js";
-import { ACTIVITY_SPACING_MS } from "../src/public/activity-playback.js";
-import { GraphLifecycle } from "../src/public/graph-lifecycle.js";
-import { ActivityCamera } from "../src/public/activity-camera.js";
+} from "../.apm/extensions/cartograph/public/activity-rendering.js";
+import { activityDuration, activityScopeLabel, activityStatus, playbackStatus, requestActivity, mountActivityControls } from "../.apm/extensions/cartograph/public/activity-controls.js";
+import { GraphGL } from "../.apm/extensions/cartograph/public/graph-gl.js";
+import { mountGraphCanvas } from "../.apm/extensions/cartograph/public/graph-canvas.js";
+import { ACTIVITY_SPACING_MS } from "../.apm/extensions/cartograph/public/activity-playback.js";
+import { GraphLifecycle } from "../.apm/extensions/cartograph/public/graph-lifecycle.js";
+import { ActivityCamera } from "../.apm/extensions/cartograph/public/activity-camera.js";
 
 const start = 1800000000000;
 const nodes = ["a", "b", "c"].map((id, i) => ({
@@ -242,7 +242,7 @@ test("Knowledge Activation camera toggle defaults on and stays independent of re
   get("activity-auto-focus").checked = true;
   get("activity-auto-focus").fire("change");
   assert.deepEqual(changes, [false, true]);
-  const html = readFileSync(new URL("../src/public/index.html", import.meta.url), "utf8");
+  const html = readFileSync(new URL("../.apm/extensions/cartograph/public/index.html", import.meta.url), "utf8");
   assert.match(html, /<summary>Knowledge Activation /);
   assert.match(html, /id="activity-auto-focus"[^>]*checked/);
 });
@@ -277,7 +277,7 @@ test("provider setup has a generic fallback and no built-in macOS privilege prom
   assert.equal(get("activity-setup-steps").children.length, 0);
   assert.equal(get("activity-provider-label").classList.contains("hidden"), true);
   assert.doesNotMatch(activityStatus(undefined).message, /macOS|eslogger|sudo|Full Disk Access/i);
-  const html = readFileSync(new URL("../src/public/index.html", import.meta.url), "utf8");
+  const html = readFileSync(new URL("../.apm/extensions/cartograph/public/index.html", import.meta.url), "utf8");
   assert.doesNotMatch(html, /macOS|eslogger|sudo|Full Disk Access/i);
 });
 

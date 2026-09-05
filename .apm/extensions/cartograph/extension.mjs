@@ -8,6 +8,8 @@ import {
   freshState,
   hydrateStores,
   openAtlas,
+  openAtlases,
+  openDefaultAtlases,
   selectNode,
   startServer,
 } from "./server.mjs";
@@ -67,13 +69,13 @@ const session = await joinSession({
       id: "cartograph",
       displayName: "Cartograph",
       description:
-        "Atlas knowledge-graph viewer: crawl, welcome gate, hyperspace jump, and star-map of a mounted atlas/ or fixtures/mini-atlas.",
+        "Atlas knowledge-graph viewer. Opens all recognized stores beneath the current project's .atlas/ together, or shows the store picker when none are found.",
       inputSchema: {
         type: "object",
         properties: {
           root: {
             type: "string",
-            description: "Atlas store root (absolute or repo-relative). Defaults to atlas/ or fixtures/mini-atlas.",
+            description: "Explicit Atlas store root (absolute or project-relative), overriding automatic discovery under the current project's .atlas/. The sample is only opened when selected explicitly.",
           },
           skipIntro: {
             type: "boolean",
@@ -201,12 +203,11 @@ const session = await joinSession({
         },
         {
           name: "reload",
-          description: "Rescan the current Atlas root and refresh the graph.",
+          description: "Rescan the mounted Atlas stores and refresh the combined graph.",
           handler: async (ctx) => {
             const entry = requireEntry(ctx.instanceId);
+            openAtlases(entry.state, entry.state.roots, { strict: true });
             hydrateStores(entry.state);
-            const roots = [...entry.state.roots];
-            for (const [index, root] of roots.entries()) openAtlas(entry.state, root, { add: index > 0 });
             entry.broadcast();
             return {
               ok: true,
@@ -222,13 +223,7 @@ const session = await joinSession({
           const input = ctx.input && typeof ctx.input === "object" ? ctx.input : {};
           const cwd = await resolveCwd(ctx);
           const state = freshState(cwd, input);
-          hydrateStores(state);
-          if (input.root) {
-            openAtlas(state, input.root);
-            state.phase = input.skipIntro === false ? "jump" : "map";
-          } else {
-            state.phase = "welcome";
-          }
+          openDefaultAtlases(state, input);
           try {
             await session.log(
               `Cartograph cwd ${cwd || "(none)"} · ${state.stores.filter((s) => s.available).length} stores`,

@@ -6,16 +6,62 @@ external file accesses illuminate the graph.
 
 ## Run
 
-Requires Node.js 22 or later. No dependency installation or build is needed.
+Requires Node.js 22 or later. No npm dependency installation or build is needed.
 
 ```sh
-npm start -- ./src/fixtures/mini-atlas
+npm start
+```
+
+The viewer opens all recognized Atlas stores under the current project's
+`.atlas/`, including nested mounts such as `.atlas/github.com/owner/store`.
+An explicit path overrides discovery. If no mounts exist, it shows the picker,
+not the demonstration graph. To open the sample explicitly:
+
+```sh
+npm start -- ./.apm/extensions/cartograph/fixtures/mini-atlas
 ```
 
 Open the printed local URL. In Copilot App, reload extensions and open the
 **project** Cartograph canvas: `.github/extensions/cartograph/extension.mjs`
-loads the source in `src/`. The installed user extension is left unchanged.
+is a development shim for `.apm/extensions/cartograph/extension.mjs`.
+The installed user extension is left unchanged.
 If both extensions are listed, select `project:cartograph` explicitly.
+
+## Install with APM
+
+Use an APM version with experimental canvas support (validated with 0.29.0),
+repository access, and Copilot App canvas support. Canvas packages execute code;
+review and trust this package before installing it.
+
+In the consuming project's `apm.yml`, merge this canvas-only approval with any
+existing executable settings. Initialize an APM project first if needed.
+
+```yaml
+executables:
+  allow:
+    sergio-sisternes-epam/atlas-cartograph:
+      canvas: true
+```
+
+APM 0.29.0 checks the dependency reference for canvas approval;
+`apm approve` can record a different package identity. Use the explicit
+repository-key grant above rather than granting unrelated executable types.
+
+From the consuming project:
+
+```sh
+apm experimental enable canvas
+apm install sergio-sisternes-epam/atlas-cartograph --target copilot
+```
+
+Install from a ref containing `apm.yml` (the default branch after this change
+is merged). Use `#<tag-or-commit>` on the package reference to pin a version.
+
+Reload project extensions and open **Cartograph**. APM deploys the complete
+runtime to `.github/extensions/cartograph/`; it does not deploy the development
+shim or depend on a `src/` directory in the consumer. Only Node built-ins and
+the host-provided Copilot SDK are external code dependencies. Atlas mounts in
+the consumer's `.atlas/` remain data, not executable imports.
 
 ## File-access activity
 
@@ -74,9 +120,10 @@ when read highlighting is paused or no read collector is running. See
 
 | Path | Purpose |
 | --- | --- |
-| `src/` | Extension, local server, graph rendering, collector, and sample Atlas |
+| `apm.yml` / `apm.lock.yaml` | APM package manifest and dependency lock |
+| `.apm/extensions/cartograph/` | Canonical, self-contained canvas runtime and sample Atlas |
 | `docs/` | Hand-authored documentation |
 | `test/` | Node.js built-in tests |
-| `.github/extensions/cartograph/` | Copilot discovery entry point |
+| `.github/extensions/cartograph/` | Repository-only development discovery shim |
 
 Run `npm test` for the test suite. See [contributing](CONTRIBUTING.md).

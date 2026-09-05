@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, isAbsolute, join, normalize, relative, resolve } from "node:path";
-import { allPresetSpecs } from "./catalog.mjs";
+import { allPresetSpecs, configuredPresetSpecs, labelFor } from "./catalog.mjs";
 import {
   aliasesFor,
   displayTitle,
@@ -125,10 +125,11 @@ function tallyStore(root, strict = false) {
   return { experiences, decisions, work, other, pages: files.length };
 }
 
-export function inspectRoot(rawRoot, cwd, { strict = false, fallbackStore } = {}) {
+export function inspectRoot(rawRoot, cwd, { strict = false, fallbackStore, label: presetLabel } = {}) {
   const root = sanitizeRoot(rawRoot, cwd);
-  const label =
-    allPresetSpecs(cwd).find((p) => sanitizeRoot(p.root, cwd) === root)?.label ?? root;
+  const label = presetLabel ??
+    configuredPresetSpecs(cwd).find((p) => sanitizeRoot(p.root, cwd) === root)?.label ??
+    (root ? labelFor(root, cwd) : "");
   const empty = (reason) => ({
     root,
     label: label || "No root",
@@ -297,14 +298,14 @@ export function loadPage(rawRoot, nodeId, cwd) {
   };
 }
 
-export function listPresets(cwd) {
-  return allPresetSpecs(cwd)
-    .map((p) => inspectRoot(p.root, cwd))
+export function listPresets(cwd, { specs = allPresetSpecs(cwd) } = {}) {
+  return specs
+    .map((p) => inspectRoot(p.root, cwd, { label: p.label, strict: p.discovered }))
     .filter((s) => s.available);
 }
 
-export function defaultRoot(cwd) {
-  const presets = listPresets(cwd).filter((s) => s.available);
+export function defaultRoot(cwd, stores = listPresets(cwd)) {
+  const presets = stores.filter((s) => s.available);
   const pick =
     presets.find((s) => s.label === "ATLAS_ROOT") ||
     presets.find((s) => s.label === "Workspace atlas") ||

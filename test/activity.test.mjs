@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { AccessActivity } from "../src/activity/model.mjs";
+import { AccessActivity } from "../.apm/extensions/cartograph/activity/model.mjs";
 
 function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), "cartograph-activity-"));

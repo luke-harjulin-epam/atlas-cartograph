@@ -4,16 +4,16 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import test from "node:test";
-import { runCollector, parseCollectorArgs } from "../src/activity/collector.mjs";
-import { CollectorError } from "../src/activity/protocol.mjs";
-import { esloggerProvider, parseEsloggerLine } from "../src/activity/providers/eslogger.mjs";
+import { runCollector, parseCollectorArgs } from "../.apm/extensions/cartograph/activity/collector.mjs";
+import { CollectorError } from "../.apm/extensions/cartograph/activity/protocol.mjs";
+import { esloggerProvider, parseEsloggerLine } from "../.apm/extensions/cartograph/activity/providers/eslogger.mjs";
 import {
   createMonitorRegistry, DEFAULT_MONITOR_PROVIDER, monitorMetadata, monitorProviders,
   validateMonitorProvider,
-} from "../src/activity/providers/index.mjs";
-import { freshState, openAtlas, startServer } from "../src/server.mjs";
+} from "../.apm/extensions/cartograph/activity/providers/index.mjs";
+import { freshState, openAtlas, startServer } from "../.apm/extensions/cartograph/server.mjs";
 
-const root = fileURLToPath(new URL("../src/fixtures/mini-atlas", import.meta.url));
+const root = fileURLToPath(new URL("../.apm/extensions/cartograph/fixtures/mini-atlas", import.meta.url));
 const tokenEnv = { CARTOGRAPH_ACTIVITY_TOKEN: "synthetic-token" };
 const event = { path: join(root, "index.md"), pid: 123, kind: "read" };
 const testProvider = {
