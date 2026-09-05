@@ -57,3 +57,14 @@ test("removed code cannot join link fragments or swallow subsequent real links",
   assert.deepEqual(extract("[`Label`](markdown.md) [[wiki|`Label`]]"), [["wiki"], ["markdown.md"], []]);
   assert.deepEqual(extract(`\`unmatched\n~~~\nexample\n~~~\n${links}\n\``), expected);
 });
+
+test("inline code cannot consume prose across preview block boundaries", () => {
+  for (const block of [`# ${links}`, `> ${links}`, `- ${links}`, `1. ${links}`, `| ${links} |`]) {
+    assert.deepEqual(extract(`Unmatched \`\n${block}\nA later \` delimiter`), expected, block);
+  }
+  for (const body of [
+    `- Unmatched \`\n- ${links}\n- A later \` delimiter`,
+    `1. Unmatched \`\n2. ${links}\n3. A later \` delimiter`,
+    `| Unmatched \` | ${links} | A later \` delimiter |`,
+  ]) assert.deepEqual(extract(body), expected, body);
+});

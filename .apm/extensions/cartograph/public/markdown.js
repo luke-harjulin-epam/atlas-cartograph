@@ -173,4 +173,4 @@ export function renderMarkdown(md) {
   return splitBlocks(text).map(renderBlock).join("");
 }
 
-export { escapeHtml };
+export { escapeHtml, listKind, splitBlocks };

@@ -33,7 +33,15 @@ function stripMarkdownCode(text) {
   let prose = [];
   let fence = "";
   const flush = () => {
-    if (prose.length) out.push(stripCodeSpans(prose.join("\n")));
+    for (const block of splitBlocks(prose.join("\n"))) {
+      if (/^\s*\|/.test(block)) {
+        out.push(block.split("\n").map((row) => row.split("|").map(stripCodeSpans).join("|")).join("\n"));
+      } else if (listKind(block)) {
+        out.push(block.split("\n").map(stripCodeSpans).join("\n"));
+      } else {
+        out.push(stripCodeSpans(block));
+      }
+    }
     prose = [];
   };
   for (const line of text.replace(/\r\n?/g, "\n").split("\n")) {
@@ -260,3 +268,4 @@ export {
   sourcesOf,
   stripMarkdownCode
 };
+import { listKind, splitBlocks } from "../public/markdown.js";
