@@ -1,0 +1,107 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    uses: ./.github/workflows/validate.yml
+    with:
+      release-tag: ${{ github.ref_name }}
+  build:
+    needs: validate
+    uses: ./.github/workflows/package.yml
+    with:
+      release-tag: ${{ github.ref_name }}
+  publish:
+    name: Upload release assets
+    needs: [validate, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    outputs:
+      release-id: ${{ steps.release.outputs.id }}
+    env:
+      TAG: ${{ github.ref_name }}
+      VERSION: ${{ needs.validate.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: cartograph-package
+          path: build/release
+      - name: Verify artifact identity and checksum
+        working-directory: build/release
+        run: |
+          test "$(find . -type f | wc -l)" -eq 3
+          jq --exit-status --arg version "$VERSION" --arg commit "$GITHUB_SHA" --arg tag "$TAG" \
+            '.name == "atlas-cartograph" and .version == $version and .commit == $commit and .tag == $tag' release.json
+          archive="atlas-cartograph-$VERSION.tar.gz"
+          sha256sum --check --strict "$archive.sha256"
+          test "$(sha256sum "$archive" | cut -d ' ' -f 1)" = "$(jq -r .sha256 release.json)"
+      - name: Refuse to overwrite an existing release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(gh api "repos/$GITHUB_REPOSITORY/commits/refs/tags/$TAG" --jq .sha)" = "$GITHUB_SHA"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases" > "$RUNNER_TEMP/releases.json"
+          count="$(jq -s --arg tag "$TAG" '[.[][] | select(.tag_name == $tag)] | length' "$RUNNER_TEMP/releases.json")"
+          if [ "$count" -ne 0 ]; then
+            echo "::error::This tag already has a release. Do not overwrite shipped assets."
+            exit 1
+          fi
+      - name: Create draft and upload the validated bundle
+        id: release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          target_commitish: ${{ github.sha }}
+          draft: true
+          prerelease: ${{ needs.validate.outputs.prerelease == 'true' }}
+          generate_release_notes: true
+          overwrite_files: false
+          fail_on_unmatched_files: true
+          files: |
+            build/release/*.tar.gz
+            build/release/*.tar.gz.sha256
+            build/release/release.json
+          body: |
+            APM plugin-format canvas bundle. The adjacent `.sha256` file verifies
+            the archive; `release.json` records its version, source commit,
+            pinned APM version and digest. No npm registry or Docker image is used.
+  release:
+    name: Publish complete release
+    needs: [validate, publish]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.ref_name }}
+      VERSION: ${{ needs.validate.outputs.version }}
+      RELEASE_ID: ${{ needs.publish.outputs.release-id }}
+      PRERELEASE: ${{ needs.validate.outputs.prerelease }}
+    steps:
+      - name: Publish only after every asset is uploaded
+        run: |
+          test "$(gh api "repos/$GITHUB_REPOSITORY/commits/refs/tags/$TAG" --jq .sha)" = "$GITHUB_SHA"
+          gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
+            --jq '{tag_name,draft,assets}' > "$RUNNER_TEMP/release.json"
+          jq --exit-status --arg tag "$TAG" --arg archive "atlas-cartograph-$VERSION.tar.gz" \
+            '.tag_name == $tag and .draft and
+             ([.assets[].name] | sort) == ([$archive, ($archive + ".sha256"), "release.json"] | sort) and
+             all(.assets[]; .state == "uploaded")' \
+            "$RUNNER_TEMP/release.json"
+          latest=legacy
+          if [ "$PRERELEASE" = true ]; then latest=false; fi
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
+            -F draft=false -F prerelease="$PRERELEASE" -f make_latest="$latest" --jq .html_url

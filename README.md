@@ -77,6 +77,29 @@ the consumer's `.atlas/` remain data, not executable imports.
 The viewer uses local fallback fonts; it does not fetch Google Fonts or other
 third-party UI assets.
 
+## CI and releases
+
+Pull requests, pushes to `main`, and merge-queue entries run the same validation:
+version alignment, JavaScript syntax, the full Node.js 22/24 suite on Linux and
+macOS, and an isolated APM archive pack/install exercise with lockfile and
+deployed-file integrity audits. The aggregate merge check is
+named **CI**; require it in the default-branch ruleset. PR runs cannot publish.
+
+After a reviewed version change reaches `main`, pushing `vX.Y.Z` starts the
+release pipeline. The tag must match `package.json`, the runtime `package.json`,
+and `apm.yml`, and point to a commit in `main`'s history. Pre-release tags such as
+`v0.1.0-rc.1` produce GitHub prereleases.
+
+Each release contains `atlas-cartograph-X.Y.Z.tar.gz`, its SHA-256 checksum,
+and `release.json` with source commit, tag, and packaging metadata. The pipeline
+uploads everything to a draft and rechecks its tag and assets before publishing,
+and refuses to overwrite an existing release. It uses only the built-in
+`GITHUB_TOKEN`, with write
+permission limited to the two publication jobs; no npm or Docker credentials
+are needed. Releases retain this repository's access restrictions.
+
+See [contributing](CONTRIBUTING.md#release-procedure) for tagging and recovery.
+
 ## File-access activity
 
 Open the map's activity controls to start an explicit macOS OS-event collector

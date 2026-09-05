@@ -8,6 +8,15 @@
   version. Do not add a license declaration without an established license.
   Do not import application code outside the runtime bundle; Node built-ins and
   the host-provided Copilot SDK are the only external runtime code dependencies.
+- Keep PR, main-push and merge-queue validation behind the stable `CI` gate.
+  Reuse the same validation and package workflows for tag releases. Publication
+  requires a matching SemVer tag in main history, completed checks and verified
+  artifacts; never publish from PR events or replace an existing release.
+- Keep CI actions commit-pinned and the APM download checksum-pinned. Use
+  `scripts/package-apm.mjs` for isolated release packaging and producer/consumer
+  lockfile audits; do not edit generated plugin manifests or install over the
+  repository's development shim. Recheck the tag and exact asset set before
+  publishing the completed draft.
 - With no explicit root, open recognized Atlas mounts under the consumer
   workspace's `.atlas/`. Atlas content is external data, never executable code.
   Do not auto-open the sample or scan installed extension/package caches.

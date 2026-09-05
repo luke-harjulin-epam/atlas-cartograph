@@ -14,6 +14,13 @@
   with serialised/coalesced edits, shared query revisions and visible rollback.
 - Report the All layer control as active only when every node layer is enabled,
   including the otherwise unnamed node categories.
+- Add read-only PR, main-push, and merge-queue CI with a stable aggregate gate,
+  Node.js 22/24 coverage on Linux/macOS, version/syntax validation, and a real
+  APM bundle installation exercise with producer/consumer lockfile audits.
+- Add tag-based GitHub releases with matching-version/main-history gates,
+  checksum-pinned packaging, SHA-256 assets, source metadata, categorised notes,
+  prerelease detection, and draft-first publication with final tag/asset checks
+  and no overwriting of existing releases.
 - Reject duplicate Atlas mount keys without changing the active graph, keep
   explicit Atlas references scoped to their target, and emit mesh edges once.
   Support `atlas://` page navigation with a single store open.

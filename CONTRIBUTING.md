@@ -140,3 +140,77 @@ runner, not an unrelated terminal. Keep the privileged logger in the authorized
 external terminal; do not move or broaden the session root to include it.
 
 Update the relevant documentation and `CHANGELOG.md` for user-visible changes.
+
+## CI contract
+
+`.github/workflows/ci.yml` covers pull requests to `main`, pushes to `main`,
+and `merge_group` events. Keep its aggregate **CI** job name stable and require
+that status in the default-branch ruleset with up-to-date branches. It must fail
+if either reusable workflow fails, is cancelled, or is skipped. Do not add path
+filters that would leave the required check absent.
+
+`validate.yml` checks all three package versions, parses every JavaScript file
+with Node, and runs the full suite on Node.js 22 and 24 on Linux and macOS.
+There are no npm dependencies, TypeScript compiler, or separate application build.
+`package.yml` downloads checksum-pinned APM 0.29.0, verifies frozen resolution,
+audits the producer lockfile, and builds the plugin archive. It installs that
+exact archive in a fresh CommonJS consumer, audits its deployed-file integrity,
+compares every deployed runtime file, and exercises default Atlas discovery,
+every public HTML/JavaScript/CSS asset, and the authenticated bootstrap API.
+Neither job starts a privileged collector.
+
+For a local reproduction, run `npm run check:version`,
+`npm run check:syntax`, `npm test`, and `npm run pack:release` with APM 0.29.0
+on `PATH` (or set `APM_BIN` to its absolute path). The last command requires
+an empty `build/release/`; move or remove only your previous generated output
+before repeating it. Producer, consumer, `HOME`, and `APM_HOME` are temporary
+and removed automatically. Packaging never deploys over the development shim.
+
+APM 0.29.0 needs two packaging compatibility choices: avoid `pack --json`,
+which can generate metadata without the bundle, and explicitly set
+`pack --target copilot` so an isolated producer does not record an invalid
+`minimal` target, even when `apm config set target copilot` has been used.
+The latter flag is deprecated upstream but necessary for this pinned version.
+The offline consumer's legacy canvas approval is confined to
+the disposable test project. Do not broaden user-wide trust or bypass integrity
+checks. When upgrading APM, update the binary checksum and script version
+together and re-exercise the complete install path.
+
+These isolated audits enforce lockfile and deployed-file consistency, not
+organisation policy: the disposable projects have no Git remote for policy
+discovery. Organisations needing additional policy gates must supply their
+approved policy explicitly rather than infer compliance from these audits.
+
+## Release procedure
+
+1. Update `package.json`, `.apm/extensions/cartograph/package.json`, and the
+   double-quoted top-level version in `apm.yml` together. Move the corresponding
+   `Unreleased` changelog entries into a dated version section.
+2. Merge that version change through a reviewed PR with **CI** passing.
+3. From the reviewed commit in `main`, create and push a new, never-used tag:
+   `git tag vX.Y.Z && git push origin vX.Y.Z`. A prerelease such as
+   `vX.Y.Z-rc.1` must also match all three manifests.
+4. Inspect the **Release** workflow in Actions. Its validate/build/publish/release
+   stages rerun the gates on the tagged commit, upload an archive, `.sha256`,
+   and `release.json` into a draft, then recheck the tag's commit and exact
+   uploaded asset names before publishing.
+
+Actions must be enabled and the repository must allow the workflow's explicit
+`contents: write` permissions on the publication jobs. No additional secrets
+are required: the built-in `GITHUB_TOKEN` performs release writes. PR jobs
+remain read-only, third-party actions are commit-pinned, and credentials are
+not persisted in checkouts. Repository code is not executed in publication jobs.
+Auto-generated notes use `.github/release.yml` and PR labels.
+
+After downloading the release assets, verify with
+`shasum -a 256 -c atlas-cartograph-X.Y.Z.tar.gz.sha256` (or `sha256sum -c` on
+Linux), then install the archive with APM's experimental canvas support and
+the appropriate consumer approval. Source installation pinned to `#vX.Y.Z`
+remains supported; no separate package registry is involved.
+
+If validation or building fails, nothing is published. If uploading or final
+publication fails, inspect the retained draft and failed run before recovery.
+Rerunning a failed final publication job can finish its existing draft; a full
+rerun deliberately refuses an existing release. Only after confirming a draft
+was never published may its owner delete that failed draft and rerun. Never
+delete/recreate a published release or force-move a tag: ship a new version.

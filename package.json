@@ -8,6 +8,9 @@
   "scripts": {
     "start": "node .apm/extensions/cartograph/dev.mjs",
     "test": "node --test test/*.test.mjs",
-    "pack:apm": "apm pack --format plugin"
+    "check:syntax": "node scripts/check-syntax.mjs",
+    "check:version": "node scripts/check-version.mjs",
+    "pack:apm": "apm pack --format plugin",
+    "pack:release": "node scripts/package-apm.mjs"
   }
 }
