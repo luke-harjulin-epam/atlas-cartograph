@@ -18,6 +18,7 @@
 - Use Node.js built-ins and ES modules. The Copilot SDK is supplied at runtime.
 - Keep universe layout single-sourced in `public/universe.js`; the Node entry
   re-exports it. Do not load third-party fonts or other UI assets at runtime.
+  Index sorted sibling positions once per group instead of rescanning per node.
 - Keep page reads inside their mounted store, including canonical symlink
   targets. Preserve the originating Atlas in navigation and chat references.
 - Reject duplicate mount keys before changing the mounted graph or selection.
@@ -43,6 +44,9 @@
   slot per visible node, use indexed relationship pairs, and throttle status UI.
 - Show queue/lag, merged and cancelled observations, and collector errors
   separately. Capture loss is unknown, not zero. Keep all counters transient.
+- Keep playback observations, pending slots and highlights per visible node,
+  even when multiple mounts represent the same physical file. Use file identity
+  to remap IDs, not to collapse aliases or infer a traversal between them.
 - Activity must remain scoped to open Atlas files, exclude viewer reads, expire
   independently per node, and preserve selection/search/layer state.
 - Keep the Knowledge Activation camera option client-side and default-on.
@@ -77,6 +81,9 @@
 - Copilot canvases default to the current CLI session's process tree, not the
   whole host application. Exclude the viewer subtree and fail closed on unknown
   ancestry; do not silently broaden process scope to make a demo light up.
+  The receiver supplies its own `viewerPid`; require a current viewer-to-root
+  lineage before seeding the collector, not just the root PID's presence.
+  Process lifecycle records update ancestry but cannot make monitoring Live.
 - Isolate monitor-specific parsing, permissions and setup in
   `.apm/extensions/cartograph/activity/providers/`. Use the shared normalized event protocol; do not
   couple the model, renderers or transport to a particular OS logger.

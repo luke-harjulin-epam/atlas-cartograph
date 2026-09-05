@@ -279,6 +279,8 @@ test("session scope admits its tools and excludes host scans, other sessions, an
   assert.equal(state.activity.nodes[0].count, 3);
   assert.equal(state.activity.nodes[0].firstSequence, 1);
   assert.equal(state.activity.scope.rootPid, 400);
+  assert.equal(state.activity.scope.viewerPid, process.pid);
+  assert.equal(connection.scope.viewerPid, process.pid);
   assert.equal(connection.scope.mode, "session");
   assert.match(connection.command, /\bfork\b/);
   assert.match(connection.command, /\bexec\b/);

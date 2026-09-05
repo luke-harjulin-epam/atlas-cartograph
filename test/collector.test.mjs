@@ -5,7 +5,7 @@ import { PassThrough } from "node:stream";
 import { spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import { createActivityService } from "../.apm/extensions/cartograph/activity/service.mjs";
-import { esloggerProvider } from "../.apm/extensions/cartograph/activity/providers/eslogger.mjs";
+import { createEsloggerParser, esloggerProvider } from "../.apm/extensions/cartograph/activity/providers/eslogger.mjs";
 import {
   CollectorError, LIMITATIONS, filterTargetEvents, parseCollectorArgs,
   parseEsloggerLine, parseTargets, runCollector, validateCollectorUrl,
@@ -497,6 +497,78 @@ const normalizedLine = (event) => `${JSON.stringify({ type: "event", valid: true
 const scopedProvider = (createParser = async () => JSON.parse) => ({
   ...esloggerProvider,
   stream: { ...esloggerProvider.stream, createParser },
+});
+
+test("reused root PID at startup cannot forward buffered file-access events", async (t) => {
+  const scope = { ...sessionScope, viewerPid: VIEWER_PID };
+  let parsed = 0;
+  const h = await harness(t, {
+    state: { targets: { paths: [TARGET], ignorePids: [], scope } },
+    collector: {
+      provider: scopedProvider(async (options) => {
+        const parser = await createEsloggerParser({
+          ...options,
+          snapshot: [
+            { pid: SESSION_ROOT, ppid: 1, startTime: 1700003600 },
+            { pid: VIEWER_PID, ppid: 1, startTime: 1700000000 },
+            { pid: PID, ppid: SESSION_ROOT, startTime: 1700003601 },
+          ],
+        });
+        return (line) => { parsed++; return parser(line); };
+      }),
+    },
+  });
+  h.input.write(line());
+  assert.deepEqual(await h.running, { status: "error", sawValid: false });
+  assert.equal(parsed, 0, "buffered observations are never parsed after attribution fails");
+  assert.ok(h.posts.every((post) => post.status === "error" && post.events.length === 0));
+  assert.match(h.diagnostics(), /viewer.*descended/);
+});
+
+test("native process lifecycle updates ancestry without reporting file monitoring as live", async (t) => {
+  for (const withAccess of [false, true]) {
+    await t.test(withAccess ? "first access enables Live" : "lifecycle-only EOF is an error", async (subtest) => {
+      const scope = { ...sessionScope, viewerPid: VIEWER_PID };
+      const snapshot = [
+        { pid: SESSION_ROOT, ppid: 1, startTime: 1700000000 },
+        { pid: VIEWER_PID, ppid: SESSION_ROOT, startTime: 1700000000 },
+      ];
+      const processIdentity = (pid, ppid, pidversion = 1) => ({
+        audit_token: { pid, pidversion }, ppid, start_time: { tv_sec: 1700000000, tv_usec: 0 },
+        parent_audit_token: { pid: ppid, pidversion: 1 },
+      });
+      const root = processIdentity(SESSION_ROOT, 1);
+      const child = processIdentity(PID, SESSION_ROOT);
+      const executed = processIdentity(PID, SESSION_ROOT, 2);
+      const nativeLine = (event_type, process, event) =>
+        `${JSON.stringify({ schema_version: 1, event_type, process, event })}\n`;
+      let parsed = 0;
+      const h = await harness(subtest, {
+        state: { targets: { paths: [TARGET], ignorePids: [], scope } },
+        collector: {
+          provider: scopedProvider(async (options) => {
+            const parser = await createEsloggerParser({ ...options, snapshot });
+            return (line) => { parsed++; return parser(line); };
+          }),
+        },
+      });
+      await waitFor(() => h.posts.length);
+      h.input.write(nativeLine(11, root, { fork: { child } }) +
+        nativeLine(9, child, { exec: { target: executed } }) +
+        nativeLine(15, executed, { exit: { stat: 0 } }));
+      await waitFor(() => parsed === 3);
+      const postsBeforeHeartbeat = h.posts.length;
+      await waitFor(() => h.posts.length > postsBeforeHeartbeat);
+      assert.ok(h.posts.every((post) => post.status === "waiting" && post.events.length === 0));
+      if (withAccess) {
+        h.input.write(nativeLine(10, root, fixture().event));
+        await waitFor(() => h.posts.some((post) => post.status === "live"));
+      }
+      h.input.end();
+      assert.deepEqual(await h.running, { status: withAccess ? "disconnected" : "error", sawValid: withAccess });
+      if (!withAccess) assert.ok(h.posts.every((post) => post.status !== "live"));
+    });
+  }
 });
 
 test("session scope filters input ancestry and preserves only normalized forwarding fields", async (t) => {

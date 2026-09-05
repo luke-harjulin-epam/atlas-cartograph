@@ -53,6 +53,10 @@ history. Markdown blocks must work without blank lines around headings or quotes
 Use fake clocks to cover normal 400 ms spacing and adaptive 200/100/50 ms targets,
 queue-age pressure, smooth acceleration/recovery, full displayed lifetimes,
 repeat coalescing, endpoint pulse expiry, and pending-event cancellation.
+Cover simultaneous visible aliases of a physical file, per-node observation
+consumption, unchanged graphs and ID remapping without alias collapse or replay.
+Keep layout output stable across input order and bound sibling lookup work with
+an operation-count regression rather than a machine-dependent timing threshold.
 Use a triangular graph to prove that A -> B -> C never pulses A -> C. Cover
 revisits, unrelated consecutive nodes, and removal of intermediate nodes;
 recorded segments must not be reconstructed from the current active-node order.
@@ -108,7 +112,10 @@ graph or read path. Cover surviving/missing endpoints, camera projection,
 recreation, relationship-layer filters and deletion during an unfinished birth.
 
 For process-scoped monitoring, cover current-session tools, short-lived child
-processes, viewer descendants, unrelated sessions, and PID reuse. A manual
+processes, viewer descendants, unrelated sessions, and PID reuse before and after
+collector startup. A missing or reparented viewer must fail initial attribution.
+Lifecycle-only streams must remain waiting and fail at EOF without going Live;
+a later valid file-access record may enable Live. A manual
 session-scoped demonstration must read the file through that session's tool
 runner, not an unrelated terminal. Keep the privileged logger in the authorized
 external terminal; do not move or broaden the session root to include it.

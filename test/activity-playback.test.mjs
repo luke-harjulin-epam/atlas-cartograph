@@ -466,6 +466,267 @@ const qualifiedGraph = () => ({
   })),
 });
 
+const aliasNodes = ["first", "second"].map((atlasKey) => ({
+  ...nodes[0], id: `${atlasKey}::a`, localId: "a", atlasKey,
+}));
+const aliasEdge = { id: "aliases", source: aliasNodes[0].id, target: aliasNodes[1].id, kind: "mesh" };
+
+test("physical aliases consume each observation once in separate bounded FIFO slots", () => {
+  let now = 0;
+  const model = new AccessActivity({ now: () => now });
+  model.setGraph({ nodes: aliasNodes, edges: [aliasEdge] });
+  const player = new ActivityPlayback();
+  player.setGraph(aliasNodes, [aliasEdge]);
+  model.record({ path: "/atlas/a.md", pid: 42, kind: "read" });
+  const incoming = model.snapshot();
+  assert.deepEqual(incoming.nodes.map(({ sequence }) => sequence), [1, 1]);
+  player.update(incoming, now);
+  player.update(structuredClone(incoming), now);
+  assert.deepEqual([...player.pending.keys()], aliasNodes.map(({ id }) => id));
+  assert.equal(player.seen.size, 2);
+  assert.deepEqual(ids(player.advance(now)), [aliasNodes[0].id]);
+  for (now = 10; now <= 20; now += 10) {
+    model.record({ path: "/atlas/a.md", pid: 42, kind: "read" });
+    player.update(model.snapshot(), now);
+    player.update(model.snapshot(), now);
+    assert.deepEqual([...player.pending.keys()], [aliasNodes[1].id, aliasNodes[0].id]);
+  }
+  assert.equal(player.pending.get(aliasNodes[1].id).queuedAt, 0);
+  assert.equal(player.pending.get(aliasNodes[0].id).queuedAt, 10);
+  const second = player.advance(400);
+  assert.equal(second.nodes.find(({ id }) => id === aliasNodes[1].id).count, 3);
+  assert.deepEqual(second.edges, []);
+  const last = player.advance(800);
+  assert.deepEqual(last.nodes.map(({ count }) => count), [3, 3]);
+  assert.deepEqual(last.nodes.map(({ expiresAt }) => expiresAt), [5800, 5400]);
+  assert.equal(last.playback.aggregatedCount, 3);
+  assert.equal(last.playback.cancelledCount, 0);
+  assert.deepEqual(last.edges, []);
+  player.update(model.snapshot(), 801);
+  assert.equal(player.advance(1200).pendingCount, 0);
+});
+
+test("unchanged and reordered graphs preserve every physical alias's active, pending and seen state", () => {
+  for (const metadata of [true, false]) {
+    const graphNodes = aliasNodes.map(({ atlasKey, ...node }) => metadata ? { ...node, atlasKey } : node);
+    const player = new ActivityPlayback();
+    player.setGraph(graphNodes, [aliasEdge]);
+    const incoming = activity(graphNodes.map(({ id }) => countedAccess(id, 1)));
+    player.update(incoming, 0);
+    player.advance(0);
+    for (const now of [10, 410]) {
+      const before = ["active", "pending", "seen"].map((name) => [...player[name]]);
+      const predecessor = player.lastActivatedId;
+      player.setGraph([...graphNodes].reverse(), [aliasEdge]);
+      player.update(incoming, now);
+      assert.deepEqual(["active", "pending", "seen"].map((name) => [...player[name]]), before);
+      assert.equal(player.lastActivatedId, predecessor);
+      assert.equal(player.cancelledCount, 0);
+      player.advance(now + 390);
+    }
+    assert.deepEqual(ids(player.advance(800)), graphNodes.map(({ id }) => id));
+  }
+});
+
+test("filtering an alias cancels only its own slot and remounting never replays retained source observations", () => {
+  for (const removed of [0, 1]) {
+    const player = new ActivityPlayback();
+    player.setGraph(aliasNodes, [aliasEdge]);
+    const incoming = activity(aliasNodes.map(({ id }) => countedAccess(id, 1)));
+    player.update(incoming, 0);
+    player.advance(0);
+    const retained = aliasNodes[1 - removed];
+    player.setGraph([retained], []);
+    assert.equal(player.cancelledCount, removed === 1 ? 1 : 0);
+    assert.equal(player.lastActivatedId, null);
+    assert.deepEqual(ids(player.advance(400)), [retained.id]);
+    player.update(incoming, 401);
+    player.setGraph(aliasNodes, [aliasEdge]);
+    player.update(incoming, 402);
+    assert.deepEqual(ids(player.advance(800)), [retained.id]);
+    assert.equal(player.pending.size, 0);
+    player.setGraph([], []);
+    player.update(incoming, 801);
+    player.advance(801);
+    player.setGraph([...aliasNodes].reverse(), [aliasEdge]);
+    player.update(incoming, 802);
+    assert.deepEqual(ids(player.advance(1200)), []);
+    assert.equal(player.seen.size, 2);
+    player.update(activity([]), 1201);
+    player.advance(1201);
+    assert.equal(player.seen.size, 0);
+  }
+});
+
+test("reads on hidden aliases are consumed independently without stealing the visible alias's update", () => {
+  const player = new ActivityPlayback();
+  player.setGraph(aliasNodes, [aliasEdge]);
+  const incoming = (sequence, now) => activity(aliasNodes.map(({ id }) => countedAccess(id, sequence, {
+    count: sequence, firstSequence: 1, now,
+  })));
+  player.update(incoming(1, 0), 0);
+  player.advance(0);
+  player.advance(400);
+  player.setGraph([aliasNodes[1]], []);
+  player.update(incoming(2, 410), 410);
+  assert.deepEqual([...player.pending.keys()], [aliasNodes[1].id]);
+  player.setGraph(aliasNodes, [aliasEdge]);
+  player.update(incoming(2, 410), 420);
+  assert.deepEqual([...player.pending.keys()], [aliasNodes[1].id]);
+  player.advance(800);
+  player.update(incoming(3, 810), 810);
+  player.advance(1200);
+  const last = player.advance(1600);
+  assert.deepEqual(last.nodes.map(({ id, count }) => [id, count]), [
+    [aliasNodes[1].id, 3], [aliasNodes[0].id, 1],
+  ]);
+  assert.deepEqual(last.edges, []);
+});
+
+test("legacy duplicate observations highlight both aliases without a physical self traversal", () => {
+  const player = new ActivityPlayback();
+  player.setGraph(aliasNodes, [aliasEdge]);
+  const incoming = activity(aliasNodes.map(({ id }) => access(id)));
+  player.update(incoming, 0);
+  player.advance(0);
+  const last = player.advance(400);
+  assert.deepEqual(ids(last), aliasNodes.map(({ id }) => id));
+  assert.deepEqual(last.edges, []);
+  player.update(incoming, 410);
+  assert.equal(player.pending.size, 0);
+});
+
+test("remounted aliases do not replay observations consumed by the remaining mount between frames", () => {
+  for (const advanceWhileUnmounted of [false, true]) {
+    const player = new ActivityPlayback();
+    player.setGraph(aliasNodes, [aliasEdge]);
+    player.update(activity(aliasNodes.map(({ id }) => countedAccess(id, 1))), 0);
+    player.advance(0);
+    player.advance(400);
+    player.setGraph([aliasNodes[1]], []);
+    const observed = (id) => countedAccess(id, 2, { count: 2, firstSequence: 1, now: 410 });
+    player.update(activity([observed(aliasNodes[1].id)]), 410);
+    if (advanceWhileUnmounted) player.advance(420);
+    player.setGraph(aliasNodes, [aliasEdge]);
+    player.update(activity(aliasNodes.map(({ id }) => observed(id))), 430);
+    assert.deepEqual([...player.pending.keys()], [aliasNodes[1].id]);
+    const last = player.advance(800);
+    assert.deepEqual(last.nodes.map(({ id, count }) => [id, count]), [[aliasNodes[1].id, 2]]);
+    assert.deepEqual(last.edges, []);
+  }
+});
+
+test("initially hidden aliases keep independent consumption when their physical metadata arrives", () => {
+  const player = new ActivityPlayback();
+  const incoming = activity(aliasNodes.map(({ id }) => countedAccess(id, 1)));
+  player.update(incoming, 0);
+  player.advance(0);
+  player.setGraph(aliasNodes, [aliasEdge]);
+  player.update(incoming, 10);
+  assert.deepEqual(ids(player.advance(10)), []);
+  assert.equal(player.seen.size, 2);
+  player.update(activity(aliasNodes.map(({ id }) => countedAccess(id, 2, {
+    count: 2, firstSequence: 1, now: 20,
+  }))), 20);
+  player.advance(20);
+  const next = player.advance(420);
+  assert.deepEqual(next.nodes.map(({ id, count }) => [id, count]), aliasNodes.map(({ id }) => [id, 1]));
+  assert.deepEqual(next.edges, []);
+});
+
+test("revealing physical metadata and mounting an alias together cannot replay a hidden read", () => {
+  const player = new ActivityPlayback();
+  player.update(activity([countedAccess(aliasNodes[0].id, 1)]), 0);
+  player.advance(0);
+  player.setGraph(aliasNodes, [aliasEdge]);
+  player.update(activity(aliasNodes.map(({ id }) => countedAccess(id, 1))), 10);
+  assert.deepEqual(ids(player.advance(10)), []);
+  assert.equal(player.seen.size, 2);
+  player.update(activity(aliasNodes.map(({ id }) => countedAccess(id, 2, {
+    count: 2, firstSequence: 1, now: 20,
+  }))), 20);
+  player.advance(20);
+  assert.deepEqual(player.advance(420).nodes.map(({ count }) => count), [1, 1]);
+});
+
+test("alias qualification preserves the surviving mount without transferring or replaying removed slots", () => {
+  let now = 0;
+  const model = new AccessActivity({ now: () => now });
+  const player = new ActivityPlayback();
+  const mount = (graphNodes) => {
+    model.setGraph({ nodes: graphNodes, edges: [] });
+    player.setGraph(graphNodes, []);
+    player.update(model.snapshot(), now);
+  };
+  const read = (time) => {
+    now = time;
+    model.record({ path: "/atlas/a.md", pid: 42, kind: "read" });
+    player.update(model.snapshot(), now);
+  };
+  mount([{ ...aliasNodes[0], id: "a" }]);
+  read(0);
+  player.advance(0);
+  read(10);
+  const original = { ...player.pending.get("a") };
+  mount(aliasNodes);
+  assert.deepEqual([...player.active.keys()], [aliasNodes[0].id]);
+  assert.deepEqual([...player.pending.values()], [{ ...original, id: aliasNodes[0].id }]);
+  assert.equal(player.advance(400).nodes[0].count, 2);
+  read(410);
+  assert.deepEqual([...player.pending.keys()], aliasNodes.map(({ id }) => id));
+  player.advance(800);
+  const survivor = { ...player.pending.get(aliasNodes[1].id) };
+  read(810);
+  mount([{ ...aliasNodes[1], id: "a" }]);
+  assert.equal(player.active.size, 0);
+  assert.equal(player.cancelledCount, 1);
+  assert.equal(player.pending.size, 1);
+  assert.equal(player.pending.get("a").queuedAt, survivor.queuedAt);
+  assert.equal(player.pending.get("a").observations, 2);
+  const displayed = player.advance(1200);
+  assert.deepEqual(displayed.nodes.map(({ id, count }) => [id, count]), [["a", 2]]);
+  assert.deepEqual(displayed.edges, []);
+  mount(aliasNodes);
+  assert.deepEqual([...player.active.keys()], [aliasNodes[1].id]);
+  assert.equal(player.pending.size, 0);
+  assert.equal(player.cancelledCount, 1);
+  read(1210);
+  player.advance(1600);
+  const last = player.advance(2000);
+  assert.deepEqual(last.nodes.map(({ id, count }) => [id, count]), [
+    [aliasNodes[1].id, 3], [aliasNodes[0].id, 1],
+  ]);
+  assert.equal(last.pendingCount, 0);
+  assert.deepEqual(last.edges, []);
+});
+
+test("relationships incident to physical aliases remain separate and equal sequences never traverse them", () => {
+  const player = new ActivityPlayback();
+  const graphNodes = [...aliasNodes, nodes[1]];
+  const graphEdges = [
+    ...aliasNodes.map(({ id }) => ({ id: `${id}-b`, source: id, target: "b", kind: "link" })),
+    aliasEdge,
+  ];
+  player.setGraph(graphNodes, graphEdges);
+  player.update(activity([
+    ...aliasNodes.map(({ id }) => countedAccess(id, 1)), countedAccess("b", 2),
+  ]), 0);
+  player.advance(0);
+  assert.deepEqual(player.advance(400).edges, []);
+  assert.deepEqual(player.advance(800).edges.map(({ source, target }) => [source, target]), [[aliasNodes[1].id, "b"]]);
+  player.update(activity(aliasNodes.map(({ id }) => countedAccess(id, 3, {
+    count: 2, firstSequence: 1, now: 810,
+  }))), 810);
+  const traversals = [["b", aliasNodes[0].id], [aliasNodes[1].id, "b"]];
+  const steps = (snapshot) => snapshot.edges.map(({ source, target }) => [source, target]).sort();
+  assert.deepEqual(steps(player.advance(1200)), traversals.sort());
+  assert.deepEqual(steps(player.advance(1600)), traversals.sort());
+  player.setGraph([...graphNodes].reverse(), graphEdges);
+  assert.deepEqual(steps(player.advance(1601)), traversals.sort());
+  player.setGraph([aliasNodes[0], nodes[1]], [graphEdges[0]]);
+  assert.deepEqual(steps(player.advance(1602)), [["b", aliasNodes[0].id]]);
+});
+
 test("multi-Atlas qualification and its reverse preserve active, pending, and consumed physical files", () => {
   let now = 0;
   const model = new AccessActivity({ now: () => now });

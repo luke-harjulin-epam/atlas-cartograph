@@ -104,6 +104,9 @@ physical file when another Atlas opens preserves its queue position, highlight
 lifetime, and actual traversed relationships. Hiding a layer cancels its
 displayed/pending effects but keeps its observations consumed: revealing it
 does not replay old reads, and only fresh reads enter playback.
+If multiple visible nodes represent the same physical file, each retains its
+own observation history, pending slot and highlight. A shared observation
+sequence is not a traversal between those aliases.
 API snapshots and
 `get_state` still report raw, unpaced observations. Their raw relationship list
 describes co-active nodes, not the displayed activation path; the browser records
@@ -122,7 +125,10 @@ host-app background scans, other sessions, and external terminals are not
 included. It is a process boundary, not an interpretation of user intent;
 a tool in this session that reads every page will still activate every page.
 
-The provider seeds existing parent relationships and follows process lifecycle
+Before seeding existing parent relationships, the provider verifies that the
+still-running viewer is currently descended from the selected root. Missing or
+reparented viewers fail closed, even if the old root PID has been reused.
+The provider then follows process lifecycle
 events so a short-lived `head` or `cat` can be attributed even after it exits.
 Unknown ancestry is not treated as permission to include an event. The receiver
 also checks the supplied ancestry against the canvas scope before activating
@@ -166,7 +172,9 @@ in source control or written to a telemetry file.
 ## Troubleshooting
 
 **Waiting:** run the command from activity controls. Live status requires
-evidence that the system logger is emitting events.
+evidence that the system logger is emitting valid file-access events.
+Fork/exec/exit records update ancestry but do not make monitoring Live.
+A lifecycle-only stream ending without a file-access observation reports an error.
 
 **Permission failure:** read the system logger's terminal error; authorize the
 terminal for Full Disk Access and provide administrator approval. Restart the

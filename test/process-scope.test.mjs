@@ -10,7 +10,7 @@ const VIEWER = 61723;
 const SHELL = 65522;
 const TOOL = 65523;
 const PATH = "/atlas/notes/example.md";
-const scope = { mode: "session", rootPid: ROOT, excludePids: [VIEWER] };
+const scope = { mode: "session", rootPid: ROOT, viewerPid: VIEWER, excludePids: [VIEWER] };
 const birth = (pid) => 1700000000 + pid;
 const proc = (pid, ppid, pidversion = 1, extra = {}) => ({
   audit_token: { pid, pidversion }, ppid,
@@ -64,6 +64,8 @@ test("scope validation defaults to all, normalizes exclusions and rejects invali
   assert.deepEqual(validateProcessScope({ mode: "all" }), { mode: "all", excludePids: [] });
   assert.deepEqual(validateProcessScope({ mode: "session", rootPid: ROOT, excludePids: [9, 2, 9] }),
     { mode: "session", rootPid: ROOT, excludePids: [2, 9] });
+  assert.deepEqual(validateProcessScope({ mode: "session", rootPid: ROOT, viewerPid: VIEWER }),
+    { mode: "session", rootPid: ROOT, viewerPid: VIEWER, excludePids: [VIEWER] });
   for (const invalid of [
     null, [], {}, { mode: "unknown" }, { mode: "all", rootPid: ROOT },
     { mode: "session" }, { mode: "session", rootPid: "123" }, { mode: "session", rootPid: Infinity },
@@ -72,6 +74,8 @@ test("scope validation defaults to all, normalizes exclusions and rejects invali
     { mode: "all", excludePids: ["123"] }, { mode: "all", excludePids: [NaN] },
     { mode: "all", excludePids: null }, { mode: "all", excludePids: [0] },
     { mode: "all", responsiblePid: HOST },
+    { mode: "all", viewerPid: VIEWER }, { mode: "session", rootPid: ROOT, viewerPid: "123" },
+    { mode: "session", rootPid: ROOT, viewerPid: ROOT }, { mode: "session", rootPid: ROOT, viewerPid: 0 },
   ]) assert.throws(() => validateProcessScope(invalid), TypeError);
 });
 
@@ -102,20 +106,47 @@ test("existing children are seeded without process-name or responsible-app attri
   }
 });
 
+test("seeding requires the live viewer to remain descended from the selected session", async () => {
+  for (const snapshot of [
+    [seed(ROOT, HOST)],
+    [seed(ROOT, HOST), seed(VIEWER, 1)],
+    [seed(ROOT, HOST), seed(VIEWER, SHELL), seed(SHELL, 1)],
+    [seed(ROOT, HOST), seed(VIEWER, SHELL), seed(SHELL, VIEWER)],
+  ]) {
+    await assert.rejects(create(snapshot), /viewer.*descended|verify.*viewer/i);
+  }
+  await assert.rejects(create(baseSnapshot, {
+    scope: { mode: "session", rootPid: ROOT, excludePids: [VIEWER] },
+  }), /verify.*viewer/i);
+  const parse = await create([seed(ROOT, HOST), seed(SHELL, ROOT), seed(VIEWER, SHELL)]);
+  assert.equal(parse(access(proc(ROOT, HOST))).type, "event");
+  assert.equal(parse(access(proc(VIEWER, SHELL))).reason, "out-of-scope");
+});
+
+test("a reused root PID before collector startup cannot seed an unrelated subtree", async () => {
+  await assert.rejects(create([
+    { ...seed(ROOT, HOST), startTime: birth(ROOT) + 3600 },
+    seed(VIEWER, 1),
+    seed(TOOL, ROOT),
+  ]), /viewer.*descended|verify.*viewer/i);
+});
+
 test("native fork/exec/exit captures nested short-lived tools before any polling could see them", async () => {
   const parse = await create();
   const root = proc(ROOT, HOST);
   const shell = proc(SHELL, ROOT);
   const tool = proc(TOOL, SHELL);
-  assert.equal(parse(fork(root, shell)).reason, "process-lifecycle");
-  parse(exec(shell, proc(SHELL, ROOT, 2)));
+  assert.deepEqual(parse(fork(root, shell)), { type: "ignored", valid: false, reason: "process-lifecycle" });
+  assert.deepEqual(parse(exec(shell, proc(SHELL, ROOT, 2))),
+    { type: "ignored", valid: false, reason: "process-lifecycle" });
   const child = { ...tool, parent_audit_token: { pid: SHELL, pidversion: 2 } };
   parse(fork(proc(SHELL, ROOT, 2), child, "ES_EVENT_TYPE_NOTIFY_FORK"));
   const executed = { ...child, audit_token: { pid: TOOL, pidversion: 2 } };
   parse(exec(child, executed, "ES_EVENT_TYPE_NOTIFY_EXEC"));
   assert.deepEqual(parse(access(executed)).event.ancestors, [SHELL, ROOT]);
   assert.equal(parse(access(executed, 12)).event.kind, "write");
-  assert.equal(parse(exit(executed, "ES_EVENT_TYPE_NOTIFY_EXIT")).reason, "process-lifecycle");
+  assert.deepEqual(parse(exit(executed, "ES_EVENT_TYPE_NOTIFY_EXIT")),
+    { type: "ignored", valid: false, reason: "process-lifecycle" });
   assert.equal(parse(access(executed)).type, "ignored", "an exited execution is not revived");
 });
 
@@ -231,8 +262,8 @@ test("detected native sequence gaps and reordering stop session attribution", as
 });
 
 test("process metadata stays bounded and separate between parser instances", async () => {
-  const first = await create([seed(ROOT, HOST)], { maxProcesses: 2 });
-  const second = await create([seed(ROOT, HOST)], { maxProcesses: 2 });
+  const first = await create(baseSnapshot, { maxProcesses: 3 });
+  const second = await create(baseSnapshot, { maxProcesses: 3 });
   first(fork(proc(ROOT, HOST), proc(TOOL, ROOT)));
   assert.equal(second(access(proc(TOOL, ROOT))).type, "ignored");
   assert.throws(() => first(fork(proc(ROOT, HOST), proc(SHELL, ROOT))), /metadata limit/);

@@ -68,13 +68,22 @@ function packInHome(nodes, homeFor) {
     if (!byKey.has(key)) byKey.set(key, []);
     byKey.get(key).push(n);
   }
-  for (const list of byKey.values()) list.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+  const indicesByKey = new Map();
+  for (const [key, list] of byKey) {
+    list.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    const indices = new Map();
+    list.forEach((node, i) => {
+      if (!indices.has(node.id)) indices.set(node.id, i);
+    });
+    indicesByKey.set(key, indices);
+  }
 
   return nodes.map((n) => {
     const mass = massOf(n, maxDegree, maxSources);
     const home = homeFor(n);
-    const siblings = byKey.get(home.key || home.label) ?? [n];
-    const i = Math.max(0, siblings.findIndex((s) => s.id === n.id));
+    const key = home.key || home.label;
+    const siblings = byKey.get(key) ?? [n];
+    const i = indicesByKey.get(key)?.get(n.id) ?? 0;
     const count = Math.max(1, siblings.length);
     const ring = Math.floor(i / 8);
     const onRing = Math.min(8, count - ring * 8);

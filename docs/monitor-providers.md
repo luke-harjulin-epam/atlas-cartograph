@@ -58,6 +58,8 @@ A structurally valid producer event that should not activate a node can use
 `{ type: "ignored", valid: true, reason: "unmodified" }`. Only valid observations
 allow the shared collector to advertise `live`; starting a process or sending
 a heartbeat is insufficient.
+Process lifecycle records may update ancestry, but must return
+`{ type: "ignored", valid: false, reason: "process-lifecycle" }`.
 
 Throw `CollectorError` from `activity/protocol.mjs` with a redacted diagnostic
 when parsing fails. Do not embed raw records, unrelated paths, or credentials.
@@ -113,6 +115,8 @@ excludes its own process subtree. A standalone embedder can supply an explicit
 scope as above; omitting scope keeps the standalone all-application behavior.
 The session root cannot be the receiver itself, because the receiver's entire
 subtree is excluded. Copilot uses the receiver's parent CLI process.
+The receiver supplies its own `viewerPid` in the session descriptor sent to
+collectors, adding it to exclusions; embedders need not set this field.
 `activity/process-scope.mjs` defines scope validation and matching. All modes
 exclude the receiver itself; session mode also excludes events whose ancestor
 chain passes through an excluded PID.
@@ -144,8 +148,11 @@ component's own reads. A provider ID mismatch must fail rather than interpret
 another implementation's stream.
 
 Scope is `{ mode: "all", excludePids: [...] }` or
-`{ mode: "session", rootPid, excludePids: [...] }`. It is immutable during a
-collector run; a changed scope requires a restart. The eslogger provider uses
+`{ mode: "session", rootPid, viewerPid, excludePids: [...] }`. It is immutable during a
+collector run; a changed scope requires a restart. Before seeding ancestry, the
+eslogger parser requires the live viewer's snapshot lineage to reach `rootPid`.
+A missing viewer, reparented viewer or missing `viewerPid` fails closed; root PID
+presence alone does not prove that the original session still exists. The provider uses
 fork/exec/exit records to track short-lived children and does not use the
 whole host application's responsible-process identity as a session identity.
 

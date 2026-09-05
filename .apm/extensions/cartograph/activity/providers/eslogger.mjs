@@ -177,7 +177,7 @@ export async function createEsloggerParser({ scope, snapshot, signal, maxProcess
       if (!record || !eventInProcessScope(event, scope)) return { type: "ignored", valid: true, reason: "out-of-scope" };
       return { type: "event", valid: true, event };
     }
-    return { type: "ignored", valid: true, reason: "process-lifecycle" };
+    return { type: "ignored", valid: false, reason: "process-lifecycle" };
   };
 }
 
@@ -195,7 +195,7 @@ export const esloggerProvider = {
       steps: [
         "Open Terminal on the Mac running this canvas with Node.js 22 or later on its PATH. Grant Terminal Full Disk Access in System Settings > Privacy & Security if required.",
         "Run the command below manually. It subscribes to open/close events; session scope also subscribes to fork/exec/exit events and seeds existing processes using read-only ps PID/parent/birth-time metadata. Only eslogger runs as root; Node runs as your normal user. Do not sudo the whole pipeline.",
-        "Leave that terminal open. Status becomes Live only after the collector observes a valid OS event. Use Control-C to stop it.",
+        "Leave that terminal open. Status becomes Live only after the collector observes a valid file-access event, not a process lifecycle event. Use Control-C to stop it.",
       ],
       notice: "The command contains a private connection token. Do not share it.",
     },
@@ -217,9 +217,9 @@ export const esloggerProvider = {
     createParser: createEsloggerParser,
     messages: {
       limitations: LIMITATIONS,
-      waiting: "Waiting for a valid eslogger event. Check the producing terminal's Full Disk Access and eslogger diagnostics.",
+      waiting: "Waiting for a valid eslogger file-access event. Check the producing terminal's Full Disk Access and eslogger diagnostics.",
       ended: "eslogger stream ended; collection is disconnected.",
-      emptyEnd: "eslogger ended without a valid event. Check sudo/eslogger diagnostics and the terminal's Full Disk Access; collection never became live.",
+      emptyEnd: "eslogger ended without a valid file-access event. Check sudo/eslogger diagnostics and the terminal's Full Disk Access; collection never became live.",
       inputError: "eslogger input stream failed. Check the producing terminal and its Full Disk Access.",
       closed: "eslogger input closed unexpectedly.",
       oversizedLine: "eslogger line exceeds the safe size limit.",

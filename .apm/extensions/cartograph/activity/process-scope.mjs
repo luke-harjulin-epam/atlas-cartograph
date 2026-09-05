@@ -4,17 +4,23 @@ export function validateProcessScope(scope) {
   if (scope === undefined) return { mode: "all", excludePids: [] };
   if (!scope || typeof scope !== "object" || Array.isArray(scope) ||
     !["all", "session"].includes(scope.mode) ||
-    Object.keys(scope).some((key) => !["mode", "rootPid", "excludePids"].includes(key)) ||
+    Object.keys(scope).some((key) => !["mode", "rootPid", "viewerPid", "excludePids"].includes(key)) ||
     (scope.mode === "session" ? !validPid(scope.rootPid) : Object.hasOwn(scope, "rootPid")) ||
+    (Object.hasOwn(scope, "viewerPid") && (scope.mode !== "session" || !validPid(scope.viewerPid))) ||
     (scope.excludePids !== undefined && (!Array.isArray(scope.excludePids) ||
       scope.excludePids.length > 4096 || !scope.excludePids.every(validPid)))) {
     throw new TypeError("Invalid activity process scope.");
   }
-  const excludePids = [...new Set(scope.excludePids ?? [])].sort((a, b) => a - b);
+  const excludePids = [...new Set([
+    ...(scope.excludePids ?? []), ...(scope.viewerPid === undefined ? [] : [scope.viewerPid]),
+  ])].sort((a, b) => a - b);
   if (scope.mode === "session" && excludePids.includes(scope.rootPid)) {
     throw new TypeError("The session root cannot also be excluded.");
   }
-  return { mode: scope.mode, ...(scope.mode === "session" ? { rootPid: scope.rootPid } : {}), excludePids };
+  return {
+    mode: scope.mode, ...(scope.mode === "session" ? { rootPid: scope.rootPid } : {}),
+    ...(scope.viewerPid === undefined ? {} : { viewerPid: scope.viewerPid }), excludePids,
+  };
 }
 
 export function eventInProcessScope(event, scope) {
@@ -56,7 +62,7 @@ export class ProcessAncestryTracker {
     if (!processes.has(this.scope.rootPid)) {
       throw new CollectorError("The selected session process is no longer running. Reopen the canvas from this session.");
     }
-    for (const record of processes.values()) {
+    const ancestorsOf = (record) => {
       const ancestors = [];
       const seen = new Set([record.pid]);
       let cursor = record;
@@ -67,9 +73,17 @@ export class ProcessAncestryTracker {
         cursor = processes.get(cursor.ppid);
         if (!cursor) break;
       }
-      if (record.pid === this.scope.rootPid || ancestors.at(-1) === this.scope.rootPid) {
-        this.store({ ...record, ancestors, seeded: true, dead: false });
-      }
+      return cursor?.pid === this.scope.rootPid ? ancestors : undefined;
+    };
+    // The serving viewer must still belong to this root. PID presence alone
+    // cannot distinguish the original CLI from reuse before collector startup.
+    const viewer = processes.get(this.scope.viewerPid);
+    if (!viewer || !ancestorsOf(viewer)) {
+      throw new CollectorError("Cannot verify the live viewer is still descended from the selected session. Reopen the canvas.");
+    }
+    for (const record of processes.values()) {
+      const ancestors = ancestorsOf(record);
+      if (ancestors) this.store({ ...record, ancestors, seeded: true, dead: false });
     }
   }
 

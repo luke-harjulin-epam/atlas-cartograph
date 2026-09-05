@@ -71,7 +71,7 @@ Depth-based target intervals are 400 ms for 1–5 pending nodes, 200 ms for 6–
 100 ms after two seconds and 50 ms after five seconds. Interval adjustment is
 linear, taking 250 ms for the full acceleration range and two seconds for full
 recovery. Queue age uses the first enqueue time, even when repeated observations
-replace a pending node's latest metadata. One slot per visible file bounds
+replace a pending node's latest metadata. One slot per visible graph node bounds
 repeated traffic; unique-file backlog can still grow up to the visible graph size.
 There is no catch-up loop that drains a hidden tab's backlog in one frame.
 
@@ -80,6 +80,7 @@ and `firstSequence` for its current active interval. Expiry, pause or removal
 resets the interval; physical-file ID remapping preserves it. Playback uses
 physical-file identities to remap pending/active records and traversed edges
 when multi-Atlas qualification changes IDs. Hidden observations stay consumed
+per node, including separate visible aliases of the same physical file,
 until the source and displayed state no longer need them, preventing replay
 when layers reappear. Playback uses counter deltas so heartbeats and same-millisecond batches cannot lose or double
 count observations. Path edges require provably consecutive sequence ranges:

@@ -23,6 +23,14 @@
   relationships and parse URI-valued lists without losing their relationship kind.
 - Preserve active and queued playback across multi-Atlas ID remapping; keep
   hidden observations consumed so revealing a layer does not replay them.
+- Reject collector startup when the viewer is no longer descended from the
+  selected session, including root PID reuse before the initial snapshot.
+- Require a valid file-access observation for Live status; process lifecycle
+  records still update ancestry without claiming file monitoring is live.
+- Preserve separate playback highlights and pending observations for visible
+  aliases of the same physical file.
+- Index sorted sibling positions once per layout group instead of performing
+  quadratic node lookups.
 - Move canonical runtime source into `.apm/extensions/cartograph/` and add an
   APM manifest, lockfile and self-contained runtime metadata for distribution.
   Preserve the repository development shim without shipping it to consumers.

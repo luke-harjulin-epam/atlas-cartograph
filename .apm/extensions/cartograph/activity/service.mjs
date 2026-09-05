@@ -43,6 +43,7 @@ export function createActivityService(entry, sendJson, {
   const normalizedScope = validateProcessScope(requestedScope);
   const scope = validateProcessScope({
     ...normalizedScope,
+    ...(normalizedScope.mode === "session" ? { viewerPid: process.pid } : {}),
     excludePids: [...new Set([...normalizedScope.excludePids, process.pid])],
   });
   if (!(provider.metadata.processScopes ?? ["all"]).includes(scope.mode)) {

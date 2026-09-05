@@ -10,7 +10,7 @@ const fileIdentity = (node) => node.path
   ? JSON.stringify(["file", node.storeRoot ?? "", node.path])
   : JSON.stringify(["id", node.storeRoot ?? "", node.id]);
 const relationshipIdentity = (edge, identities) =>
-  JSON.stringify([identities.get(edge.source), identities.get(edge.target), edge.kind, edge.relKind ?? ""]);
+  JSON.stringify([identities.get(edge.source)?.key, identities.get(edge.target)?.key, edge.kind, edge.relKind ?? ""]);
 const sequenced = (node) => Number.isSafeInteger(node.sequence) && node.sequence > 0 &&
   Number.isSafeInteger(node.count) && node.count > 0 &&
   Number.isSafeInteger(node.firstSequence) && node.firstSequence > 0 &&
@@ -31,6 +31,7 @@ export class ActivityPlayback {
   constructor() {
     this.graph = indexActivityGraph([], []);
     this.identities = new Map();
+    this.nextIdentity = 0;
     this.relationships = new Map();
     this.pairs = new Map();
     this.labels = new Map();
@@ -59,8 +60,50 @@ export class ActivityPlayback {
   }
 
   setGraph(nodes, edges) {
-    const identities = new Map(nodes.map((node) => [node.id, fileIdentity(node)]));
-    const byIdentity = new Map(nodes.map((node) => [fileIdentity(node), node.id]));
+    const visible = new Set([...this.graph.nodes].map((id) => this.identities.get(id)));
+    const groups = new Map();
+    const group = (file) => {
+      if (!groups.has(file)) groups.set(file, { previous: new Set(), next: [] });
+      return groups.get(file);
+    };
+    for (const identity of [...this.identities.values(), ...this.seen.keys()]) {
+      group(identity.file).previous.add(identity);
+    }
+    for (const node of nodes) group(fileIdentity(node)).next.push(node);
+    const identities = new Map(), claimed = new Set();
+    const retain = (node, identity) => {
+      identity.atlasKey ??= node.atlasKey;
+      identities.set(node.id, identity);
+      claimed.add(identity);
+    };
+    // Keep exact visible instances first; a physical file can have multiple mounted aliases.
+    for (const node of nodes) {
+      const identity = this.identities.get(node.id);
+      if (identity?.file === fileIdentity(node) &&
+          (identity.atlasKey === undefined || node.atlasKey === undefined || identity.atlasKey === node.atlasKey)) {
+        retain(node, identity);
+      }
+    }
+    for (const { previous, next } of groups.values()) {
+      for (const node of next) {
+        if (identities.has(node.id)) continue;
+        const candidates = [...previous].filter((identity) => !claimed.has(identity));
+        const mounts = candidates.filter((identity) => identity.atlasKey === node.atlasKey);
+        const sameMount = node.atlasKey !== undefined &&
+          next.filter((other) => other.atlasKey === node.atlasKey).length === 1;
+        if (sameMount && mounts.length === 1) retain(node, mounts[0]);
+        else if (previous.size === 1 && next.length === 1 && candidates.length === 1 &&
+            (candidates[0].atlasKey === undefined || node.atlasKey === undefined)) {
+          retain(node, candidates[0]);
+        }
+      }
+      for (const node of next) {
+        if (identities.has(node.id)) continue;
+        const identity = this.createIdentity(node);
+        retain(node, identity);
+      }
+    }
+    const byIdentity = new Map([...identities].map(([id, identity]) => [identity, id]));
     const remap = new Map([...this.identities].map(([id, identity]) => [id, byIdentity.get(identity)]));
     this.graph = indexActivityGraph(nodes, edges);
     this.relationships = new Map(edges.filter((edge) => identities.has(edge.source) && identities.has(edge.target))
@@ -93,19 +136,48 @@ export class ActivityPlayback {
       if (!relationship || source === undefined || target === undefined) this.transitions.delete(key);
       else this.transitions.set(key, { ...transition, id: relationship.id, source, target });
     }
+    for (const [id, nextId] of remap) {
+      if (nextId !== undefined && nextId !== id) this.identities.delete(id);
+    }
     for (const [id, identity] of identities) {
       // Raw activity has no path. Consume initially hidden files by ID until their graph metadata arrives.
-      const fallback = fileIdentity({ id });
-      const seen = this.seen.get(fallback);
-      if (fallback !== identity && seen) {
-        if (newerObservation(seen, this.seen.get(identity))) this.seen.set(identity, seen);
+      const fallback = this.identities.get(id);
+      if (fallback && fallback !== identity && fallback.file === fileIdentity({ id })) {
+        this.mergeConsumption(fallback, identity);
         this.seen.delete(fallback);
-        if (this.sourceIdentities.delete(fallback)) this.sourceIdentities.add(identity);
+        this.sourceIdentities.delete(fallback);
       }
       this.identities.set(id, identity);
     }
+    // Mounting another alias is not a new read, including when hidden metadata just arrived.
+    // Seed new/returning instances from known consumption, never copy displayed state.
+    for (const { previous, next } of groups.values()) {
+      const known = [...previous, ...next.map((node) => identities.get(node.id))];
+      for (const node of next) {
+        const identity = identities.get(node.id);
+        if (!visible.has(identity)) {
+          for (const old of known) this.mergeConsumption(old, identity);
+        }
+      }
+    }
     this.pruneTransitions();
     this.edgesDirty = true;
+  }
+
+  createIdentity(node) {
+    // A stable instance token keeps aliases distinct even when their graph IDs are qualified.
+    return { key: ++this.nextIdentity, file: fileIdentity(node), atlasKey: node.atlasKey };
+  }
+
+  identityFor(node) {
+    if (!this.identities.has(node.id)) this.identities.set(node.id, this.createIdentity(node));
+    return this.identities.get(node.id);
+  }
+
+  mergeConsumption(from, to) {
+    const seen = this.seen.get(from);
+    if (seen && newerObservation(seen, this.seen.get(to))) this.seen.set(to, seen);
+    if (this.sourceIdentities.has(from)) this.sourceIdentities.add(to);
   }
 
   breakPath(restarted = false) {
@@ -129,8 +201,7 @@ export class ActivityPlayback {
       for (const node of this.active.values()) node.expiresAt = node.accessedAt + duration;
       this.edgesDirty = true;
     }
-    this.sourceIdentities = new Set((activity.nodes ?? []).map((node) =>
-      this.identities.get(node.id) ?? fileIdentity(node)));
+    this.sourceIdentities = new Set((activity.nodes ?? []).map((node) => this.identityFor(node)));
     const nodes = [...(activity.nodes ?? [])].sort((a, b) =>
       sequenced(a) && sequenced(b) ? a.sequence - b.sequence : a.accessedAt - b.accessedAt);
     for (const node of nodes) {
@@ -138,7 +209,7 @@ export class ActivityPlayback {
           !Number.isFinite(node.expiresAt) || node.accessedAt > now || node.expiresAt <= now) continue;
       const hasSequence = sequenced(node);
       if (node.sequence !== undefined && !hasSequence) continue;
-      const identity = this.identities.get(node.id) ?? fileIdentity(node);
+      const identity = this.identityFor(node);
       const seen = this.seen.get(identity);
       if (!newerObservation(node, seen)) continue;
       const restarted = hasSequence && seen && sequenced(seen) && node.sequence <= seen.sequence;
@@ -165,7 +236,7 @@ export class ActivityPlayback {
         continue;
       }
       this.aggregatedCount += observations - (pending ? 0 : 1);
-      // One FIFO slot per file bounds repeated traffic without starving older files.
+      // One FIFO slot per visible node bounds repeated traffic without starving older nodes.
       // Interleaved coalesced observations cannot prove a path into or out of this slot.
       this.pending.set(node.id, {
         ...node, queuedAt: pending?.queuedAt ?? now,
@@ -226,7 +297,8 @@ export class ActivityPlayback {
       const consecutive = previous && observed.continuous && previous.continuous &&
         (Number.isSafeInteger(previous.sequence) && Number.isSafeInteger(observed.sequence) ? previous.sequence + 1 === observed.sequenceStart :
           previous.sequence === undefined && observed.sequence === undefined);
-      if (consecutive && previous.id !== id) {
+      if (consecutive && previous.id !== id &&
+          this.identities.get(previous.id).file !== this.identities.get(id).file) {
         for (const [key, edge] of this.pairs.get(pairKey(previous.id, id)) ?? []) {
           const count = (this.transitions.get(key)?.count ?? 0) + 1;
           this.transitions.set(key, { id: edge.id, source: previous.id, target: id, startedAt: now, count });
