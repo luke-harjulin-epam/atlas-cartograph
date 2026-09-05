@@ -10,7 +10,7 @@ import { answerQuery } from "./atlas/chat.mjs";
 import { DEFAULT_DURATION_MS, validateDuration } from "./activity/model.mjs";
 import { createActivityService } from "./activity/service.mjs";
 import { createLiveAtlas, graphFileKey, mountGraphChanges } from "./atlas/live.mjs";
-import { requireCanvas } from "./http.mjs";
+import { readJsonBody, requireCanvas } from "./http.mjs";
 export { defaultRoot };
 
 const PUBLIC_DIR = join(dirname(fileURLToPath(import.meta.url)), "public");
@@ -43,6 +43,7 @@ export function freshState(cwd, input = {}) {
       relations: true,
       sources: true,
     },
+    layersRevision: 0,
     graph: null,
     page: null,
     error: null,
@@ -73,6 +74,7 @@ function snapshot(state) {
     selectedId: state.selectedId,
     previewOpen: state.previewOpen,
     layers: state.layers,
+    layersRevision: state.layersRevision ?? 0,
     graph: state.graph,
     page: state.page,
     error: state.error,
@@ -93,17 +95,6 @@ function broadcast(entry) {
   const payload = `data: ${JSON.stringify(snapshot(entry.state))}\n\n`;
   for (const res of entry.clients) {
     res.write(payload);
-  }
-}
-
-async function readJsonBody(req) {
-  const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
-  if (!chunks.length) return {};
-  try {
-    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
-  } catch {
-    return {};
   }
 }
 
@@ -428,6 +419,7 @@ export async function startServer(instanceId, state, options = {}) {
           entry.state.query = String(body.query ?? "");
         } else if (body.action === "layers") {
           entry.state.layers = { ...entry.state.layers, ...body.layers };
+          entry.state.layersRevision = (entry.state.layersRevision ?? 0) + 1;
         } else if (body.action === "grouping") {
           entry.state.grouping =
             body.grouping === "proximity" ? "proximity" : body.grouping === "atlases" ? "atlases" : "layers";
@@ -474,6 +466,7 @@ export async function startServer(instanceId, state, options = {}) {
 
       serveStatic(req, res);
     } catch (err) {
+      if (err.statusCode === 413) res.setHeader("Connection", "close");
       if (err instanceof DuplicateAtlasKeyError) {
         entry.state.error = err.message;
         broadcast(entry);

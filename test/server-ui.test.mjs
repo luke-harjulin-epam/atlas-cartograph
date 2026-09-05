@@ -358,6 +358,96 @@ test("same-origin canvas calls still load pages, inspect roots and change select
   assert.equal((await bootstrap.json()).state.page.body, "Body from two.");
 });
 
+test("canvas POST routes reject malformed and non-object JSON without changing state", async (t) => {
+  const { state, start } = fixture(t);
+  const entry = await start();
+  const baseline = JSON.stringify(state);
+  const headers = { "X-Cartograph-Client": "canvas", "Content-Type": "application/json" };
+  for (const path of ["/api/ui", "/api/probe", "/api/page"]) {
+    for (const body of ["", " ", '{"private":"do-not-echo"', "null", "[]", "true", "42", '"text"']) {
+      const response = await fetch(new URL(path, entry.url), { method: "POST", headers, body });
+      assert.equal(response.status, 400, `${path}: ${body}`);
+      const error = (await response.json()).error;
+      assert.match(error, /JSON/);
+      assert.ok(!error.includes("do-not-echo"));
+      assert.equal(JSON.stringify(state), baseline);
+    }
+  }
+});
+
+test("layer mutations have monotonic revisions shared by HTTP replies and snapshots", async (t) => {
+  const { start } = fixture(t);
+  const entry = await start();
+  const headers = { "X-Cartograph-Client": "canvas", "Content-Type": "application/json" };
+  const bootstrap = async () => (await (await fetch(new URL("/api/bootstrap", entry.url), { headers })).json()).state;
+  assert.equal((await bootstrap()).layersRevision, 0);
+  for (const [index, layers] of [{ relations: false }, { sources: false }, { relations: false }].entries()) {
+    const response = await fetch(new URL("/api/ui", entry.url), {
+      method: "POST", headers, body: JSON.stringify({ action: "layers", layers }),
+    });
+    assert.equal(response.status, 200);
+    const state = await response.json();
+    assert.equal(state.layersRevision, index + 1);
+    assert.equal(state.layers.relations, false);
+    if (index > 0) assert.equal(state.layers.sources, false);
+    assert.equal((await bootstrap()).layersRevision, state.layersRevision);
+  }
+});
+
+test("canvas POST routes accept exactly one MiB and reject larger byte payloads", async (t) => {
+  const { state, roots, start } = fixture(t);
+  const entry = await start();
+  const headers = { "X-Cartograph-Client": "canvas", "Content-Type": "application/json" };
+  const limit = 1024 * 1024;
+  for (const path of ["/api/ui", "/api/probe", "/api/page"]) {
+    const object = { action: "query", query: "safe", root: roots[0], nodeId: "index" };
+    const json = JSON.stringify(object);
+    const body = json + " ".repeat(limit - Buffer.byteLength(json));
+    const accepted = await fetch(new URL(path, entry.url), { method: "POST", headers, body });
+    assert.equal(accepted.status, 200, path);
+    await accepted.json();
+    const baseline = JSON.stringify(state);
+    for (const oversized of [body + " ", JSON.stringify({ padding: "\u00e9".repeat(limit / 2) })]) {
+      const response = await fetch(new URL(path, entry.url), { method: "POST", headers, body: oversized });
+      assert.equal(response.status, 413, path);
+      assert.match((await response.json()).error, /1 MiB/);
+      assert.equal(JSON.stringify(state), baseline);
+    }
+  }
+});
+
+test("chunked requests receive 413 as soon as the byte limit is crossed, without waiting for EOF", async (t) => {
+  const { state, start } = fixture(t);
+  const entry = await start();
+  const baseline = JSON.stringify(state);
+  for (const path of ["/api/ui", "/api/probe", "/api/page"]) {
+    const response = await new Promise((resolve, reject) => {
+      const req = request(new URL(path, entry.url), {
+        method: "POST",
+        headers: {
+          "X-Cartograph-Client": "canvas", "Content-Type": "application/json",
+          "Transfer-Encoding": "chunked",
+        },
+      }, (res) => {
+        let body = "";
+        res.setEncoding("utf8");
+        res.on("data", (chunk) => { body += chunk; });
+        res.on("error", reject);
+        res.on("end", () => resolve({ status: res.statusCode, body, ended: req.writableEnded }));
+      });
+      t.after(() => req.destroy());
+      req.setTimeout(2000, () => req.destroy(new Error("No response before request EOF")));
+      req.on("error", reject);
+      req.write('{"padding":"');
+      for (let i = 0; i < 17; i++) req.write(Buffer.alloc(64 * 1024, 97));
+    });
+    assert.equal(response.status, 413, path);
+    assert.equal(response.ended, false);
+    assert.match(JSON.parse(response.body).error, /1 MiB/);
+    assert.equal(JSON.stringify(state), baseline);
+  }
+});
+
 test("browser forwards link targets to the server and marks canvas requests", () => {
   const app = readFileSync(new URL("../.apm/extensions/cartograph/public/app.js", import.meta.url), "utf8");
   assert.match(app, /"X-Cartograph-Client": "canvas"/);

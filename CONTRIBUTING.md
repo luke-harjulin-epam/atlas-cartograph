@@ -46,6 +46,15 @@ Cover bootstrap and SSE snapshot authorisation before filesystem work or stream
 registration. Native EventSource needs `Accept: text/event-stream` and the
 browser-controlled `Sec-Fetch-Site: same-origin`; other clients must send the
 canvas header. Neither route may bypass canonical Host or Origin validation.
+Exercise malformed/non-object JSON and the one-MiB byte boundary on canvas and
+activity POST routes. Chunked oversized input must receive 413 before EOF.
+Check that a preview relation, wiki link or external anchor acts exactly once,
+including after a snapshot rerender. Exercise rapid layer edits, delayed
+acknowledgements, stale snapshot revisions, errors and later external changes.
+Keyboard browsing must reach every node through bounded pages, distinguish
+same-title Atlas nodes, preserve focus on live updates and return from previews.
+Renderer coverage must exercise the production mount, more than 5,000 edges,
+shared playback/camera behaviour and WebGL initialisation/context-loss fallback.
 Cover duplicate mount rejection and recovery, missing explicit Atlas targets,
 single-store URI navigation, and unique edge IDs/degrees. Chat regressions must
 exercise overlapping success/failure replies and pending entries trimmed from

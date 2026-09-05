@@ -31,6 +31,16 @@
   aliases of the same physical file.
 - Index sorted sibling positions once per layout group instead of performing
   quadratic node lookups.
+- Bound all JSON POST bodies to one MiB while streaming, return 413 for oversized
+  input, and reject malformed or non-object JSON with 400 instead of false success.
+- Route preview/wiki links through one click handler so navigation and external
+  tabs are not duplicated.
+- Preserve rapid layer changes with optimistic serialised updates, authoritative
+  snapshot revisions and visible error rollback.
+- Add keyboard-operable node browsing with filtering, bounded pages, Atlas/path
+  labels and focus-preserving selection and preview navigation.
+- Enable the production WebGL graph layer with shared camera/playback, 2D
+  decorations and labels, complete edge rendering and context-loss fallback.
 - Move canonical runtime source into `.apm/extensions/cartograph/` and add an
   APM manifest, lockfile and self-contained runtime metadata for distribution.
   Preserve the repository development shim without shipping it to consumers.

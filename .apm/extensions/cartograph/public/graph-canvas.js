@@ -3,6 +3,7 @@ import { activityNodeStyle, activityEdgeOpacity, activityPulse } from "./activit
 import { ActivityPlayback, PLAYBACK_STATUS_INTERVAL_MS } from "./activity-playback.js";
 import { GraphLifecycle, lifecyclePoints, lifecycleNodeOpacity, lifecycleEdgeOpacity, lifecycleEdgeGlows } from "./graph-lifecycle.js";
 import { ActivityCamera, activationFocusNodes } from "./activity-camera.js";
+import { createGraphGL } from "./graph-gl.js";
 
 const KIND_CORE = {
   experience: "#d4e4ff",
@@ -338,8 +339,8 @@ function drawActivityEdges(ctx, activity, lookup, reduce, lifecycle) {
   }
   ctx.restore();
 }
-function draw2d(ctx, s) {
-  const { w, h, t, cam } = s;
+function drawBackdrop(ctx, s) {
+  const { w, h } = s;
   ctx.clearRect(0, 0, w, h);
   const bg = ctx.createRadialGradient(w * 0.5, h * 0.48, 8, w * 0.5, h * 0.5, Math.max(w, h) * 0.75);
   bg.addColorStop(0, "#122033"); bg.addColorStop(0.22, "#0a121c"); bg.addColorStop(0.6, "#05080e"); bg.addColorStop(1, "#020308");
@@ -348,6 +349,10 @@ function draw2d(ctx, s) {
   const beacon = beaconCenter(s);
   drawUniverse(ctx, s, beacon.sx, beacon.sy, beacon.r);
   drawClusters(ctx, s);
+}
+function draw2d(ctx, s) {
+  const { t, cam } = s;
+  drawBackdrop(ctx, s);
   const q = s.query.trim().toLowerCase();
   const match = (n) => !q || n.title.toLowerCase().includes(q) || n.id.toLowerCase().includes(q);
   const lookup = new Map(s.sim.map((n) => [n.id, n]));
@@ -393,6 +398,12 @@ function draw2d(ctx, s) {
     ctx.beginPath(); ctx.arc(point.x, point.y, point.size / 2, 0, Math.PI * 2); ctx.fill();
   }
   ctx.restore();
+  drawLabels(ctx, s, ordered, focusSet);
+}
+function drawLabels(ctx, s, ordered = [...s.sim].sort((a, b) => b.wz - a.wz), focusSet = neighborhood(s.selectedId, s.edges)) {
+  const q = s.query.trim().toLowerCase();
+  const match = (n) => !q || n.title.toLowerCase().includes(q) || n.id.toLowerCase().includes(q);
+  const locked = Boolean(s.selectedId);
   for (const n of ordered) {
     if (n.depth < 0.62) continue;
     const faded = Boolean(q && !match(n));
@@ -423,11 +434,41 @@ function draw2d(ctx, s) {
 }
 
 export function mountGraphCanvas(wrap, options) {
-  const canvas = document.createElement("canvas");
-  canvas.style.position = "absolute";
-  canvas.style.inset = "0";
+  const makeCanvas = () => {
+    const layer = document.createElement("canvas");
+    layer.style.position = "absolute";
+    layer.style.inset = "0";
+    layer.style.pointerEvents = "none";
+    layer.setAttribute("aria-hidden", "true");
+    return layer;
+  };
+  const canvas = makeCanvas();
   wrap.insertBefore(canvas, wrap.firstChild);
   const ctx = canvas.getContext("2d");
+  const gpuCanvas = makeCanvas();
+  let gpu = ctx ? createGraphGL(gpuCanvas, { transparent: true }) : null;
+  let labels = null;
+  let labelCtx = null;
+  if (gpu) {
+    labels = makeCanvas();
+    try { labelCtx = labels.getContext("2d"); }
+    catch { labelCtx = null; }
+    if (labelCtx) {
+      wrap.insertBefore(gpuCanvas, canvas.nextSibling);
+      wrap.insertBefore(labels, gpuCanvas.nextSibling);
+    } else {
+      gpu.destroy();
+      gpu = null;
+      labels = null;
+    }
+  }
+  if (!ctx) {
+    canvas.remove();
+    throw new Error("Cartograph requires Canvas 2D support for graph labels.");
+  }
+  wrap.dataset.renderer = gpu ? "webgl" : "2d";
+  let rendererNotice = null;
+  let destroyed = false;
 
   const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
   const s = {
@@ -556,20 +597,54 @@ export function mountGraphCanvas(wrap, options) {
   }
 
   function resize() {
+    if (destroyed) return;
     const rect = wrap.getBoundingClientRect();
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     s.w = Math.max(2, rect.width || wrap.clientWidth || 640);
     s.h = Math.max(2, rect.height || wrap.clientHeight || 720);
-    canvas.width = Math.max(1, Math.floor(rect.width * dpr));
-    canvas.height = Math.max(1, Math.floor(rect.height * dpr));
-    canvas.style.width = `${rect.width}px`; canvas.style.height = `${rect.height}px`;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    for (const [layer, context] of [[canvas, ctx], [labels, labelCtx]]) {
+      if (!layer || !context) continue;
+      layer.width = Math.max(1, Math.floor(s.w * dpr));
+      layer.height = Math.max(1, Math.floor(s.h * dpr));
+      layer.style.width = `${s.w}px`; layer.style.height = `${s.h}px`;
+      context.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    if (gpu) {
+      try { gpu.resize(s.w, s.h, dpr); }
+      catch { fallback2d(); }
+    }
     s.activityCamera.lastFitAt = -Infinity;
   }
+
+  function fallback2d() {
+    if (!gpu || destroyed) return;
+    gpuCanvas.removeEventListener("webglcontextlost", onContextLost);
+    gpu.destroy();
+    gpu = null;
+    gpuCanvas.remove();
+    labels?.remove();
+    labels = labelCtx = null;
+    wrap.dataset.renderer = "2d";
+    rendererNotice = document.createElement("span");
+    rendererNotice.setAttribute("role", "status");
+    rendererNotice.textContent = "WebGL interrupted — using 2D rendering.";
+    Object.assign(rendererNotice.style, {
+      position: "absolute", left: "12px", bottom: "12px", pointerEvents: "none",
+      color: "#c8dcf0", background: "#0a121c", padding: "4px 8px", fontSize: "12px",
+    });
+    wrap.insertBefore(rendererNotice, canvas.nextSibling);
+    draw2d(ctx, s);
+  }
+  const onContextLost = (event) => {
+    event.preventDefault();
+    fallback2d();
+  };
+  if (gpu) gpuCanvas.addEventListener("webglcontextlost", onContextLost);
 
   let raf = 0;
   let last = performance.now();
   const tick = (now) => {
+    if (destroyed) return;
     const dt = Math.min(0.033, (now - last) / 1000);
     last = now;
     s.t += s.reduce ? 0 : dt;
@@ -643,7 +718,24 @@ export function mountGraphCanvas(wrap, options) {
       s.lastPlaybackStatusAt = wallTime;
       options.onPlayback?.(s.activityFrame.playback);
     }
-    draw2d(ctx, s);
+    if (destroyed) return;
+    if (gpu) {
+      try {
+        drawBackdrop(ctx, s);
+        gpu.draw({
+          nodes: s.sim, edges: s.edges, w: s.w, h: s.h, k: s.cam.k, t: s.t,
+          query: s.query, selectedId: s.selectedId, hover: s.hover, reduce: s.reduce,
+          activityFrame: s.activityFrame, lifecycleFrame: s.lifecycleFrame,
+          transparent: true,
+        });
+        labelCtx.clearRect(0, 0, s.w, s.h);
+        drawLabels(labelCtx, s);
+      } catch {
+        fallback2d();
+      }
+    } else {
+      draw2d(ctx, s);
+    }
     raf = requestAnimationFrame(tick);
   };
 
@@ -733,15 +825,19 @@ export function mountGraphCanvas(wrap, options) {
   wrap.addEventListener("pointerup", onUp);
   wrap.addEventListener("pointercancel", onUp);
   wrap.addEventListener("wheel", onWheel, { passive: false });
-  wrap.addEventListener("contextmenu", (e) => e.preventDefault());
+  const onContextMenu = (event) => event.preventDefault();
+  wrap.addEventListener("contextmenu", onContextMenu);
   const ro = new ResizeObserver(resize);
   ro.observe(wrap);
   resize();
   raf = requestAnimationFrame(tick);
 
-  wrap.querySelector("[data-zoom-in]")?.addEventListener("click", () => { pauseAutoFocus(); applyZoom(s, s.cam.k * 1.25, s.w / 2, s.h / 2); syncZoom(); });
-  wrap.querySelector("[data-zoom-out]")?.addEventListener("click", () => { pauseAutoFocus(); applyZoom(s, s.cam.k / 1.25, s.w / 2, s.h / 2); syncZoom(); });
-  wrap.querySelector("[data-zoom-reset]")?.addEventListener("click", () => { flyTo(null); syncZoom(); });
+  const zoomHandlers = [
+    ["[data-zoom-in]", () => { pauseAutoFocus(); applyZoom(s, s.cam.k * 1.25, s.w / 2, s.h / 2); syncZoom(); }],
+    ["[data-zoom-out]", () => { pauseAutoFocus(); applyZoom(s, s.cam.k / 1.25, s.w / 2, s.h / 2); syncZoom(); }],
+    ["[data-zoom-reset]", () => { flyTo(null); syncZoom(); }],
+  ].map(([selector, handler]) => [wrap.querySelector(selector), handler]);
+  for (const [button, handler] of zoomHandlers) button?.addEventListener("click", handler);
 
   return {
     setGraph,
@@ -765,9 +861,26 @@ export function mountGraphCanvas(wrap, options) {
       s.featured = labels && labels.length ? new Set(labels) : null;
     },
     destroy() {
+      if (destroyed) return;
+      destroyed = true;
       cancelAnimationFrame(raf);
       ro.disconnect();
       motionPreference.removeEventListener("change", onMotionChange);
+      for (const [type, handler] of [
+        ["pointerdown", onDown], ["pointermove", onMove], ["pointerup", onUp],
+        ["pointercancel", onUp], ["wheel", onWheel], ["contextmenu", onContextMenu],
+      ]) wrap.removeEventListener(type, handler);
+      for (const [button, handler] of zoomHandlers) button?.removeEventListener("click", handler);
+      for (const id of s.pointers.keys()) if (wrap.hasPointerCapture?.(id)) wrap.releasePointerCapture(id);
+      s.pointers.clear();
+      gpuCanvas.removeEventListener("webglcontextlost", onContextLost);
+      gpu?.destroy();
+      gpu = null;
+      gpuCanvas.remove();
+      labels?.remove();
+      canvas.remove();
+      rendererNotice?.remove();
+      delete wrap.dataset.renderer;
       s.playback.reset();
       s.lifecycle.cancel();
       s.activityCamera.clear();

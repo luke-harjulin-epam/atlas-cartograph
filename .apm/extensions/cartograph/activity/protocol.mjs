@@ -5,7 +5,7 @@ import { isAbsolute } from "node:path";
  * Paths identify graph files on the receiver's host. No file contents or raw OS records cross this boundary.
  */
 export const MAX_BATCH = 128;
-export const MAX_POST_BYTES = 1024 * 1024;
+export { MAX_JSON_BODY_BYTES as MAX_POST_BYTES } from "../http.mjs";
 export const MAX_MESSAGE_LENGTH = 500;
 export const ACCESS_KINDS = new Set(["read", "write", "read-write", "open"]);
 export const COLLECTOR_STATUSES = new Set(["waiting", "live", "error", "disconnected"]);

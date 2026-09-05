@@ -3,6 +3,8 @@
 Cartograph is an Atlas knowledge-graph viewer for GitHub Copilot App canvases.
 Open one or more Atlas stores, explore their relationships, and watch recent
 external file accesses illuminate the graph.
+Use **Browse nodes** for keyboard-accessible filtering and selection across
+every open Atlas, including nodes on hidden layers.
 
 ## Run
 

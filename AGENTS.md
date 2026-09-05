@@ -29,6 +29,15 @@
   Bootstrap and SSE snapshots need the same boundary. Native EventSource may
   use same-origin Fetch Metadata instead of the canvas header, but never omit
   canonical Host and Origin validation.
+  Share bounded JSON parsing across POST routes: cap streamed bytes at 1 MiB,
+  return 413 before EOF when exceeded, and reject malformed/non-object JSON with 400.
+- Handle preview/wiki navigation through one delegated click path. Preserve
+  rapid layer intent with serialised updates and revisioned server snapshots,
+  without blocking later authoritative changes from another client.
+- Keep all graph nodes reachable through native keyboard controls with bounded
+  pages, Atlas/path labels and focus preservation during live updates.
+- Keep WebGL and 2D rendering on the same camera, playback and lifecycle clock;
+  retain all edges, decorative labels and a working 2D fallback.
 - Keep WebGL and Canvas 2D activity behavior equivalent, including reduced motion.
 - Keep adaptive 400/200/100/50 ms activity pacing in shared browser playback,
   never in filesystem operations or collector transport. Use queue depth and

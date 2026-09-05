@@ -383,22 +383,23 @@ test("WebGL packs bright concurrent nodes, dim surroundings, and restores query/
   };
   const baseline = pack(activityFrame(null));
   const active = pack(activityFrame(activity, start + 2000, graph));
-  assert.equal(active.length, 5 * 7); // two halos plus the three original nodes
-  assert.ok(active[1 * 7 + 6] > baseline[6]);
-  assert.ok(active[3 * 7 + 6] > baseline[1 * 7 + 6]);
+  assert.equal(active.length, 5 * 7); // two activity halos plus three normal halo slots
+  assert.ok(active[6] > baseline[6]);
+  assert.ok(active[2 * 7 + 6] > baseline[1 * 7 + 6]);
   assert.ok(active[4 * 7 + 6] < baseline[2 * 7 + 6]);
   assert.deepEqual(pack(activityFrame(activity, start + 6000, graph)), baseline);
 });
 
 test("WebGL activity draws arrow geometry and drops pulses exactly at endpoint expiry", () => {
   const renderer = Object.create(GraphGL.prototype);
+  renderer.gl = { TRIANGLES: 4 };
   renderer.scratch = new Float32Array(1000);
   const draws = [];
   renderer.drawLines = (data, count) => draws.push({ type: "lines", data: Array.from(data.slice(0, count * 6)) });
   renderer.drawPoints = (data, stride, count) => draws.push({ type: "points", data: Array.from(data.slice(0, stride * count)) });
   const lookup = new Map(nodes.map((node) => [node.id, node]));
   renderer.drawActivity({ activityFrame: activityFrame(activity, start + 2000, graph) }, lookup);
-  assert.equal(draws[0].data.length, 36);
+  assert.equal(draws[0].data.length, 108);
   assert.equal(draws[1].data.length, 63);
   draws.length = 0;
   renderer.drawActivity({ activityFrame: activityFrame(activity, start + 2000, graph), reduce: true }, lookup);
@@ -421,7 +422,7 @@ test("mounted 2D renderer follows the activation path without replacing graph, s
       return (...args) => operations.push({ type: key, args, alpha: target.globalAlpha, fill: target.fillStyle, stroke: target.strokeStyle });
     },
   });
-  const canvas = { style: {}, getContext: () => context };
+  const canvas = { ...fakeElement("canvas"), setAttribute() {}, remove() {}, getContext: (type) => type === "2d" ? context : null };
   const preference = { ...fakeElement(), matches: true };
   let tick;
   let now = start + 2000;
@@ -484,6 +485,7 @@ test("WebGL fallback uses paced playback but never paces a supplied activity fra
   renderer.gl = { viewport() {}, clearColor() {}, clear() {}, blendFunc() {} };
   renderer.drawQuad = () => {};
   renderer.drawCore = () => {};
+  renderer.drawNodeCores = () => {};
   renderer.packEdges = () => 0;
   renderer.packNodes = () => 0;
   let overlay;
@@ -540,7 +542,7 @@ function lifecycleCanvasFixture(t, reduce = true, options = {}) {
       };
     },
   });
-  const canvas = { style: {}, getContext: () => context };
+  const canvas = { ...fakeElement("canvas"), setAttribute() {}, remove() {}, getContext: (type) => type === "2d" ? context : null };
   const preference = { ...fakeElement(), matches: reduce };
   let tick;
   let now = start;
@@ -781,6 +783,7 @@ test("WebGL fallback consumes deltas once, snapshots old projected positions, an
   renderer.gl = { viewport() {}, clearColor() {}, clear() {}, blendFunc() {} };
   renderer.drawQuad = () => {};
   renderer.drawCore = () => {};
+  renderer.drawNodeCores = () => {};
   let drawn;
   let liveNodes;
   renderer.packEdges = () => 0;
@@ -972,6 +975,7 @@ test("WebGL exposes the same aggregation counts and throttled status without cha
   renderer.gl = { viewport() {}, clearColor() {}, clear() {}, blendFunc() {} };
   renderer.drawQuad = () => {};
   renderer.drawCore = () => {};
+  renderer.drawNodeCores = () => {};
   renderer.packEdges = () => 0;
   renderer.packNodes = () => 0;
   renderer.drawActivity = () => {};

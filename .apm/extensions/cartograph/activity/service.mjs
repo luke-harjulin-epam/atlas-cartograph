@@ -2,34 +2,14 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { AccessActivity } from "./model.mjs";
 import { monitorMetadata, monitorProviders } from "./providers/index.mjs";
-import { COLLECTOR_STATUSES, MAX_BATCH, MAX_MESSAGE_LENGTH, MAX_POST_BYTES, validAccessEvent } from "./protocol.mjs";
+import { COLLECTOR_STATUSES, MAX_BATCH, MAX_MESSAGE_LENGTH, validAccessEvent } from "./protocol.mjs";
 import { eventInProcessScope, validateProcessScope } from "./process-scope.mjs";
-import { requireCanvas } from "../http.mjs";
+import { readJsonBody, requireCanvas } from "../http.mjs";
 
 const COLLECTOR = fileURLToPath(new URL("./collector.mjs", import.meta.url));
 
 function failure(statusCode, message) {
   return Object.assign(new Error(message), { statusCode });
-}
-
-async function readBody(req) {
-  const chunks = [];
-  let size = 0;
-  for await (const chunk of req) {
-    size += chunk.length;
-    if (size > MAX_POST_BYTES) throw failure(413, "Activity request exceeds 1 MiB.");
-    chunks.push(chunk);
-  }
-  let body;
-  try {
-    body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-  } catch {
-    throw failure(400, "Activity request must be valid JSON.");
-  }
-  if (!body || typeof body !== "object" || Array.isArray(body)) {
-    throw failure(400, "Activity request must be an object.");
-  }
-  return body;
 }
 
 export function createActivityService(entry, sendJson, {
@@ -125,12 +105,12 @@ export function createActivityService(entry, sendJson, {
       }
       sendJson(res, 200, { endpoint: entry.url, token, pid: process.pid, providerId, scope, command: connection.command });
     } else if (path === "/api/activity/config") {
-      sendJson(res, 200, configure(await readBody(req)));
+      sendJson(res, 200, configure(await readJsonBody(req)));
     } else if (path === "/api/activity/targets") {
       sync();
       sendJson(res, 200, { providerId, scope, paths: model.enabled ? [...model.paths.keys()] : [], ignorePids: [...model.ignorePids] });
     } else {
-      const body = await readBody(req);
+      const body = await readJsonBody(req);
       if (!Array.isArray(body.events) || body.events.length > MAX_BATCH ||
           !COLLECTOR_STATUSES.has(body.status) ||
           (body.message !== undefined && (typeof body.message !== "string" || body.message.length > MAX_MESSAGE_LENGTH))) {

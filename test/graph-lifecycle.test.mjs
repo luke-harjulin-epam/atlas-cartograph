@@ -319,9 +319,9 @@ test("WebGL fades normal node and edge packing, not only the colored overlay", (
   for (const [elapsed, opacity] of [[0, 0], [1000, 0.5], [2000, 1]]) {
     const frame = { ...base, lifecycleFrame: model.frame(start + elapsed) };
     renderer.packNodes(frame, "", () => true, new Set());
-    assert.equal(renderer.scratch[2 * 7 + 6], opacity);
+    assert.ok(Math.abs(renderer.scratch[2 * 7 + 6] - 0.95 * 0.55 * opacity) < 1e-6);
     renderer.packEdges(frame, lookup, "", () => true, new Set());
-    assert.ok(Math.abs(renderer.scratch[5] - 0.24 * opacity) < 1e-6);
+    assert.ok(Math.abs(renderer.scratch[5] - 0.22 * opacity) < 1e-6);
   }
 });
 
@@ -412,7 +412,7 @@ test("WebGL packs relationship glow widths as triangles and fades ordinary edges
   assert.equal(draw.data[1] - draw.data[7], 10);
   assert.ok(Math.abs(draw.data[77] - 0.9) < 1e-6);
   renderer.packEdges({ edges: [ab], lifecycleFrame: frame }, lookup, "", () => true, new Set());
-  assert.ok(Math.abs(renderer.scratch[5] - 0.12) < 1e-6);
+  assert.ok(Math.abs(renderer.scratch[5] - 0.11) < 1e-6);
   draw = null;
   renderer.drawLifecycleEdges(model.frame(start + 2000), lookup);
   assert.equal(draw, null);

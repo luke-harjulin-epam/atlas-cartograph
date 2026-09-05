@@ -40,6 +40,29 @@ enablement and package approval. Reloading extensions after an APM install
 loads the deployed canvas. The OS read collector is still separately started
 by the user; installing the package does not elevate privileges.
 
+## Browse and select nodes
+
+Choose **Browse nodes** in the map toolbar to explore every node using native
+keyboard controls, without relying on canvas pointer targets. Filter by title,
+Atlas, path or kind, or use **Previous page** and **Next page** to move through
+25-node pages. Each entry includes its Atlas and path to distinguish duplicate
+titles. The count reports the current page or an explicit no-results state.
+
+Tab to a node and press Enter or Space to select it and open its preview.
+Selecting a node on a hidden layer reveals that layer. Close the preview to
+return focus to the selected entry; **Open selected preview** and **Clear
+selection** also work when the selected node is off-page. Escape closes the
+browser and returns focus to **Browse nodes**. Live graph updates preserve the
+focused entry and filter text; deleting that entry moves focus to the filter.
+
+Layer buttons update immediately and serialise rapid changes. A saving message
+remains until acknowledgement; failures restore the last confirmed view and show
+an error. Versioned snapshots prevent delayed responses undoing newer changes.
+
+The map uses WebGL where available, with the same labels, camera and controls
+as its 2D fallback. If WebGL is interrupted, rendering continues in 2D with a
+status notice; graph selection and playback are retained.
+
 ## Live graph updates
 
 Folder watching starts automatically for every open Atlas. No read collector,

@@ -2,6 +2,9 @@ import { mountGraphCanvas } from "./graph-canvas.js";
 import { escapeHtml, renderMarkdown } from "./markdown.js";
 import { mountActivityControls } from "./activity-controls.js";
 import { mountGraphWatchControls } from "./graph-watch-controls.js";
+import { allNodeLayersOn, createLayerControls } from "./layer-controls.js";
+import { handleContentClick } from "./content-navigation.js";
+import { mountNodeBrowser } from "./node-browser.js";
 
 const CRAWL_BODY = `Compiled memory, mapped as sky.
 
@@ -31,6 +34,43 @@ let map = null;
 const activityControls = mountActivityControls($("activity-controls"), applyActivity,
   (enabled) => map?.setAutoFocus(enabled));
 const graphWatchControls = mountGraphWatchControls($("activity-controls"));
+const layerControls = createLayerControls(
+  (layers) => post("layers", { layers }),
+  (layers, { pending, error }) => {
+    state.layers = layers;
+    state.layersRevision = layerControls.layersRevision;
+    $("layer-status").textContent = pending ? "Saving layers…" : "";
+    $("layer-error").textContent = error || "";
+    $("layer-error").classList.toggle("hidden", !error);
+    if (map && state.graph) {
+      const vis = visibleGraph();
+      map.setGraph(vis.nodes, vis.edges, state.grouping, state.graphChanges, lifecycleVisibility(), lifecycleEdgeVisibility());
+    }
+    renderMapChrome();
+  },
+);
+let previewFromBrowser = false;
+const nodeBrowser = mountNodeBrowser($("node-browser"), $("browse-nodes"), {
+  open: async () => {
+    if (state.previewOpen) applyState(await post("preview", { open: false }));
+    previewFromBrowser = false;
+  },
+  select: async (id) => {
+    const node = state.graph?.nodes.find((n) => n.id === id);
+    if (node) layerControls.reveal(layerFor(node.kind));
+    applyState(await post("select", { nodeId: id }));
+    if (state.previewOpen) {
+      previewFromBrowser = true;
+      $("preview-close").focus();
+    }
+  },
+  preview: async () => {
+    applyState(await post("preview", { open: true }));
+    previewFromBrowser = true;
+    $("preview-close").focus();
+  },
+  clear: async () => applyState(await post("select", { nodeId: "" })),
+});
 
 function applyActivity(activity) {
   state.activity = activity;
@@ -49,34 +89,11 @@ function post(action, payload = {}) {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-Cartograph-Client": "canvas" },
     body: JSON.stringify({ action, ...payload }),
-  }).then((r) => r.json());
-}
-
-const NODE_LAYER_KEYS = ["experiences", "decisions", "work", "indexes", "other"];
-const NODE_LAYER_BUTTONS = ["experiences", "decisions", "work", "indexes"];
-
-function allNodeLayersOn(layers) {
-  return NODE_LAYER_BUTTONS.every((k) => layers?.[k] !== false);
-}
-
-function applyLayerClick(layers, key) {
-  const next = { ...layers };
-  if (key === "all") {
-    for (const k of NODE_LAYER_KEYS) next[k] = true;
-    return next;
-  }
-  if (key === "relations" || key === "sources") {
-    next[key] = layers?.[key] === false;
-    return next;
-  }
-  if (allNodeLayersOn(layers)) {
-    for (const k of NODE_LAYER_BUTTONS) next[k] = k === key;
-    next.other = false;
-    return next;
-  }
-  next[key] = layers?.[key] === false;
-  if (NODE_LAYER_BUTTONS.every((k) => next[k] === false)) next[key] = true;
-  return next;
+  }).then(async (response) => {
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || `Request failed (${response.status})`);
+    return result;
+  });
 }
 
 function layerFor(kind) {
@@ -114,25 +131,6 @@ function relationshipVisible(edge, layers) {
 function lifecycleEdgeVisibility() {
   const layers = { ...state.layers };
   return (edge) => relationshipVisible(edge, layers);
-}
-
-function onPreviewClick(e) {
-  const a = e.target.closest("a");
-  if (a) {
-    e.preventDefault();
-    const href = a.getAttribute("href") || "";
-    if (/^https?:\/\//i.test(href) || href.startsWith("mailto:")) {
-      window.open(href, "_blank", "noopener,noreferrer");
-      return;
-    }
-    if (href && href !== "#") navigateWiki(href);
-    return;
-  }
-  const wiki = e.target.closest(".wikilink, [data-target]");
-  if (wiki && wiki.closest("#preview")) {
-    e.preventDefault();
-    navigateWiki(wiki.getAttribute("data-target"));
-  }
 }
 
 function storeCard(s) {
@@ -243,13 +241,7 @@ function renderPreview() {
         `<li><button type="button" class="kind-${escapeHtml(c.kind)}" data-target="${escapeHtml(c.path)}">${escapeHtml(c.kind)} · ${escapeHtml(chipLabel(c.path))}</button></li>`,
     )
     .join("");
-  rel.querySelectorAll("button").forEach((el) => {
-    el.addEventListener("click", () => navigateWiki(el.getAttribute("data-target")));
-  });
   $("preview-body").innerHTML = renderMarkdown(page?.body || "_No page body._");
-  $("preview-body").querySelectorAll(".wikilink").forEach((el) => {
-    el.addEventListener("click", () => navigateWiki(el.getAttribute("data-target")));
-  });
 }
 
 function renderMapChrome() {
@@ -273,13 +265,17 @@ function renderMapChrome() {
     btn.addEventListener("click", () => post("select", { nodeId: btn.getAttribute("data-id") }).then(() => post("preview", { open: true })));
   });
   document.querySelectorAll("[data-grouping]").forEach((btn) => {
-    btn.classList.toggle("active", (state.grouping || "layers") === btn.getAttribute("data-grouping"));
+    const on = (state.grouping || "layers") === btn.getAttribute("data-grouping");
+    btn.classList.toggle("active", on);
+    btn.setAttribute("aria-pressed", String(on));
   });
   document.querySelectorAll("[data-layer]").forEach((btn) => {
     const key = btn.getAttribute("data-layer");
     const on = key === "all" ? allNodeLayersOn(state.layers) : state.layers?.[key] !== false;
     btn.classList.toggle("active", on);
+    btn.setAttribute("aria-pressed", String(on));
   });
+  nodeBrowser.setState(state, layerFor);
   renderIslands();
 }
 
@@ -335,7 +331,8 @@ function renderIslands() {
 
 function applyState(next) {
   const grouping = next.grouping || state.grouping || "layers";
-  state = { ...state, ...next, grouping };
+  const layers = layerControls.snapshot(next.layers, next.layersRevision);
+  state = { ...state, ...next, grouping, layers, layersRevision: layerControls.layersRevision };
   activityControls.setActivity(state.activity);
   graphWatchControls.setWatch(state.graphWatch);
   if (!state.graph) map?.setGraph([], [], grouping, state.graphChanges, () => false);
@@ -502,20 +499,30 @@ $("atlas-add-grid")?.addEventListener("click", (e) => {
   post("add", { root: btn.getAttribute("data-root") });
   $("atlas-add")?.classList.add("hidden");
 });
-$("preview").addEventListener("click", onPreviewClick);
-document.addEventListener("click", (e) => {
-  const a = e.target.closest("a");
-  if (!a) return;
-  e.preventDefault();
-  const href = a.getAttribute("href") || "";
-  if (/^https?:\/\//i.test(href) || href.startsWith("mailto:")) {
-    window.open(href, "_blank", "noopener,noreferrer");
-    return;
+document.addEventListener("click", (e) => handleContentClick(e, navigateWiki,
+  (href, target, features) => window.open(href, target, features)));
+async function closePreview() {
+  try {
+    if (previewFromBrowser) {
+      applyState(await post("preview", { open: false }));
+      previewFromBrowser = false;
+      nodeBrowser.focusSelection();
+    } else {
+      await post("select", { nodeId: "" });
+    }
+  } catch (error) {
+    $("preview-link-error").textContent = error.message;
+    $("preview-link-error").classList.remove("hidden");
   }
-  if (href && href !== "#") navigateWiki(href);
+}
+$("preview-close").addEventListener("click", closePreview);
+$("preview-backdrop").addEventListener("click", closePreview);
+$("preview").addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    e.preventDefault();
+    closePreview();
+  }
 });
-$("preview-close").addEventListener("click", () => post("select", { nodeId: "" }));
-$("preview-backdrop").addEventListener("click", () => post("select", { nodeId: "" }));
 $("panel").addEventListener("click", (e) => {
   const groupBtn = e.target.closest("[data-grouping]");
   if (groupBtn) {
@@ -525,8 +532,8 @@ $("panel").addEventListener("click", (e) => {
   }
   const layerBtn = e.target.closest("[data-layer]");
   if (layerBtn) {
-    const next = applyLayerClick(state.layers || {}, layerBtn.getAttribute("data-layer"));
-    post("layers", { layers: next });
+    e.preventDefault();
+    layerControls.click(layerBtn.getAttribute("data-layer"));
   }
 });
 
@@ -558,9 +565,6 @@ function renderChat() {
     .join("");
   log.querySelectorAll("[data-node]").forEach((btn) => {
     btn.addEventListener("click", () => post("select", { nodeId: btn.getAttribute("data-node") }));
-  });
-  log.querySelectorAll(".wikilink").forEach((el) => {
-    el.addEventListener("click", () => navigateWiki(el.getAttribute("data-target")));
   });
   log.scrollTop = log.scrollHeight;
 }

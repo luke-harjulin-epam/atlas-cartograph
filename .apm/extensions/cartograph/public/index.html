@@ -60,12 +60,34 @@
           <div class="search field">
             <input id="search" placeholder="Search stars" aria-label="Search graph" />
           </div>
+          <button id="browse-nodes" class="btn btn-ghost browse-toggle" type="button" aria-expanded="false" aria-controls="node-browser">Browse nodes</button>
           <button id="chat-toggle" class="icon-btn" type="button" aria-label="Chat with the graph" aria-pressed="false" title="Chat with the graph">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v7A2.5 2.5 0 0 1 16.5 16H11l-4.2 3.2c-.7.54-1.8.04-1.8-.83V6.5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
             </svg>
           </button>
         </div>
+        <section id="node-browser" class="node-browser hidden" aria-labelledby="node-browser-title">
+          <div class="node-browser-head">
+            <h2 id="node-browser-title">Browse nodes</h2>
+            <button id="node-browser-close" class="btn btn-ghost" type="button">Close browser</button>
+          </div>
+          <p id="node-browser-help" class="muted">All nodes in open Atlases, including hidden layers. Select a node to show it on the map and open its preview. Close the preview to return here. Tab moves between controls; Escape closes this browser.</p>
+          <label for="node-filter">Filter by title, Atlas, path or kind</label>
+          <input id="node-filter" type="search" autocomplete="off" aria-describedby="node-browser-help" />
+          <p id="node-count" class="muted" role="status" aria-live="polite" aria-atomic="true"></p>
+          <ul id="node-list" class="node-list" aria-label="Graph nodes"></ul>
+          <nav class="node-pagination" aria-label="Node pages">
+            <button id="node-previous" class="btn btn-ghost" type="button" disabled>Previous page</button>
+            <button id="node-next" class="btn btn-ghost" type="button" disabled>Next page</button>
+          </nav>
+          <p id="node-selected" class="muted" role="status" aria-live="polite" aria-atomic="true">No node selected.</p>
+          <div class="node-selection-actions">
+            <button id="node-preview" class="btn" type="button" disabled>Open selected preview</button>
+            <button id="node-clear" class="btn btn-ghost" type="button" disabled>Clear selection</button>
+          </div>
+          <p id="node-error" class="danger hidden" role="alert"></p>
+        </section>
         <details id="activity-controls" class="activity-controls">
           <summary>Knowledge Activation <span id="activity-status" role="status" aria-live="polite">Waiting</span> · <span id="graph-watch-status" role="status" aria-live="polite">Changes idle</span> <span id="activity-playback-status" aria-label="Knowledge activation playback queue">400 ms</span></summary>
           <div class="activity-body">
@@ -138,6 +160,8 @@
             <button class="layer active" data-layer="relations" type="button">Relates</button>
             <button class="layer active" data-layer="sources" type="button">Provenance</button>
           </div>
+          <p id="layer-status" class="muted" role="status" aria-live="polite"></p>
+          <p id="layer-error" class="danger hidden" role="alert"></p>
           <dl class="stats">
             <div>Nodes <span id="stat-nodes">0</span></div>
             <div>Edges <span id="stat-edges">0</span></div>

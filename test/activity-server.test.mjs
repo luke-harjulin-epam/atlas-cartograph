@@ -129,6 +129,27 @@ test("bad batches are rejected atomically; configuration validates without false
   assert.deepEqual(await (await post({ status: "live", events: [event] })).json(), { ok: true, accepted: 0 });
 });
 
+test("activity endpoints share strict JSON object parsing and byte limits", async (t) => {
+  const { state, request, headers } = await fixture(t);
+  const baseline = JSON.stringify(state.activity);
+  for (const path of ["/api/activity/config", "/api/activity/events"]) {
+    const authorization = path.endsWith("/config") ? canvasHeaders : headers;
+    for (const [body, status] of [
+      ["", 400], ["{", 400], ["null", 400], ["[]", 400],
+      [JSON.stringify({ padding: "x".repeat(1024 * 1024) }), 413],
+    ]) {
+      const response = await request(path, {
+        method: "POST",
+        headers: { ...authorization, "Content-Type": "application/json" },
+        body,
+      });
+      assert.equal(response.status, status, path);
+      assert.match((await response.json()).error, /JSON|1 MiB/);
+      assert.equal(JSON.stringify(state.activity), baseline);
+    }
+  }
+});
+
 test("configuration payloads preserve interval counts and reset them on pause and expiry", async (t) => {
   const { state, entry, request, post, advance } = await fixture(t);
   const event = { path: join(root, "index.md"), pid: 123, kind: "read" };
