@@ -157,6 +157,9 @@ test("graph filtering cancels removed nodes and relationships without touching r
   player.setGraph([], []);
   assert.deepEqual(ids(player.advance(1000)), []);
   assert.equal(player.advance(1000).pendingCount, 0);
+  assert.equal(player.seen.size, 3);
+  player.update(activity([]), 1000);
+  player.advance(1000);
   assert.equal(player.seen.size, 0);
 });
 
@@ -454,4 +457,302 @@ test("real backend interval counts preserve revisits without losing or duplicati
   const frame = player.advance(now);
   assert.deepEqual(frame.edges.map(({ source, target }) => [source, target]), [["a", "b"], ["b", "c"]]);
   assert.equal(frame.playback.aggregatedCount, 0);
+});
+
+const qualifiedGraph = () => ({
+  nodes: nodes.map((node) => ({ ...node, id: `atlas::${node.id}` })),
+  edges: edges.map((edge) => ({
+    ...edge, id: `atlas::${edge.id}`, source: `atlas::${edge.source}`, target: `atlas::${edge.target}`,
+  })),
+});
+
+test("multi-Atlas qualification and its reverse preserve active, pending, and consumed physical files", () => {
+  let now = 0;
+  const model = new AccessActivity({ now: () => now });
+  const player = playback();
+  const local = { nodes, edges }, qualified = qualifiedGraph();
+  model.setGraph(local);
+  const read = (id, time) => {
+    now = time;
+    model.record({ path: `/atlas/${id}.md`, pid: 42, kind: "read" });
+    player.update(model.snapshot(), now);
+  };
+  read("a", 0);
+  player.advance(0);
+  read("b", 10);
+  read("b", 20);
+  player.advance(400);
+  read("a", 410);
+  read("c", 420);
+  const beforeActive = [...player.active.values()];
+  const beforePending = [...player.pending.values()];
+  const beforeEdges = player.advance(420).edges;
+  const beforeSeen = [...player.seen.values()];
+  const aggregatedCount = player.aggregatedCount;
+  for (const [graph, prefix] of [[qualified, "atlas::"], [local, ""]]) {
+    model.setGraph(graph);
+    player.setGraph(graph.nodes, graph.edges);
+    player.update(model.snapshot(), now);
+    const remapped = (records) => records.map((node) => ({ ...node, id: prefix + node.id }));
+    assert.deepEqual([...player.active.values()], remapped(beforeActive));
+    assert.deepEqual([...player.pending.values()], remapped(beforePending));
+    assert.deepEqual([...player.seen.values()].map(({ id, ...node }) => node),
+      beforeSeen.map(({ id, ...node }) => node));
+    assert.equal(player.lastActivatedId, `${prefix}b`);
+    assert.equal(player.cancelledCount, 0);
+    assert.equal(player.aggregatedCount, aggregatedCount);
+    assert.deepEqual(player.advance(now).edges, beforeEdges.map((edge) => ({
+      ...edge, id: prefix + edge.id, source: prefix + edge.source, target: prefix + edge.target,
+    })));
+  }
+  const revisit = player.advance(800);
+  assert.equal(revisit.nodes.find((node) => node.id === "a").count, 2);
+  assert.equal(revisit.nodes.find((node) => node.id === "a").highlightedAt, 0);
+  assert.equal(revisit.nodes.find((node) => node.id === "a").expiresAt, 5800);
+  assert.deepEqual(revisit.edges.map(({ source, target, count }) => [source, target, count]), [["b", "a", 2]]);
+  const last = player.advance(1200);
+  assert.deepEqual(last.edges.map(({ source, target }) => [source, target]), [["b", "a"], ["a", "c"]]);
+  assert.equal(last.nodes.reduce((sum, node) => sum + node.count, 0), 5);
+  assert.equal(last.nodes.find((node) => node.id === "c").expiresAt, 6200);
+  read("a", 1600);
+  const fresh = player.advance(now);
+  assert.equal(fresh.nodes.find((node) => node.id === "a").count, 3);
+  assert.equal(fresh.nodes.find((node) => node.id === "a").firstSequence, 1);
+  assert.deepEqual(fresh.edges.map(({ source, target }) => [source, target]), [["b", "a"], ["c", "a"]]);
+});
+
+test("physical files do not inherit playback when a local ID is reused in another path or Atlas", () => {
+  for (const replacement of [{ ...nodes[0], path: "replacement.md" }, { ...nodes[0], storeRoot: "/other" }]) {
+    const player = playback();
+    player.update(activity([countedAccess("a", 1)]), 0);
+    player.advance(0);
+    player.update(activity([countedAccess("a", 2, { count: 2, firstSequence: 1, now: 10 })]), 10);
+    player.setGraph([replacement], []);
+    assert.equal(player.advance(100).nodes.length, 0);
+    assert.equal(player.pending.size, 0);
+    assert.equal(player.cancelledCount, 1);
+    player.update(activity([countedAccess("a", 3, { now: 100 })]), 100);
+    const next = player.advance(400);
+    assert.equal(next.nodes[0].count, 1);
+    assert.equal(next.nodes[0].highlightedAt, 400);
+    assert.deepEqual(next.edges, []);
+  }
+});
+
+test("qualification does not conflate equal local IDs belonging to two physical files", () => {
+  const player = playback();
+  player.update(activity([countedAccess("a", 1)]), 0);
+  player.advance(0);
+  const qualified = qualifiedGraph();
+  player.setGraph([...qualified.nodes, { ...nodes[0], id: "other::a", storeRoot: "/other" }], qualified.edges);
+  player.update(activity([countedAccess("atlas::a", 1), countedAccess("other::a", 2, { now: 10 })]), 10);
+  assert.deepEqual([...player.pending.keys()], ["other::a"]);
+  const next = player.advance(400);
+  assert.deepEqual(next.nodes.map(({ id, count }) => [id, count]), [["atlas::a", 1], ["other::a", 1]]);
+  assert.deepEqual(next.edges, []);
+});
+
+test("hiding and revealing a layer cannot replay cancelled raw observations", () => {
+  for (const counted of [false, true]) {
+    const player = playback();
+    const incoming = activity(nodes.map(({ id }, i) => counted ? countedAccess(id, i + 1) : access(id)));
+    player.update(incoming, 0);
+    player.advance(0);
+    player.setGraph([nodes[2]], []);
+    assert.deepEqual(ids(player.advance(100)), []);
+    assert.equal(player.cancelledCount, 1);
+    player.update(incoming, 100);
+    player.advance(100);
+    player.setGraph(nodes, edges);
+    player.update(incoming, 200);
+    const visible = player.advance(400);
+    assert.deepEqual(ids(visible), ["c"]);
+    assert.deepEqual(visible.edges, []);
+    assert.equal(visible.pendingCount, 0);
+    assert.equal(visible.playback.cancelledCount, 1);
+    player.setGraph([], []);
+    player.update(incoming, 401);
+    player.advance(401);
+    player.setGraph(nodes, edges);
+    player.update(incoming, 450);
+    assert.deepEqual(ids(player.advance(800)), []);
+  }
+});
+
+test("reads while hidden are consumed, and only fresh visible reads enter playback", () => {
+  let now = 0;
+  const model = new AccessActivity({ now: () => now });
+  model.setGraph({ nodes, edges });
+  const player = playback();
+  model.record({ path: "/atlas/a.md", pid: 42, kind: "read" });
+  player.update(model.snapshot(), now);
+  player.advance(now);
+  player.setGraph([nodes[0], nodes[2]], [edges[2]]);
+  now = 10;
+  model.record({ path: "/atlas/b.md", pid: 42, kind: "read" });
+  player.update(model.snapshot(), now);
+  now = 20;
+  model.record({ path: "/atlas/b.md", pid: 42, kind: "read" });
+  player.update(model.snapshot(), now);
+  assert.equal(player.pending.size, 0);
+  player.setGraph(nodes, edges);
+  player.update(model.snapshot(), now);
+  assert.equal(player.advance(400).nodes.length, 1);
+  now = 410;
+  model.record({ path: "/atlas/b.md", pid: 42, kind: "read" });
+  player.update(model.snapshot(), now);
+  const fresh = player.advance(now);
+  assert.equal(fresh.nodes.find((node) => node.id === "b").count, 1);
+  assert.deepEqual(fresh.edges, []);
+  now = 810;
+  model.record({ path: "/atlas/c.md", pid: 42, kind: "read" });
+  player.update(model.snapshot(), now);
+  assert.deepEqual(player.advance(now).edges.map(({ source, target }) => [source, target]), [["b", "c"]]);
+});
+
+test("initially invisible activity uses an ID fallback until physical graph metadata is available", () => {
+  const player = new ActivityPlayback();
+  player.setGraph([], []);
+  const incoming = activity([countedAccess("a", 1)]);
+  player.update(incoming, 0);
+  player.advance(0);
+  player.setGraph(nodes, edges);
+  player.update(incoming, 10);
+  assert.deepEqual(ids(player.advance(10)), []);
+  player.update(activity([countedAccess("a", 2, { count: 2, firstSequence: 1, now: 20 })]), 20);
+  assert.equal(player.advance(20).nodes[0].count, 1);
+});
+
+test("legacy nodes without paths remain separate and do not remap merely because metadata is absent", () => {
+  const player = new ActivityPlayback();
+  player.setGraph([{ id: "a" }, { id: "b" }], []);
+  player.update(activity([access("a"), access("b")]), 0);
+  player.advance(0);
+  player.setGraph([{ id: "b" }, { id: "c" }], []);
+  const remaining = player.advance(400);
+  assert.deepEqual(ids(remaining), ["b"]);
+  assert.equal(remaining.nodes[0].observedAt, 0);
+  player.update(activity([access("c", 410)]), 410);
+  assert.deepEqual(ids(player.advance(800)), ["b", "c"]);
+});
+
+test("legacy paths still distinguish physical files when storeRoot is unavailable", () => {
+  const player = new ActivityPlayback();
+  player.setGraph([{ id: "a", path: "/one/a.md" }], []);
+  player.update(activity([access("a")]), 0);
+  player.advance(0);
+  player.setGraph([{ id: "qualified::a", path: "/one/a.md" }], []);
+  player.update(activity([access("qualified::a")]), 10);
+  assert.deepEqual(ids(player.advance(10)), ["qualified::a"]);
+  player.setGraph([{ id: "qualified::a", path: "/two/a.md" }], []);
+  assert.deepEqual(ids(player.advance(20)), []);
+});
+
+test("legacy activity cannot invent a shortcut across a hidden observation or cancelled pending slot", () => {
+  for (const hideAfterQueue of [false, true]) {
+    const player = playback();
+    if (!hideAfterQueue) player.setGraph([nodes[0], nodes[2]], [edges[2]]);
+    player.update(activity(nodes.map(({ id }) => access(id))), 0);
+    if (hideAfterQueue) player.setGraph([nodes[0], nodes[2]], [edges[2]]);
+    player.advance(0);
+    const next = player.advance(400);
+    assert.deepEqual(ids(next), ["a", "c"]);
+    assert.deepEqual(next.edges, []);
+  }
+});
+
+test("qualification retains only actually traversed relationships with unchanged kind and direction", () => {
+  const original = { ...edges[0], kind: "link", relKind: "parent" };
+  const qualified = qualifiedGraph();
+  for (const changed of [{ kind: "mesh" }, { relKind: "child" }, { source: "atlas::a", target: "atlas::b" }]) {
+    const player = playback();
+    player.setGraph(nodes, [original]);
+    player.update(activity([countedAccess("a", 1), countedAccess("b", 2)]), 0);
+    player.advance(0);
+    assert.equal(player.advance(400).edges.length, 1);
+    player.setGraph(qualified.nodes, [
+      { ...qualified.edges[0], kind: original.kind, relKind: original.relKind, ...changed }, qualified.edges[2],
+    ]);
+    assert.deepEqual(player.advance(401).edges, []);
+    player.setGraph(nodes, [original]);
+    assert.deepEqual(player.advance(402).edges, []);
+  }
+});
+
+test("physical identity retains consumption across hidden qualification without playing hidden reads later", () => {
+  const player = playback();
+  player.update(activity([countedAccess("a", 1)]), 0);
+  player.advance(0);
+  player.setGraph([], []);
+  player.update(activity([countedAccess("atlas::a", 2, { count: 2, firstSequence: 1, now: 100 })]), 100);
+  player.advance(100);
+  const qualified = qualifiedGraph();
+  player.setGraph(qualified.nodes, qualified.edges);
+  player.update(activity([countedAccess("atlas::a", 2, { count: 2, firstSequence: 1, now: 100 })]), 200);
+  assert.deepEqual(ids(player.advance(400)), []);
+  player.update(activity([countedAccess("atlas::a", 3, { count: 3, firstSequence: 1, now: 410 })]), 410);
+  assert.equal(player.advance(410).nodes[0].count, 1);
+});
+
+test("deletion cancels playback but recreating the same physical path accepts a new backend interval", () => {
+  let now = 0;
+  const model = new AccessActivity({ now: () => now });
+  model.setGraph({ nodes, edges });
+  const player = playback();
+  model.record({ path: "/atlas/a.md", pid: 42, kind: "read" });
+  player.update(model.snapshot(), now);
+  player.advance(now);
+  now = 10;
+  model.record({ path: "/atlas/a.md", pid: 42, kind: "read" });
+  player.update(model.snapshot(), now);
+  model.setGraph({ nodes: [], edges: [] });
+  player.setGraph([], []);
+  assert.equal(player.advance(10).nodes.length, 0);
+  assert.equal(player.cancelledCount, 1);
+  model.setGraph({ nodes, edges });
+  player.setGraph(nodes, edges);
+  now = 20;
+  model.record({ path: "/atlas/a.md", pid: 42, kind: "read" });
+  player.update(model.snapshot(), now);
+  const recreated = player.advance(400);
+  assert.equal(recreated.nodes[0].count, 1);
+  assert.equal(recreated.nodes[0].firstSequence, 3);
+  assert.equal(recreated.nodes[0].highlightedAt, 400);
+  assert.deepEqual(recreated.edges, []);
+});
+
+test("a genuinely newer sequence reset starts a new interval rather than being suppressed or double counted", () => {
+  const player = playback();
+  player.update(activity([countedAccess("a", 5, { count: 5, firstSequence: 1 })]), 0);
+  player.advance(0);
+  player.update(activity([countedAccess("a", 6, { count: 6, firstSequence: 1, now: 10 })]), 10);
+  player.setGraph([], []);
+  player.setGraph(nodes, edges);
+  const restarted = activity([countedAccess("a", 1, { now: 20 })]);
+  player.update(restarted, 20);
+  player.update(restarted, 21);
+  assert.equal(player.pending.size, 1);
+  player.update(activity([countedAccess("a", 6, { count: 6, firstSequence: 1, now: 10 })]), 22);
+  const next = player.advance(400);
+  assert.equal(next.nodes[0].count, 1);
+  assert.equal(next.nodes[0].sequence, 1);
+  assert.equal(next.playback.cancelledCount, 1);
+  assert.deepEqual(next.edges, []);
+});
+
+test("a source sequence restart cannot connect across queued observations from the earlier sequence", () => {
+  const player = playback();
+  player.update(activity([countedAccess("a", 1)]), 0);
+  player.advance(0);
+  player.update(activity([
+    countedAccess("c", 2, { now: 10 }),
+    countedAccess("a", 5, { count: 2, firstSequence: 1, now: 20 }),
+  ]), 20);
+  player.update(activity([countedAccess("a", 3, { now: 30 })]), 30);
+  const middle = player.advance(400);
+  assert.deepEqual(ids(middle), ["c"]);
+  const next = player.advance(800);
+  assert.deepEqual(ids(next), ["c", "a"]);
+  assert.equal(next.nodes.find((node) => node.id === "a").count, 1);
+  assert.deepEqual(next.edges, []);
 });

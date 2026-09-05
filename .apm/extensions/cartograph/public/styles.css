@@ -252,6 +252,11 @@ input { font: inherit; color: inherit; }
   flex: 1; min-height: 40px; border-radius: 10px; border: 1px solid var(--color-border);
   background: rgba(5, 8, 14, 0.35); color: var(--color-fg); padding: 0 0.7rem; outline: none;
 }
+.path-row input:focus-visible, .search input:focus-visible,
+.root-input:focus-visible, .chat-form input:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
 .chat-form button {
   min-height: 40px; border-radius: 10px; border: 0; background: var(--color-accent); color: var(--color-accent-fg);
   padding: 0 0.9rem; font-weight: 600;

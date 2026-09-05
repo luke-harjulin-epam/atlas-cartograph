@@ -1,5 +1,6 @@
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { basename, isAbsolute, join, normalize, relative, resolve } from "node:path";
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { isAbsolute, join, normalize, relative, resolve, win32 } from "node:path";
+import { isPathWithin } from "../paths.mjs";
 import { allPresetSpecs, configuredPresetSpecs, labelFor } from "./catalog.mjs";
 import {
   aliasesFor,
@@ -37,29 +38,41 @@ export function isIgnoredAtlasPath(path) {
   return parts.some((part) => part.startsWith(".") || SKIP_DIRS.has(part)) || parts.length > 14;
 }
 
-function walkMd(dir, acc = [], depth = 0, strict = false) {
-  if (depth > 12 || (!strict && !existsSync(dir))) return acc;
+function confinedPath(root, path) {
+  const canonical = realpathSync(path);
+  return isPathWithin(root, canonical) ? canonical : null;
+}
+
+function walkMd(dir, acc = [], depth = 0, strict = false, canonicalRoot, ancestors = new Set()) {
+  if (depth > 12) return acc;
   let entries = [];
+  let canonical;
   try {
-    entries = readdirSync(dir);
+    canonical = realpathSync(dir);
+    canonicalRoot ??= canonical;
+    if (!isPathWithin(canonicalRoot, canonical) || ancestors.has(canonical)) return acc;
+    entries = readdirSync(canonical);
   } catch (error) {
-    if (strict && error.code !== "ENOENT" && error.code !== "ENOTDIR") throw error;
+    if (strict && !["ENOENT", "ENOTDIR", "ELOOP"].includes(error.code)) throw error;
     return acc;
   }
+  const visited = new Set(ancestors).add(canonical);
   for (const name of entries) {
     if (name.startsWith(".")) continue;
     const full = join(dir, name);
     let st;
     try {
-      st = statSync(full);
+      const target = confinedPath(canonicalRoot, join(canonical, name));
+      if (!target) continue;
+      st = statSync(target);
     } catch (error) {
-      if (strict && error.code !== "ENOENT" && error.code !== "ENOTDIR") throw error;
+      if (strict && !["ENOENT", "ENOTDIR", "ELOOP"].includes(error.code)) throw error;
       continue;
     }
     if (st.isDirectory()) {
       if (SKIP_DIRS.has(name)) continue;
-      walkMd(full, acc, depth + 1, strict);
-    } else if (name.endsWith(".md")) {
+      walkMd(full, acc, depth + 1, strict, canonicalRoot, visited);
+    } else if (st.isFile() && name.endsWith(".md")) {
       acc.push(full);
     }
   }
@@ -85,9 +98,10 @@ function readText(path) {
   return readFileSync(path, "utf8");
 }
 
-function readJson(path, strict = false) {
+function readJson(root, path, strict = false) {
   try {
-    return JSON.parse(readText(path));
+    const target = confinedPath(root, path);
+    return target ? JSON.parse(readText(target)) : null;
   } catch (error) {
     if (strict && error.code !== "ENOENT" && error.code !== "ENOTDIR") throw error;
     return null;
@@ -145,8 +159,10 @@ export function inspectRoot(rawRoot, cwd, { strict = false, fallbackStore, label
   if (!root) return empty("Set an Atlas root to open Cartograph.");
   if (!strict && !existsSync(root)) return empty("Path does not exist.");
   let st;
+  let canonicalRoot;
   try {
-    st = statSync(root);
+    canonicalRoot = realpathSync(root);
+    st = statSync(canonicalRoot);
   } catch (error) {
     if (strict && error.code !== "ENOENT" && error.code !== "ENOTDIR") throw error;
     return empty("Cannot read path.");
@@ -159,7 +175,7 @@ export function inspectRoot(rawRoot, cwd, { strict = false, fallbackStore, label
   }
   let atlasId = fallbackStore?.atlasId;
   if (format === "atlas") {
-    const schema = readJson(join(root, "SCHEMA.json"), strict);
+    const schema = readJson(canonicalRoot, join(root, "SCHEMA.json"), strict);
     if (schema && typeof schema.atlas_id === "string") atlasId = schema.atlas_id;
   }
   const counts = tallyStore(root, strict);
@@ -175,14 +191,18 @@ export function inspectRoot(rawRoot, cwd, { strict = false, fallbackStore, label
 
 function parseFiles(storeRoot, files, format, atlasId, atlasLabel, strict = false) {
   const nodes = [];
+  const canonicalRoot = realpathSync(storeRoot);
   for (const file of files) {
     const rel = (isAbsolute(file) ? relative(storeRoot, file) : file).replace(/\\/g, "/");
     let text = "";
     try {
       const full = isAbsolute(file) ? file : join(storeRoot, file);
-      text = readText(full);
+      if (!isPathWithin(storeRoot, full)) continue;
+      const target = confinedPath(canonicalRoot, full);
+      if (!target) continue;
+      text = readText(target);
     } catch (error) {
-      if (strict && error.code !== "ENOENT" && error.code !== "ENOTDIR") throw error;
+      if (strict && !["ENOENT", "ENOTDIR", "ELOOP"].includes(error.code)) throw error;
       continue;
     }
     if (!text) continue;
@@ -264,26 +284,49 @@ export function loadGraph(rawRoot, opts, cwd) {
   };
 }
 
-export function loadPage(rawRoot, nodeId, cwd) {
-  const store = inspectRoot(rawRoot, cwd);
-  if (!store.available) return null;
-  const raw = String(nodeId ?? "");
-  const slug = raw.includes("::") ? raw.split("::").slice(1).join("::") : raw;
+function pageIdentity(nodeId) {
+  const raw = String(nodeId ?? "").trim();
+  const separator = raw.indexOf("::");
+  const atlas = separator < 0 ? null : raw.slice(0, separator);
+  const slug = (separator < 0 ? raw : raw.slice(separator + 2)).trim().replace(/\\/g, "/");
+  // Validate before normalizeLink strips leading slashes or any filesystem lookup.
+  if (atlas === "" || !slug || slug.includes("\0") || isAbsolute(slug) ||
+      win32.isAbsolute(slug) || /^[a-z]:/i.test(slug) || slug.split("/").includes("..")) return null;
   const id = normalizeLink(slug);
-  const stem = basename(id);
+  return id && id !== "." && !id.split("/").includes("..") ? { atlas, id } : null;
+}
+
+function matchesAtlas(store, atlas) {
+  return atlas === null || atlas === (store.atlasId || store.label) || atlas === store.label;
+}
+
+function pageFromStore(store, id) {
+  const canonicalRoot = realpathSync(store.root);
   const candidates = [
-    join(store.root, id.endsWith(".md") ? id : `${id}.md`),
-    join(store.root, "experiences", `${stem}.md`),
-    join(store.root, "decisions", `${stem}.md`),
-    join(store.root, "work", `${stem}.md`),
-    join(store.root, "knowledge", `${stem}.md`),
-    join(store.root, "raw", "experiences", `${stem}.md`),
-    join(store.root, id),
+    resolve(store.root, `${id}.md`),
+    resolve(store.root, id),
+    ...(!id.includes("/") ? ["experiences", "decisions", "work", "knowledge", "raw/experiences"]
+      .map((dir) => resolve(store.root, dir, `${id}.md`)) : []),
   ];
-  const file = candidates.find((p) => existsSync(p) && statSync(p).isFile());
+  let file;
+  let target;
+  for (const candidate of candidates) {
+    if (!isPathWithin(store.root, candidate)) return null;
+    try {
+      target = confinedPath(canonicalRoot, candidate);
+      if (!target) return null;
+      if (statSync(target).isFile()) {
+        file = candidate;
+        break;
+      }
+    } catch (error) {
+      if (error.code === "ELOOP") return null;
+      if (error.code !== "ENOENT" && error.code !== "ENOTDIR") throw error;
+    }
+  }
   if (!file) return null;
   const rel = relative(store.root, file).replace(/\\/g, "/");
-  const { meta, body } = parseFrontmatter(readText(file));
+  const { meta, body } = parseFrontmatter(readText(target));
   const type = typeof meta.type === "string" && meta.type ? meta.type : "";
   const kind = kindFor(rel, type, store.format);
   return {
@@ -296,6 +339,14 @@ export function loadPage(rawRoot, nodeId, cwd) {
     relatesTo: relatesToOf(meta),
     body: body.trim(),
   };
+}
+
+export function loadPage(rawRoot, nodeId, cwd) {
+  const identity = pageIdentity(nodeId);
+  if (!identity) return null;
+  const store = inspectRoot(rawRoot, cwd);
+  if (!store.available || !matchesAtlas(store, identity.atlas)) return null;
+  return pageFromStore(store, identity.id);
 }
 
 export function listPresets(cwd, { specs = allPresetSpecs(cwd) } = {}) {
@@ -318,18 +369,15 @@ export function defaultRoot(cwd, stores = listPresets(cwd)) {
 
 export function loadPageFromRoots(roots, nodeId, cwd) {
   const list = (roots || []).filter(Boolean);
-  const raw = String(nodeId ?? "");
-  const atlas = raw.includes("::") ? raw.split("::")[0] : "";
+  const identity = pageIdentity(nodeId);
+  if (!identity) return null;
   for (const root of list) {
     const store = inspectRoot(root, cwd);
+    if (!store.available || !matchesAtlas(store, identity.atlas)) continue;
     const key = store.atlasId || store.label;
-    if (atlas && key && atlas !== key && atlas !== store.label) continue;
-    const page = loadPage(root, raw, cwd);
+    const page = pageFromStore(store, identity.id);
     if (page) return { ...page, atlasKey: key, storeRoot: store.root };
-  }
-  for (const root of list) {
-    const page = loadPage(root, raw, cwd);
-    if (page) return page;
+    if (identity.atlas !== null) return null;
   }
   return null;
 }
@@ -345,13 +393,15 @@ export function loadCombinedGraphs(roots, cwd, options = {}) {
 export function loadFullGraph(rawRoot, cwd, { strict = false, fallbackStore } = {}) {
   let offset = 0;
   let acc = null;
-  for (let steps = 0; steps < 40; steps++) {
-    const batch = loadGraph(rawRoot, { offset, limit: steps === 0 ? 24 : 80, strict, fallbackStore }, cwd);
+  while (true) {
+    const batch = loadGraph(rawRoot, { offset, limit: offset === 0 ? 24 : 80, strict, fallbackStore }, cwd);
     if (!batch.store.available) return batch;
     acc = acc ? mergeGraphs(acc, batch) : batch;
     const next = batch.nextOffset;
-    if (next == null || next <= offset) break;
+    if (next == null) return acc;
+    if (!Number.isFinite(next) || next <= offset) {
+      throw new Error(`Atlas scan did not advance beyond offset ${offset}.`);
+    }
     offset = next;
   }
-  return acc ?? loadGraph(rawRoot, { offset: 0, limit: 200, strict, fallbackStore }, cwd);
 }

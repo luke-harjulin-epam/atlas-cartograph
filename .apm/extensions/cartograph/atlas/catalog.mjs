@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isPathWithin } from "../paths.mjs";
 
 export const EXTENSION_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const BUNDLED_MINI_ATLAS = resolve(EXTENSION_ROOT, "fixtures/mini-atlas");
@@ -40,7 +41,7 @@ const SKIP_WALK = new Set([
 function isInstalledPath(path) {
   const abs = resolve(path);
   const parts = abs.split(sep);
-  return abs === EXTENSION_ROOT || abs.startsWith(`${EXTENSION_ROOT}${sep}`) ||
+  return isPathWithin(EXTENSION_ROOT, abs) ||
     parts.includes(".apm") || parts.includes("apm_modules") ||
     parts.some((part, index) => part === ".github" && parts[index + 1] === "extensions");
 }

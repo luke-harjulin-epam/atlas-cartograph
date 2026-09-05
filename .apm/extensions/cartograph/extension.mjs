@@ -17,14 +17,14 @@ import { EXTENSION_ROOT } from "./atlas/catalog.mjs";
 import { answerQuery } from "./atlas/chat.mjs";
 import { MIN_DURATION_MS, MAX_DURATION_MS } from "./activity/model.mjs";
 import { monitorProviders } from "./activity/providers/index.mjs";
+import { isPathWithin } from "./paths.mjs";
 
 const instances = new Map();
 let sessionCwd = "";
 
 function isInstallDir(p) {
   if (!p) return false;
-  const abs = resolve(p);
-  return abs === EXTENSION_ROOT || abs.startsWith(`${EXTENSION_ROOT}/`);
+  return isPathWithin(EXTENSION_ROOT, p);
 }
 
 function firstRealCwd(...candidates) {

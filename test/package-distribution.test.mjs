@@ -49,6 +49,13 @@ test("a copied canvas runs without the source repository or its package metadata
     await entry?.close();
     rmSync(consumer, { recursive: true, force: true });
   });
+
+  test("the UI shell and styles do not load third-party assets", () => {
+    const html = readFileSync(join(runtime, "public", "index.html"), "utf8");
+    const css = readFileSync(join(runtime, "public", "styles.css"), "utf8");
+    assert.doesNotMatch(html, /<(?:link|script|img)\b[^>]*(?:href|src)=["'](?:https?:)?\/\//i);
+    assert.doesNotMatch(css, /(?:url\(\s*["']?|@import\s*["'])(?:https?:)?\/\//i);
+  });
   const { freshState, openAtlas, startServer } = await import(pathToFileURL(join(deployed, "server.mjs")));
   const { BUNDLED_MINI_ATLAS } = await import(pathToFileURL(join(deployed, "atlas", "catalog.mjs")));
   const { ActivityCamera } = await import(pathToFileURL(join(deployed, "public", "activity-camera.js")));

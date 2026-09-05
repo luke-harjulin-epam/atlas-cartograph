@@ -1,4 +1,9 @@
-import { loadPage, loadPageFromRoots } from "./scan.mjs";
+import { loadPageFromRoots } from "./scan.mjs";
+
+function queryPage(state, id) {
+  const roots = state.roots?.length ? state.roots : state.root ? [state.root] : [];
+  return loadPageFromRoots(roots, id, state.cwd);
+}
 
 function tokens(q) {
   return String(q || "")
@@ -38,8 +43,7 @@ export function searchAtlas(state, query) {
   scored.sort((a, b) => b.score - a.score);
   const top = scored.slice(0, 8);
   for (const hit of top) {
-    const roots = state.roots?.length ? state.roots : state.root ? [state.root] : [];
-    const page = roots.length ? loadPageFromRoots(roots, hit.node.id, state.cwd) : loadPage(state.root, hit.node.id, state.cwd);
+    const page = queryPage(state, hit.node.id);
     const body = page?.body || "";
     for (const t of terms) {
       if (body.toLowerCase().includes(t)) hit.score += 2;
@@ -98,12 +102,12 @@ export function answerQuery(state, query) {
     };
   }
   const lead = hits[0];
-  const page = state.root ? loadPage(state.root, lead.id, state.cwd) : null;
+  const page = queryPage(state, lead.id);
   const leadText = firstSentence(page?.body || lead.snippet) || lead.path;
   const text = [
     `**${lead.title}** — ${leadText}`,
     "",
-    ...hits.map((h) => `- [${h.title}](${h.path || h.id}) (${h.kind})`),
+    ...hits.map((h) => `- [${h.title}](${h.id.includes("::") ? h.id : h.path || h.id}) (${h.kind})`),
   ].join("\n");
   return { text, hits };
 }

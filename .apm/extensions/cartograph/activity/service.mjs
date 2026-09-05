@@ -4,6 +4,7 @@ import { AccessActivity } from "./model.mjs";
 import { monitorMetadata, monitorProviders } from "./providers/index.mjs";
 import { COLLECTOR_STATUSES, MAX_BATCH, MAX_MESSAGE_LENGTH, MAX_POST_BYTES, validAccessEvent } from "./protocol.mjs";
 import { eventInProcessScope, validateProcessScope } from "./process-scope.mjs";
+import { requireCanvas } from "../http.mjs";
 
 const COLLECTOR = fileURLToPath(new URL("./collector.mjs", import.meta.url));
 
@@ -88,15 +89,6 @@ export function createActivityService(entry, sendJson, {
     }
   }
 
-  function requireCanvas(req) {
-    const origin = new URL(entry.url).origin;
-    if (req.headers["x-cartograph-client"] !== "canvas" ||
-        (req.headers.origin && req.headers.origin !== origin) ||
-        (req.headers["sec-fetch-site"] && !["same-origin", "none"].includes(req.headers["sec-fetch-site"]))) {
-      throw failure(403, "Activity settings require a same-origin canvas request.");
-    }
-  }
-
   function configure(input) {
     try {
       model.configure(input);
@@ -118,7 +110,7 @@ export function createActivityService(entry, sendJson, {
     };
     if (!routes[path]) throw failure(404, "Unknown activity endpoint.");
     if (req.method !== routes[path]) throw failure(405, "Method not allowed.");
-    if (path === "/api/activity/connection" || path === "/api/activity/config") requireCanvas(req);
+    if (path === "/api/activity/connection" || path === "/api/activity/config") requireCanvas(req, entry.url);
     else authenticate(req);
     if (req.method === "POST" && req.headers["content-type"]?.split(";")[0] !== "application/json") {
       throw failure(415, "Activity requests require application/json.");

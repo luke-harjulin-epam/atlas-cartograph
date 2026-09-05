@@ -9,6 +9,7 @@ import { answerQuery } from "./atlas/chat.mjs";
 import { DEFAULT_DURATION_MS, validateDuration } from "./activity/model.mjs";
 import { createActivityService } from "./activity/service.mjs";
 import { createLiveAtlas, graphFileKey, mountGraphChanges } from "./atlas/live.mjs";
+import { requireCanvas } from "./http.mjs";
 export { defaultRoot };
 
 const PUBLIC_DIR = join(dirname(fileURLToPath(import.meta.url)), "public");
@@ -230,7 +231,11 @@ function resolveNodeId(state, raw) {
   const key = normalizeLink(String(raw ?? ""));
   if (!key) return null;
   const nodes = state.graph?.nodes ?? [];
-  const hit = nodes.find(
+  const qualified = key.includes("::") || key.startsWith("atlas://");
+  if (qualified) {
+    return nodes.find((node) => node.id === key || (node.aliases ?? []).some((alias) => normalizeLink(alias) === key))?.id ?? key;
+  }
+  const matches = nodes.filter(
     (n) =>
       n.id === raw ||
       n.id === key ||
@@ -241,6 +246,8 @@ function resolveNodeId(state, raw) {
       n.id.endsWith(`/${key}`) ||
       n.id.endsWith(`/${key.split("/").pop()}`),
   );
+  const selected = nodes.find((node) => node.id === state.selectedId);
+  const hit = (selected && matches.find((node) => node.atlasKey === selected.atlasKey)) || matches[0];
   return hit?.id ?? key;
 }
 
@@ -294,9 +301,12 @@ export function selectNode(state, nodeId) {
     return state;
   }
   const id = resolveNodeId(state, nodeId);
-  const inGraph = Boolean(state.graph?.nodes?.some((n) => n.id === id));
+  const node = state.graph?.nodes?.find((n) => n.id === id);
+  const inGraph = Boolean(node);
   const roots = normalizeRoots(state);
-  const loaded = roots.length ? loadPageFromRoots(roots, id, state.cwd) : null;
+  const loaded = node?.storeRoot
+    ? loadPage(node.storeRoot, node.path, state.cwd)
+    : roots.length ? loadPageFromRoots(roots, id, state.cwd) : null;
   if (!inGraph && !loaded) {
     state.linkError = `No page for “${nodeId}”.`;
     return state;
@@ -329,6 +339,18 @@ export async function startServer(instanceId, state, options = {}) {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
     try {
       if (await entry.activity.handle(req, res, url.pathname)) return;
+      const canvasRoutes = { "/api/ui": "POST", "/api/probe": "POST", "/api/page": "POST", "/api/graph": "GET" };
+      if (canvasRoutes[url.pathname]) {
+        requireCanvas(req, entry.url);
+        if (req.method !== canvasRoutes[url.pathname]) {
+          sendJson(res, 405, { error: "Method not allowed." });
+          return;
+        }
+        if (req.method === "POST" && req.headers["content-type"]?.split(";")[0] !== "application/json") {
+          sendJson(res, 415, { error: "Canvas requests require application/json." });
+          return;
+        }
+      }
       if (url.pathname === "/events") {
         entry.liveAtlas.syncRoots();
         entry.activity.sync();

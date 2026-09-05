@@ -82,6 +82,12 @@ function renderTable(block) {
   return `<div class="md-table"><table><thead><tr>${th}</tr></thead><tbody>${tr}</tbody></table></div>`;
 }
 
+function listKind(line) {
+  if (/^\s*[-*+]\s+/.test(line)) return "ul";
+  if (/^\s*\d+\.\s+/.test(line)) return "ol";
+  return null;
+}
+
 function splitBlocks(src) {
   const lines = src.replace(/\r\n/g, "\n").split("\n");
   const out = [];
@@ -117,9 +123,7 @@ function splitBlocks(src) {
     const isTable = /^\s*\|/.test(line);
     const prevTable = buf.length > 0 && /^\s*\|/.test(buf[0]);
     if (buf.length && isTable !== prevTable) flush();
-    const isList = /^\s*[-*+]\s+/.test(line) || /^\s*\d+\.\s+/.test(line);
-    const prevList = buf.length > 0 && (/^\s*[-*+]\s+/.test(buf[0]) || /^\s*\d+\.\s+/.test(buf[0]));
-    if (buf.length && isList !== prevList && !isList) flush();
+    if (buf.length && listKind(line) !== listKind(buf[0])) flush();
     if (buf.length && /^(#{1,6}\s|---$|___$|\*\*\*$|>\s)/.test(line)) flush();
     buf.push(line);
   }

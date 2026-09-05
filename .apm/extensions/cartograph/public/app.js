@@ -47,7 +47,7 @@ function showPhase(name) {
 function post(action, payload = {}) {
   return fetch("/api/ui", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-Cartograph-Client": "canvas" },
     body: JSON.stringify({ action, ...payload }),
   }).then((r) => r.json());
 }
@@ -212,20 +212,7 @@ function chipLabel(path) {
 }
 
 function navigateWiki(target) {
-  const key = String(target || "")
-    .replace(/\\/g, "/")
-    .replace(/^\.\//, "")
-    .replace(/\.md$/i, "");
-  const hit = state.graph?.nodes?.find(
-    (n) =>
-      n.id === key ||
-      n.id === target ||
-      (n.aliases ?? []).includes(key) ||
-      n.path === key ||
-      n.path === `${key}.md` ||
-      n.title.toLowerCase() === key.toLowerCase(),
-  );
-  return post("select", { nodeId: hit?.id || key });
+  return post("select", { nodeId: target });
 }
 
 function renderPreview() {

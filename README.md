@@ -62,6 +62,8 @@ runtime to `.github/extensions/cartograph/`; it does not deploy the development
 shim or depend on a `src/` directory in the consumer. Only Node built-ins and
 the host-provided Copilot SDK are external code dependencies. Atlas mounts in
 the consumer's `.atlas/` remain data, not executable imports.
+The viewer uses local fallback fonts; it does not fetch Google Fonts or other
+third-party UI assets.
 
 ## File-access activity
 

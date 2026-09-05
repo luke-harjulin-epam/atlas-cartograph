@@ -16,6 +16,12 @@
 - Do not edit an installed user extension or the main checkout when working in
   a worktree. The project extension loads this worktree's source.
 - Use Node.js built-ins and ES modules. The Copilot SDK is supplied at runtime.
+- Keep universe layout single-sourced in `public/universe.js`; the Node entry
+  re-exports it. Do not load third-party fonts or other UI assets at runtime.
+- Keep page reads inside their mounted store, including canonical symlink
+  targets. Preserve the originating Atlas in navigation and chat references.
+- Guard path-scanning and state-changing HTTP routes with the shared canvas
+  request validation; do not rely on CORS or JSON parsing as authorization.
 - Keep WebGL and Canvas 2D activity behavior equivalent, including reduced motion.
 - Keep adaptive 400/200/100/50 ms activity pacing in shared browser playback,
   never in filesystem operations or collector transport. Use queue depth and

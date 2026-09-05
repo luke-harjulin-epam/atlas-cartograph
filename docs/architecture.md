@@ -12,6 +12,9 @@ hand-authored; there is no generated marketplace site or documentation generator
 | `atlas/watch.mjs` | Replaceable, unprivileged open-root filesystem change source |
 | `atlas/live.mjs` | Debounced rescans, watcher status and explicit creation/deletion deltas |
 | `public/` | Browser UI, graph layout, WebGL and Canvas 2D renderers |
+| `public/universe.js` | Canonical universe layout; `atlas/universe.mjs` re-exports it for Node |
+| `http.mjs` | Shared canvas-request Origin, Host, fetch-site and custom-header validation |
+| `paths.mjs` | Platform-aware directory containment |
 | `public/activity-playback.js` | Adaptive visual queue, aggregation, display lifetimes, and pulse scheduling |
 | `public/activity-camera.js` | Displayed-effect target selection, padded camera fit, manual override and idle restoration |
 | `activity/model.mjs` | Exact file-to-node mapping, timers, temporal relationships |
@@ -75,7 +78,10 @@ There is no catch-up loop that drains a hidden tab's backlog in one frame.
 Each raw node exposes `sequence` (global accepted observation order), `count`
 and `firstSequence` for its current active interval. Expiry, pause or removal
 resets the interval; physical-file ID remapping preserves it. Playback uses
-counter deltas so heartbeats and same-millisecond batches cannot lose or double
+physical-file identities to remap pending/active records and traversed edges
+when multi-Atlas qualification changes IDs. Hidden observations stay consumed
+until the source and displayed state no longer need them, preventing replay
+when layers reappear. Playback uses counter deltas so heartbeats and same-millisecond batches cannot lose or double
 count observations. Path edges require provably consecutive sequence ranges:
 interleaved aggregation, missing observations and filtered intermediates cannot
 manufacture shortcuts. Older snapshots without sequence metadata remain usable,
@@ -181,6 +187,18 @@ application code from outside its own bundle. Runtime package metadata keeps
 browser JavaScript as ES modules even in a non-ESM consumer repository.
 Node built-ins and the runtime-provided Copilot SDK are the only external
 code dependencies; there is no compilation step or second implementation.
+Fonts use the local system fallback stack; no remote stylesheet or font request
+is needed to open the viewer.
+
+UI mutations and path-scanning HTTP endpoints require
+`X-Cartograph-Client: canvas`, the loopback Host, and same-origin Origin/fetch
+metadata when supplied. Their POST bodies must be `application/json`.
+The collector continues to use its separate bearer authentication.
+
+Page loading confines lexical and canonical file paths to a mounted root.
+Qualified node IDs retain their Atlas during page lookup and chat excerpts;
+unqualified links prefer the selected page's Atlas. Full-graph loading consumes
+all available batches instead of treating a partial scan as complete.
 
 Without an explicit root, initialization discovers the consumer workspace's
 `.atlas/` stores and opens them together. This intentionally traverses the

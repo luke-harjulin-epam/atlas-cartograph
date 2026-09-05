@@ -244,6 +244,8 @@ test("Knowledge Activation camera toggle defaults on and stays independent of re
   assert.deepEqual(changes, [false, true]);
   const html = readFileSync(new URL("../.apm/extensions/cartograph/public/index.html", import.meta.url), "utf8");
   assert.match(html, /<summary>Knowledge Activation /);
+  const summary = html.match(/<summary>([\s\S]*?)<\/summary>/)[1].replace(/<[^>]*>/g, "");
+  assert.match(summary, /Changes idle\s+400 ms/);
   assert.match(html, /id="activity-auto-focus"[^>]*checked/);
 });
 

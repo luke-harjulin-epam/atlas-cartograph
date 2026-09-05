@@ -6,10 +6,18 @@ export const PLAYBACK_STATUS_INTERVAL_MS = 200;
 const SPEED_UP_MS = 250;
 const SLOW_DOWN_MS = 2000;
 const pairKey = (a, b) => JSON.stringify(a < b ? [a, b] : [b, a]);
+const fileIdentity = (node) => node.path
+  ? JSON.stringify(["file", node.storeRoot ?? "", node.path])
+  : JSON.stringify(["id", node.storeRoot ?? "", node.id]);
+const relationshipIdentity = (edge, identities) =>
+  JSON.stringify([identities.get(edge.source), identities.get(edge.target), edge.kind, edge.relKind ?? ""]);
 const sequenced = (node) => Number.isSafeInteger(node.sequence) && node.sequence > 0 &&
   Number.isSafeInteger(node.count) && node.count > 0 &&
   Number.isSafeInteger(node.firstSequence) && node.firstSequence > 0 &&
   node.firstSequence <= node.sequence && node.count <= node.sequence - node.firstSequence + 1;
+const newerObservation = (node, seen) => !seen || (sequenced(node) && sequenced(seen)
+  ? node.accessedAt >= seen.accessedAt && (node.sequence > seen.sequence || node.accessedAt > seen.accessedAt)
+  : node.accessedAt > seen.accessedAt);
 
 export function activitySpacing(pendingCount, oldestPendingMs = 0) {
   if (!pendingCount) return ACTIVITY_SPACING_MS;
@@ -35,7 +43,10 @@ export class ActivityPlayback {
     this.pending = new Map();
     this.active = new Map();
     this.seen = new Map();
-    this.sourceIds = new Set();
+    this.sourceIdentities = new Set();
+    for (const id of this.identities.keys()) {
+      if (!this.graph.nodes.has(id)) this.identities.delete(id);
+    }
     this.transitions = new Map();
     this.edges = [];
     this.lastPlayedAt = -Infinity;
@@ -48,9 +59,12 @@ export class ActivityPlayback {
   }
 
   setGraph(nodes, edges) {
-    const identities = new Map(nodes.map((node) => [node.id, JSON.stringify([node.storeRoot, node.path])]));
+    const identities = new Map(nodes.map((node) => [node.id, fileIdentity(node)]));
+    const byIdentity = new Map(nodes.map((node) => [fileIdentity(node), node.id]));
+    const remap = new Map([...this.identities].map(([id, identity]) => [id, byIdentity.get(identity)]));
     this.graph = indexActivityGraph(nodes, edges);
-    this.relationships = new Map(edges.map((edge) => [JSON.stringify([edge.id, edge.source, edge.target]), edge]));
+    this.relationships = new Map(edges.filter((edge) => identities.has(edge.source) && identities.has(edge.target))
+      .map((edge) => [relationshipIdentity(edge, identities), edge]));
     this.labels = new Map(nodes.map((node) => [node.id, node.title || node.id]));
     this.pairs.clear();
     for (const [key, edge] of this.relationships) {
@@ -58,20 +72,48 @@ export class ActivityPlayback {
       if (!this.pairs.has(pair)) this.pairs.set(pair, []);
       this.pairs.get(pair).push([key, edge]);
     }
-    for (const records of [this.pending, this.active, this.seen]) {
-      for (const id of records.keys()) {
-        if (!identities.has(id) || identities.get(id) !== this.identities.get(id)) {
-          if (records === this.pending) {
-            this.cancelledCount += records.get(id).observations;
-            this.lastActivatedId = null;
-          }
-          records.delete(id);
+    this.lastActivatedId = remap.get(this.lastActivatedId) ?? null;
+    let cancelled = false;
+    for (const name of ["pending", "active"]) {
+      const retained = new Map();
+      for (const [id, record] of this[name]) {
+        const nextId = remap.get(id);
+        if (nextId !== undefined) retained.set(nextId, { ...record, id: nextId });
+        else if (name === "pending") {
+          this.cancelledCount += record.observations;
+          cancelled = true;
         }
       }
+      this[name] = retained;
     }
-    this.identities = identities;
+    if (cancelled) this.breakPath();
+    for (const [key, transition] of this.transitions) {
+      const relationship = this.relationships.get(key);
+      const source = remap.get(transition.source), target = remap.get(transition.target);
+      if (!relationship || source === undefined || target === undefined) this.transitions.delete(key);
+      else this.transitions.set(key, { ...transition, id: relationship.id, source, target });
+    }
+    for (const [id, identity] of identities) {
+      // Raw activity has no path. Consume initially hidden files by ID until their graph metadata arrives.
+      const fallback = fileIdentity({ id });
+      const seen = this.seen.get(fallback);
+      if (fallback !== identity && seen) {
+        if (newerObservation(seen, this.seen.get(identity))) this.seen.set(identity, seen);
+        this.seen.delete(fallback);
+        if (this.sourceIdentities.delete(fallback)) this.sourceIdentities.add(identity);
+      }
+      this.identities.set(id, identity);
+    }
     this.pruneTransitions();
     this.edgesDirty = true;
+  }
+
+  breakPath(restarted = false) {
+    this.lastActivatedId = null;
+    // Legacy snapshots cannot prove adjacency across a cancelled or invisible observation.
+    for (const node of this.pending.values()) {
+      if (restarted || !sequenced(node)) node.continuous = false;
+    }
   }
 
   update(activity, now = Date.now()) {
@@ -87,17 +129,28 @@ export class ActivityPlayback {
       for (const node of this.active.values()) node.expiresAt = node.accessedAt + duration;
       this.edgesDirty = true;
     }
-    this.sourceIds = new Set((activity.nodes ?? []).map((node) => node.id));
+    this.sourceIdentities = new Set((activity.nodes ?? []).map((node) =>
+      this.identities.get(node.id) ?? fileIdentity(node)));
     const nodes = [...(activity.nodes ?? [])].sort((a, b) =>
       sequenced(a) && sequenced(b) ? a.sequence - b.sequence : a.accessedAt - b.accessedAt);
     for (const node of nodes) {
-      if (!this.graph.nodes.has(node.id) || !Number.isFinite(node.accessedAt) ||
+      if (!Number.isFinite(node.accessedAt) ||
           !Number.isFinite(node.expiresAt) || node.accessedAt > now || node.expiresAt <= now) continue;
       const hasSequence = sequenced(node);
       if (node.sequence !== undefined && !hasSequence) continue;
-      const seen = this.seen.get(node.id);
-      if (seen && (hasSequence && sequenced(seen) ? seen.sequence >= node.sequence : seen.accessedAt >= node.accessedAt)) continue;
-      const sameInterval = hasSequence && seen?.firstSequence === node.firstSequence;
+      const identity = this.identities.get(node.id) ?? fileIdentity(node);
+      const seen = this.seen.get(identity);
+      if (!newerObservation(node, seen)) continue;
+      const restarted = hasSequence && seen && sequenced(seen) && node.sequence <= seen.sequence;
+      if (restarted) {
+        this.cancelledCount += this.pending.get(node.id)?.observations ?? 0;
+        this.pending.delete(node.id);
+        this.active.delete(node.id);
+        this.breakPath(true);
+        this.pruneTransitions();
+        this.edgesDirty = true;
+      }
+      const sameInterval = !restarted && hasSequence && seen?.firstSequence === node.firstSequence;
       const observations = hasSequence ? node.count - (sameInterval ? seen.count : 0) : 1;
       if (observations < 1) continue;
       const sequenceStart = hasSequence
@@ -105,7 +158,12 @@ export class ActivityPlayback {
         : undefined;
       const continuous = !hasSequence || node.sequence - sequenceStart + 1 === observations;
       const pending = this.pending.get(node.id);
-      this.seen.set(node.id, { ...node });
+      this.identities.set(node.id, identity);
+      this.seen.set(identity, { ...node });
+      if (!this.graph.nodes.has(node.id)) {
+        this.breakPath();
+        continue;
+      }
       this.aggregatedCount += observations - (pending ? 0 : 1);
       // One FIFO slot per file bounds repeated traffic without starving older files.
       // Interleaved coalesced observations cannot prove a path into or out of this slot.
@@ -191,8 +249,12 @@ export class ActivityPlayback {
       }
       this.edgesDirty = false;
     }
-    for (const id of this.seen.keys()) {
-      if (!this.sourceIds.has(id) && !this.active.has(id) && !this.pending.has(id)) this.seen.delete(id);
+    const displayed = new Set([...this.active.keys(), ...this.pending.keys()].map((id) => this.identities.get(id)));
+    for (const identity of this.seen.keys()) {
+      if (!this.sourceIdentities.has(identity) && !displayed.has(identity)) this.seen.delete(identity);
+    }
+    for (const [id, identity] of this.identities) {
+      if (!this.graph.nodes.has(id) && !this.seen.has(identity)) this.identities.delete(id);
     }
     return {
       enabled: this.enabled,

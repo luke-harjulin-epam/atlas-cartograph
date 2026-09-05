@@ -99,7 +99,12 @@ adding a store or after a new file appears in the live graph before accessing
 its files. A new file's creation glow does not depend on that target refresh.
 
 Playback discards nodes removed from the visible graph and never transfers an
-old highlight to another Atlas file that reuses its ID. API snapshots and
+old highlight to another Atlas file that reuses its ID. Renumbering the same
+physical file when another Atlas opens preserves its queue position, highlight
+lifetime, and actual traversed relationships. Hiding a layer cancels its
+displayed/pending effects but keeps its observations consumed: revealing it
+does not replay old reads, and only fresh reads enter playback.
+API snapshots and
 `get_state` still report raw, unpaced observations. Their raw relationship list
 describes co-active nodes, not the displayed activation path; the browser records
 its own path during playback rather than rendering that list directly.

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Render Markdown lists directly after paragraphs/headings and preserve items
+  when ordered and unordered lists meet. Separate activity-summary status text
+  for accessible reading and share one universe layout implementation.
+- Constrain page reads to mounted stores, guard canvas HTTP actions against
+  cross-origin requests, and preserve Atlas identity in navigation and chat.
+- Load all graph batches instead of silently truncating large stores. Correct
+  installation-directory detection on Windows.
+- Remove remote font loading and restore visible keyboard focus for inputs.
+- Preserve active and queued playback across multi-Atlas ID remapping; keep
+  hidden observations consumed so revealing a layer does not replay them.
 - Move canonical runtime source into `.apm/extensions/cartograph/` and add an
   APM manifest, lockfile and self-contained runtime metadata for distribution.
   Preserve the repository development shim without shipping it to consumers.
