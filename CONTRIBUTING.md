@@ -54,6 +54,11 @@ acknowledgements, stale snapshot revisions, errors and later external changes.
 Search regressions must retain the newest typed text and caret through delayed
 requests, accept empty queries and later external changes, and cover both HTTP
 and canvas query revisions. All-layer state must include unnamed categories.
+Exercise full-state transport reordering across bootstrap, SSE and action
+replies, including deleted nodes, previews, phase timers and late failures.
+Discovery tests must distinguish symlink loops from permission/I/O failures.
+Use operation-count bounds for long-chain, many-Atlas and disconnected layouts,
+and preserve grouping labels and positions.
 Receiver graph refreshes must preserve divergent lexical-alias observations
 one-to-one, retain inactive aliases, and discard ambiguous or retargeted identities.
 Keyboard browsing must reach every node through bounded pages, distinguish

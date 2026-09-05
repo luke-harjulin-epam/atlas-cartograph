@@ -5,7 +5,7 @@ import { request } from "node:http";
 import { join } from "node:path";
 import { setImmediate as nextTurn } from "node:timers/promises";
 import test from "node:test";
-import { addAtlas, dropAtlas, freshState, openAtlas, selectNode, setQuery, startServer } from "../.apm/extensions/cartograph/server.mjs";
+import { addAtlas, dropAtlas, freshState, openAtlas, refreshAtlases, selectNode, setQuery, startServer } from "../.apm/extensions/cartograph/server.mjs";
 
 function fixture(t) {
   const cwd = realpathSync(mkdtempSync(join(tmpdir(), "cartograph-ui-")));
@@ -417,6 +417,59 @@ test("query updates share monotonic revisions across HTTP, canvas mutations and 
   }
   const extension = readFileSync(new URL("../.apm/extensions/cartograph/extension.mjs", import.meta.url), "utf8");
   assert.match(extension, /setQuery\(entry\.state, ctx\.input\.query\)/, "canvas actions must use the same query mutation");
+});
+
+test("bootstrap, initial SSE, broadcasts and action replies share one increasing snapshot revision", async (t) => {
+  const { start, roots } = fixture(t);
+  const entry = await start();
+  const headers = { "X-Cartograph-Client": "canvas", "Content-Type": "application/json" };
+  const bootstrap = async () => (await (await fetch(new URL("/api/bootstrap", entry.url), { headers })).json()).state;
+  const boot = await bootstrap();
+  assert.ok(Number.isSafeInteger(boot.stateRevision) && boot.stateRevision > 0);
+  const response = await fetch(new URL("/events", entry.url), { headers, signal: AbortSignal.timeout(5000) });
+  const reader = response.body.getReader();
+  let buffer = "";
+  const decoder = new TextDecoder();
+  async function nextSnapshot() {
+    for (;;) {
+      const end = buffer.indexOf("\n\n");
+      if (end !== -1) {
+        const frame = buffer.slice(0, end);
+        buffer = buffer.slice(end + 2);
+        if (!frame.startsWith("data: ")) continue;
+        return JSON.parse(frame.slice(6));
+      }
+      const chunk = await reader.read();
+      assert.equal(chunk.done, false, "SSE stays open until snapshots are read");
+      buffer += decoder.decode(chunk.value, { stream: true });
+    }
+  }
+  try {
+    const initial = await nextSnapshot();
+    assert.ok(initial.stateRevision > boot.stateRevision);
+    const action = await fetch(new URL("/api/ui", entry.url), {
+      method: "POST", headers, body: JSON.stringify({ action: "select", nodeId: "two::work/shared" }),
+    });
+    const reply = await action.json();
+    const selected = await nextSnapshot();
+    assert.ok(selected.stateRevision > initial.stateRevision);
+    assert.ok(reply.stateRevision > selected.stateRevision);
+    assert.equal(selected.selectedId, "two::work/shared");
+    assert.equal(reply.page.body, "Body from two.");
+    rmSync(join(roots[1], "work", "shared.md"));
+    refreshAtlases(entry.state);
+    entry.broadcast();
+    const deleted = await nextSnapshot();
+    assert.ok(deleted.stateRevision > reply.stateRevision);
+    assert.equal(deleted.selectedId, null);
+    assert.equal(deleted.page, null);
+    assert.equal(deleted.graph.nodes.some(({ id }) => id === "two::work/shared"), false);
+    const later = await bootstrap();
+    assert.ok(later.stateRevision > deleted.stateRevision);
+    assert.deepEqual(later.graph, deleted.graph);
+  } finally {
+    await reader.cancel();
+  }
 });
 
 test("canvas POST routes accept exactly one MiB and reject larger byte payloads", async (t) => {

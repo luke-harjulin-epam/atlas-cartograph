@@ -77,7 +77,7 @@ function walkAtlasDirs(root, { strict = false } = {}) {
         if (entry.isDirectory() || entry.isSymbolicLink()) walk(join(canonical, entry.name), depth + 1);
       }
     } catch (error) {
-      if (strict && error.code !== "ENOENT") throw error;
+      if (strict && error.code !== "ENOENT" && error.code !== "ELOOP") throw error;
     }
   }
   if (root) walk(root, 0);

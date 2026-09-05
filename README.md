@@ -7,6 +7,8 @@ Use **Browse nodes** for keyboard-accessible filtering and selection across
 every open Atlas, including nodes on hidden layers.
 Graph search updates immediately while serialising edits, so delayed replies
 cannot replace newer typed text.
+Full-state ordering also prevents delayed responses from restoring deleted nodes
+or stale previews.
 
 ## Run
 

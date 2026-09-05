@@ -28,6 +28,7 @@ export function freshState(cwd, input = {}) {
   const root = typeof input.root === "string" ? sanitizeRoot(input.root, cwd) : "";
   return {
     cwd,
+    stateRevision: 0,
     phase: input.skipIntro ? (root ? "map" : "welcome") : root ? "jump" : "crawl",
     root,
     roots: root ? [root] : [],
@@ -67,7 +68,9 @@ export function freshState(cwd, input = {}) {
 }
 
 function snapshot(state) {
+  state.stateRevision = (state.stateRevision ?? 0) + 1;
   return {
+    stateRevision: state.stateRevision,
     phase: state.phase,
     root: state.root,
     roots: state.roots || (state.root ? [state.root] : []),

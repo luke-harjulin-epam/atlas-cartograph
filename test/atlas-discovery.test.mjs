@@ -182,6 +182,24 @@ test("invalid .atlas paths and scan failures surface errors without replacing a 
   assert.match(state.error, /Cannot open Atlas stores:/);
 });
 
+test("self-referential and multi-entry symlink loops do not abort strict discovery", (t) => {
+  const cwd = workspace(t);
+  const first = store(join(cwd, ".atlas", "aaa-store"), "first");
+  const second = store(join(cwd, ".atlas", "zzz-store"), "second");
+  const base = join(cwd, ".atlas");
+  symlinkSync("self", join(base, "self"), "dir");
+  symlinkSync("loop-b", join(base, "loop-a"), "dir");
+  symlinkSync("loop-a", join(base, "loop-b"), "dir");
+  symlinkSync("missing", join(base, "broken"), "dir");
+  assert.throws(() => realpathSync(join(base, "self")), { code: "ELOOP" });
+  assert.throws(() => realpathSync(join(base, "loop-a")), { code: "ELOOP" });
+  assert.deepEqual(discoverAtlasPresets(cwd).map(({ root }) => root), [first, second]);
+  const state = openDefaultAtlases(freshState(cwd));
+  assert.equal(state.error, null);
+  assert.equal(state.phase, "map");
+  assert.deepEqual(state.roots, [first, second]);
+});
+
 test("unreadable discovery directories and store files are visible, not empty graphs", (t) => {
   if (process.getuid?.() === 0 || process.platform === "win32") {
     t.skip("POSIX permission checks require a non-root user");

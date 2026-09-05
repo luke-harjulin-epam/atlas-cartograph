@@ -164,9 +164,14 @@ export function assignProximity(nodes, edges) {
   const parent = new Map();
   const find = (x) => {
     if (!parent.has(x)) parent.set(x, x);
-    let p = parent.get(x);
-    while (p !== parent.get(p)) p = parent.get(p);
-    return p;
+    let root = x;
+    while (root !== parent.get(root)) root = parent.get(root);
+    while (x !== root) {
+      const next = parent.get(x);
+      parent.set(x, root);
+      x = next;
+    }
+    return root;
   };
   const unite = (a, b) => {
     const pa = find(a);
@@ -203,12 +208,16 @@ function layoutLayers(nodes) {
 }
 
 function layoutAtlases(nodes) {
-  const keys = [...new Set(nodes.map((n) => n.atlasKey || n.atlasLabel || n.atlasId || "Atlas"))].sort();
+  const labels = new Map();
+  for (const n of nodes) {
+    const key = n.atlasKey || n.atlasLabel || n.atlasId || "Atlas";
+    if (!labels.has(key)) labels.set(key, n.atlasLabel || key);
+  }
+  const keys = [...labels.keys()].sort();
   const homes = new Map();
   keys.forEach((key, i) => {
     const fib = fibonacciHome(i, Math.max(keys.length, 1));
-    const label = nodes.find((n) => (n.atlasKey || n.atlasLabel || n.atlasId || "Atlas") === key)?.atlasLabel || key;
-    homes.set(key, { ...fib, label, key });
+    homes.set(key, { ...fib, label: labels.get(key), key });
   });
   return packInHome(nodes, (n) => {
     const key = n.atlasKey || n.atlasLabel || n.atlasId || "Atlas";
@@ -218,12 +227,15 @@ function layoutAtlases(nodes) {
 
 function layoutProximity(nodes, edges) {
   const assigned = assignProximity(nodes, edges);
-  const keys = [...new Set([...assigned.values()].map((c) => c.key))].sort();
+  const labels = new Map();
+  for (const c of assigned.values()) {
+    if (!labels.has(c.key)) labels.set(c.key, c.label || c.key);
+  }
+  const keys = [...labels.keys()].sort();
   const homes = new Map();
   keys.forEach((key, i) => {
     const fib = fibonacciHome(i, Math.max(keys.length, 1));
-    const label = [...assigned.values()].find((c) => c.key === key)?.label || key;
-    homes.set(key, { ...fib, label, key });
+    homes.set(key, { ...fib, label: labels.get(key), key });
   });
   return packInHome(nodes, (n) => {
     const c = assigned.get(n.id);

@@ -68,6 +68,17 @@ Full-state snapshots and UI acknowledgements include `layersRevision` and
 actions share `setQuery`. The client serialises/coalesces optimistic edits and
 uses these revisions to reject stale values while still accepting later external
 edits. Search snapshots do not rewrite unchanged input, preserving its caret.
+Every full-state payload also receives an increasing per-canvas `stateRevision`
+when constructed, covering bootstrap, SSE connections/broadcasts and UI replies.
+The browser rejects older/equal revisions before graph, selection, page or phase
+updates; discarded payloads cannot arm transition timers. Field controllers still
+preserve pending local intent within an accepted full snapshot. Late bootstrap
+errors remain visible without replacing an already live map.
+
+Default discovery skips unresolved symlink loops (`ELOOP`) as well as vanished
+entries, while permission and other I/O errors remain visible. Proximity grouping
+compresses union-find paths; Atlas and proximity home construction index the first
+label for each key rather than scanning every node or assignment for every home.
 
 Activity updates have their own SSE event and do not resend/rebuild the graph.
 Raw observation expiry runs server-side. The browser coalesces repeated

@@ -36,15 +36,21 @@ function appFixture() {
   const calls = [];
   const opened = [];
   const queries = [];
+  const graphs = [];
+  const streams = [];
+  const timers = [];
+  const bootstrap = deferred();
   const context = vm.createContext({
     document, allNodeLayersOn, createLayerControls, createStateControls, handleContentClick, mountNodeBrowser, escapeHtml, renderMarkdown,
     window: { matchMedia: () => ({ matches: false }), open: (...args) => opened.push(args) },
-    performance: { now: () => 0 }, requestAnimationFrame() {}, setTimeout() {}, clearTimeout() {},
+    performance: { now: () => 0 }, requestAnimationFrame() {},
+    setTimeout(callback) { timers.push(callback); return timers.length; }, clearTimeout() {},
     mountActivityControls: () => ({ setActivity() {}, autoFocusEnabled: () => true, setPlayback() {} }),
     mountGraphWatchControls: () => ({ setWatch() {} }),
-    mountGraphCanvas: () => ({ setGraph() {}, setSelected() {}, setQuery(query) { queries.push(query); }, setActivity() {}, clusters: () => [] }),
-    EventSource: class { addEventListener() {} },
+    mountGraphCanvas: () => ({ setGraph(nodes) { graphs.push(nodes); }, setSelected() {}, setQuery(query) { queries.push(query); }, setActivity() {}, clusters: () => [] }),
+    EventSource: class { constructor() { streams.push(this); } addEventListener() {} },
     fetch: (url, options) => {
+      if (url === "/api/bootstrap") return bootstrap.promise;
       const request = deferred();
       if (url === "/api/ui") calls.push({ ...JSON.parse(options.body), ...request });
       return request.promise;
@@ -60,13 +66,100 @@ function appFixture() {
       relatesTo: [{ path: "related" }], sources: ["source"],
     },
   };
-  function apply(next) { vm.runInContext(`applyState(${JSON.stringify(next)})`, context); }
+  function apply(next) { return vm.runInContext(`applyState(${JSON.stringify(next)})`, context); }
   apply(initial);
   return {
-    document, calls, opened, queries, apply,
+    document, calls, opened, queries, graphs, timers, bootstrap, apply,
+    receive: (next) => streams[0].onmessage({ data: JSON.stringify(next) }),
     state: () => JSON.parse(vm.runInContext("JSON.stringify(state)", context)),
   };
 }
+
+test("older bootstrap, action replies and SSE cannot resurrect deleted graph or preview state", async () => {
+  const { document, calls, bootstrap, receive, apply, state, graphs, timers } = appFixture();
+  apply({ stateRevision: 3, previewOpen: false });
+  const old = state();
+  document.getElementById("browse-nodes").click();
+  document.getElementById("node-list").firstElementChild.firstElementChild.click();
+  assert.equal(calls[0].action, "select");
+  const latest = {
+    ...old, stateRevision: 6, graph: { nodes: [], edges: [], store: {} },
+    selectedId: null, previewOpen: false, page: null, chat: [],
+    graphChanges: { revision: 2, origin: "filesystem", deleted: old.graph.nodes },
+  };
+  receive(latest);
+  const expected = state();
+  const rendered = graphs.length;
+  const armed = timers.length;
+  const stale = { ...old, phase: "jump", previewOpen: true, stateRevision: 4 };
+  calls[0].resolve({ ok: true, json: async () => stale });
+  bootstrap.resolve({ ok: true, json: async () => ({ state: { ...stale, stateRevision: 3 } }) });
+  await settle();
+  receive(stale);
+  receive({ ...stale, stateRevision: 6 });
+  assert.deepEqual(state(), expected);
+  assert.equal(graphs.length, rendered, "discarded snapshots never reach graph reconciliation");
+  assert.equal(timers.length, armed, "discarded jump phases never arm transition timers");
+  assert.equal(document.getElementById("preview").classList.contains("hidden"), true);
+  assert.equal(document.getElementById("node-list").children.length, 0);
+  assert.equal(apply({ ...old }), false, "legacy data cannot downgrade an established revisioned stream");
+});
+
+test("full-state ordering guards field controllers while newer snapshots preserve pending query/layers", async () => {
+  const { document, calls, apply, state } = appFixture();
+  apply({ stateRevision: 1 });
+  const input = document.getElementById("search");
+  input.value = "typing";
+  input.dispatchEvent(new FrontendEvent("input"));
+  document.querySelector('[data-layer="sources"]').click();
+  const layers = state().layers;
+  apply({ stateRevision: 3, query: "", queryRevision: 0, layers: all, layersRevision: 0,
+    selectedId: null, previewOpen: false, page: null, graph: { nodes: [], edges: [] } });
+  assert.equal(state().query, "typing");
+  assert.deepEqual(state().layers, layers);
+  assert.equal(apply({ stateRevision: 2, query: "stale", queryRevision: 99,
+    layers: all, layersRevision: 99 }), false);
+  calls[0].resolve({ ok: true, json: async () => ({ query: "typing", queryRevision: 1 }) });
+  calls[1].resolve({ ok: true, json: async () => ({ layers, layersRevision: 1 }) });
+  await settle();
+  assert.equal(state().query, "typing");
+  assert.deepEqual(state().layers, layers);
+  apply({ stateRevision: 4, query: "external", queryRevision: 2, layers: all, layersRevision: 2 });
+  assert.equal(state().query, "external");
+  assert.deepEqual(state().layers, all);
+  assert.equal(state().graph.nodes.length, 0);
+});
+
+test("newer reconnect snapshots apply and arm a jump once; late bootstrap failures retain the live map", async () => {
+  const { document, bootstrap, receive, state, timers } = appFixture();
+  receive({ stateRevision: 5, phase: "jump" });
+  const armed = timers.length;
+  receive({ stateRevision: 7, phase: "jump" });
+  assert.equal(timers.length, armed);
+  receive({ stateRevision: 12, phase: "map" });
+  const graph = state().graph;
+  bootstrap.reject(new Error("Bootstrap unavailable"));
+  await settle();
+  assert.equal(state().phase, "map");
+  assert.equal(state().stateRevision, 12);
+  assert.deepEqual(state().graph, graph);
+  assert.match(document.getElementById("map-error").textContent, /Bootstrap unavailable/);
+  assert.equal(document.getElementById("map-error").classList.contains("hidden"), false);
+  receive({ stateRevision: 13, phase: "map", error: null });
+  assert.equal(document.getElementById("map-error").classList.contains("hidden"), true);
+});
+
+test("failed bootstrap HTTP responses surface errors without bypassing snapshot ordering", async () => {
+  const { document, bootstrap, receive, state } = appFixture();
+  receive({ stateRevision: 1, phase: "map" });
+  const graph = state().graph;
+  bootstrap.resolve({ ok: false, status: 500, json: async () => ({ error: "Cannot load stores" }) });
+  await settle();
+  assert.equal(state().phase, "map");
+  assert.equal(state().stateRevision, 1);
+  assert.deepEqual(state().graph, graph);
+  assert.match(document.getElementById("map-error").textContent, /Cannot load stores/);
+});
 
 test("layer solo, additive, all and relationship semantics are preserved", () => {
   const solo = applyLayerClick(all, "experiences");

@@ -37,6 +37,10 @@
 - Use the shared revision-aware state controller for search and layers. Query
   mutations from HTTP and canvas actions must both advance the server revision;
   never overwrite pending text or its caret with an older snapshot.
+- Stamp every full-state payload with a monotonic emission revision and discard
+  older bootstrap, SSE and action snapshots before applying any fields or timers.
+- Skip symlink loops during default discovery without hiding permission/I/O
+  failures. Index layout labels and compress proximity parent chains.
 - Preserve receiver activity per lexical path, physical target and mount identity
   when graph IDs change. Never copy one alias's counts onto another alias.
 - Keep all graph nodes reachable through native keyboard controls with bounded

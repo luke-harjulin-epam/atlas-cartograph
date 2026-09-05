@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Reject stale full-state snapshots so delayed bootstrap/action replies cannot
+  restore deleted nodes, old previews or earlier navigation phases.
+- Skip self-referential symlink entries during default Atlas discovery while
+  retaining errors for unreadable paths.
+- Compress proximity parent chains and index Atlas/cluster labels to avoid
+  quadratic grouping work on long chains, many mounts and disconnected graphs.
 - Preserve independent activity counts, timestamps and sequences for file aliases
   during graph rebuilds and ID qualification, without activating newly added aliases.
 - Preserve search intent during rapid typing, delayed replies and snapshots,

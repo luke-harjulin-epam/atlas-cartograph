@@ -30,6 +30,7 @@ const phases = {
 };
 
 let state = { phase: "crawl", stores: [], graph: null, root: "", query: "", selectedId: null, previewOpen: false, layers: {}, grouping: "layers", error: null, linkError: null, page: null, chat: [] };
+let latestStateRevision = null;
 let chatOpen = false;
 let map = null;
 const activityControls = mountActivityControls($("activity-controls"), applyActivity,
@@ -342,16 +343,7 @@ function renderIslands() {
   });
 }
 
-function applyState(next) {
-  const grouping = next.grouping || state.grouping || "layers";
-  const layers = layerControls.snapshot(next.layers, next.layersRevision);
-  const query = queryControls.snapshot(next.query, next.queryRevision);
-  state = { ...state, ...next, grouping, layers, layersRevision: layerControls.layersRevision,
-    query, queryRevision: queryControls.revision };
-  activityControls.setActivity(state.activity);
-  graphWatchControls.setWatch(state.graphWatch);
-  if (!state.graph) map?.setGraph([], [], grouping, state.graphChanges, () => false);
-  showPhase(state.phase || "welcome");
+function renderStateError() {
   if (state.error) {
     $("welcome-error").textContent = state.error;
     $("welcome-error").classList.toggle("hidden", !state.error || state.phase !== "welcome");
@@ -361,6 +353,25 @@ function applyState(next) {
     $("welcome-error").classList.add("hidden");
     $("map-error").classList.add("hidden");
   }
+}
+
+function applyState(next) {
+  if (Number.isSafeInteger(next.stateRevision) && next.stateRevision >= 0) {
+    if (latestStateRevision !== null && next.stateRevision <= latestStateRevision) return false;
+    latestStateRevision = next.stateRevision;
+  } else if (latestStateRevision !== null) {
+    return false;
+  }
+  const grouping = next.grouping || state.grouping || "layers";
+  const layers = layerControls.snapshot(next.layers, next.layersRevision);
+  const query = queryControls.snapshot(next.query, next.queryRevision);
+  state = { ...state, ...next, grouping, layers, layersRevision: layerControls.layersRevision,
+    query, queryRevision: queryControls.revision };
+  activityControls.setActivity(state.activity);
+  graphWatchControls.setWatch(state.graphWatch);
+  if (!state.graph) map?.setGraph([], [], grouping, state.graphChanges, () => false);
+  showPhase(state.phase || "welcome");
+  renderStateError();
   if (state.phase === "welcome") renderStores();
   if (state.phase === "map") {
     const m = ensureMap();
@@ -373,6 +384,7 @@ function applyState(next) {
     renderPreview();
     renderChat();
   }
+  return true;
 }
 
 async function openRoot(root) {
@@ -618,16 +630,23 @@ es.onerror = () => { activityControls.setConnected(false); graphWatchControls.se
 es.onmessage = (e) => {
   const next = JSON.parse(e.data);
   const was = state.phase;
-  applyState(next);
-  if (next.phase === "jump" && was !== "jump") armJump();
+  if (applyState(next) && next.phase === "jump" && was !== "jump") armJump();
 };
 
 fetch("/api/bootstrap", { headers: { "X-Cartograph-Client": "canvas" } })
-  .then((r) => r.json())
+  .then(async (response) => {
+    const boot = await response.json();
+    if (!response.ok) throw new Error(boot.error || `Bootstrap failed (${response.status})`);
+    return boot;
+  })
   .then((boot) => {
-    applyState(boot.state || boot);
-    if ((boot.state?.phase || boot.phase) === "jump") armJump();
+    const next = boot.state || boot;
+    const was = state.phase;
+    if (applyState(next) && next.phase === "jump" && was !== "jump") armJump();
   })
   .catch((err) => {
-    applyState({ phase: "welcome", error: String(err) });
+    state.error = String(err);
+    if (latestStateRevision === null) state.phase = "welcome";
+    showPhase(state.phase);
+    renderStateError();
   });
