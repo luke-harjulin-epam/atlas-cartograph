@@ -20,6 +20,15 @@
 - With no explicit root, open recognized Atlas mounts under the consumer
   workspace's `.atlas/`. Atlas content is external data, never executable code.
   Do not auto-open the sample or scan installed extension/package caches.
+- Track synthetic development stores under `.atlas/local/`, with distinct Atlas
+  identities. Keep the local mini Atlas byte-identical to the packaged sample;
+  keep the stress baseline's 505 nodes and 1508 relationships intact. Development
+  fixtures ship in repository clones, not in consumer APM deployments. Never
+  start workloads or privileged collectors simply by opening a store.
+- Keep development runners in `scripts/dev/`, defaulting to offline dry-run.
+  Require explicit execution and exact fixture/collector scope checks. Never
+  overwrite baseline pages; clean up only owned temporary files. Synthetic
+  activity belongs only in the explicitly labelled development preview server.
 - Keep hand-authored documentation under `docs/`. This repository is not an APM
   marketplace and has no generated documentation or package catalog.
 - Do not edit an installed user extension or the main checkout when working in

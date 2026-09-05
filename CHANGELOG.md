@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Include the mini and 505-node stress development Atlases under tracked
+  `.atlas/local/` paths, so a fresh repository clone opens both automatically.
+  Keep the packaged mini Atlas self-contained and give the stress fixture a
+  distinct identity for multi-Atlas discovery.
+- Rehome lifecycle, mixed-activity, stress and adaptive-preview runners into
+  `scripts/dev/`, with offline dry-run defaults, scoped preflight, bounded load
+  and cleanup that never removes baseline pages.
+
 ## 0.1.0 - 2026-09-05
 
 - Preserve the selected monitor provider when recreating an activity service
