@@ -72,6 +72,36 @@ test("explicit Atlas page selection works with a single mounted store", (t) => {
   assert.equal(state.selectedId, "work/shared");
 });
 
+test("mesh sidebar chips retain their Atlas qualifier and do not duplicate the resolved edge", (t) => {
+  const { state, roots } = fixture(t);
+  writeFileSync(join(roots[0], "index.md"), "# One\n[Remote](atlas://two/work/shared)");
+  openAtlas(state, roots[0]);
+  addAtlas(state, roots[1]);
+  selectNode(state, "one::index");
+  assert.deepEqual(state.page.relatesTo, [{ path: "atlas://two/work/shared", kind: "two" }]);
+  selectNode(state, state.page.relatesTo[0].path);
+  assert.equal(state.selectedId, "two::work/shared");
+  assert.equal(state.page.body, "Body from two.");
+});
+
+test("frontmatter sidebar references deduplicate qualified edges and keep unresolved targets explicit", (t) => {
+  const { state, roots } = fixture(t);
+  writeFileSync(join(roots[0], "index.md"), [
+    "---", "relates_to:", "  - path: atlas://two/work/shared", "    kind: depends-on",
+    "  - path: atlas://missing/work/shared", "    kind: related", "---", "# One",
+  ].join("\n"));
+  openAtlas(state, roots[0]);
+  addAtlas(state, roots[1]);
+  selectNode(state, "one::index");
+  assert.deepEqual(state.page.relatesTo, [
+    { path: "atlas://two/work/shared", kind: "depends-on" },
+    { path: "atlas://missing/work/shared", kind: "related" },
+  ]);
+  selectNode(state, state.page.relatesTo[1].path);
+  assert.match(state.linkError, /No page/);
+  assert.equal(state.selectedId, "one::index");
+});
+
 test("duplicate Atlas mounts fail visibly without altering the mounted graph or selection", async (t) => {
   const { state, roots, start } = fixture(t);
   openAtlas(state, roots[0]);
@@ -209,9 +239,11 @@ test("canvas routes share origin, fetch-site, host and custom-header protection"
   const { state, roots, start } = fixture(t);
   const entry = await start();
   const headers = { "X-Cartograph-Client": "canvas", "Content-Type": "application/json" };
-  const routes = ["/api/ui", "/api/probe", "/api/page", "/api/graph"];
+  const routes = ["/api/ui", "/api/probe", "/api/page", "/api/graph", "/api/bootstrap", "/events"];
+  selectNode(state, "two::work/shared");
+  const baseline = JSON.stringify(state);
   for (const route of routes) {
-    const method = route === "/api/graph" ? "GET" : "POST";
+    const method = ["/api/graph", "/api/bootstrap", "/events"].includes(route) ? "GET" : "POST";
     const body = method === "POST" ? JSON.stringify({ action: "query", query: "untrusted", root: roots[0], nodeId: "index" }) : undefined;
     for (const invalid of [
       { "Content-Type": "application/json" },
@@ -246,6 +278,59 @@ test("canvas routes share origin, fetch-site, host and custom-header protection"
     }
   }
   assert.equal(state.query, "");
+  assert.equal(JSON.stringify(state), baseline, "unauthorised requests must not trigger discovery or sync");
+  assert.equal(entry.clients.size, 0, "unauthorised requests must not open streams");
+});
+
+test("native EventSource requires same-origin browser metadata and the canonical Host", async (t) => {
+  const { state, start } = fixture(t);
+  const entry = await start();
+  const headers = { Accept: "text/event-stream", "Sec-Fetch-Site": "same-origin" };
+  for (const invalid of [
+    { Accept: "text/event-stream" },
+    { ...headers, "Sec-Fetch-Site": "none" },
+    { ...headers, "Sec-Fetch-Site": "same-site" },
+    { ...headers, "Sec-Fetch-Site": "cross-site" },
+    { ...headers, Origin: "https://untrusted.example" },
+    { ...headers, Origin: "null" },
+    { "Sec-Fetch-Site": "same-origin" },
+  ]) {
+    const abort = new AbortController();
+    t.after(() => abort.abort());
+    const response = await fetch(new URL("/events", entry.url), { headers: invalid, signal: abort.signal });
+    assert.equal(response.status, 403, JSON.stringify(invalid));
+    await response.json();
+  }
+  const status = await new Promise((resolve, reject) => {
+    const req = request(new URL("/events", entry.url), {
+      headers: { ...headers, Host: "untrusted.example" },
+    }, (res) => {
+      res.resume();
+      res.on("error", reject);
+      res.on("end", () => resolve(res.statusCode));
+    });
+    req.on("error", reject);
+    req.end();
+  });
+  assert.equal(status, 403, "same-origin metadata cannot bypass the Host check");
+  assert.equal(entry.clients.size, 0);
+  for (const path of ["/api/bootstrap", "/api/activity/connection"]) {
+    const response = await fetch(new URL(path, entry.url), { headers });
+    assert.equal(response.status, 403, "the headerless exception is only for EventSource");
+    await response.json();
+  }
+  selectNode(state, "two::work/shared");
+  for (const valid of [headers, { ...headers, Origin: new URL(entry.url).origin }]) {
+    const abort = new AbortController();
+    t.after(() => abort.abort());
+    const response = await fetch(new URL("/events", entry.url), { headers: valid, signal: abort.signal });
+    assert.equal(response.status, 200);
+    const reader = response.body.getReader();
+    const initial = new TextDecoder().decode((await reader.read()).value);
+    assert.match(initial, /Body from two/);
+    await reader.cancel();
+    abort.abort();
+  }
 });
 
 test("same-origin canvas calls still load pages, inspect roots and change selection", async (t) => {
@@ -268,10 +353,14 @@ test("same-origin canvas calls still load pages, inspect roots and change select
   const graph = await fetch(new URL(`/api/graph?root=${encodeURIComponent(roots[1])}`, entry.url), { headers });
   assert.equal(graph.status, 200);
   assert.equal((await graph.json()).store.atlasId, "two");
+  const bootstrap = await fetch(new URL("/api/bootstrap", entry.url), { headers });
+  assert.equal(bootstrap.status, 200);
+  assert.equal((await bootstrap.json()).state.page.body, "Body from two.");
 });
 
 test("browser forwards link targets to the server and marks canvas requests", () => {
   const app = readFileSync(new URL("../.apm/extensions/cartograph/public/app.js", import.meta.url), "utf8");
   assert.match(app, /"X-Cartograph-Client": "canvas"/);
   assert.match(app, /function navigateWiki\(target\) \{\s*return post\("select", \{ nodeId: target \}\);/);
+  assert.match(app, /fetch\("\/api\/bootstrap", \{ headers: \{ "X-Cartograph-Client": "canvas" \} \}\)/);
 });

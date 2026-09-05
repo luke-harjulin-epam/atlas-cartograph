@@ -25,6 +25,9 @@
   relationship once. Chat completions must update their own request placeholder.
 - Guard path-scanning and state-changing HTTP routes with the shared canvas
   request validation; do not rely on CORS or JSON parsing as authorization.
+  Bootstrap and SSE snapshots need the same boundary. Native EventSource may
+  use same-origin Fetch Metadata instead of the canvas header, but never omit
+  canonical Host and Origin validation.
 - Keep WebGL and Canvas 2D activity behavior equivalent, including reduced motion.
 - Keep adaptive 400/200/100/50 ms activity pacing in shared browser playback,
   never in filesystem operations or collector transport. Use queue depth and

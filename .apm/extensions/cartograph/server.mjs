@@ -230,7 +230,7 @@ export function refreshAtlases(state) {
   return true;
 }
 
-function resolveNodeId(state, raw) {
+function resolveNodeId(state, raw, sourceId = state.selectedId) {
   const key = normalizeLink(String(raw ?? ""));
   if (!key) return null;
   const nodes = state.graph?.nodes ?? [];
@@ -253,22 +253,28 @@ function resolveNodeId(state, raw) {
       n.id.endsWith(`/${key}`) ||
       n.id.endsWith(`/${key.split("/").pop()}`),
   );
-  const selected = nodes.find((node) => node.id === state.selectedId);
+  const selected = nodes.find((node) => node.id === sourceId);
   const hit = (selected && matches.find((node) => node.atlasKey === selected.atlasKey)) || matches[0];
   return hit?.id ?? key;
 }
 
 function enrichPage(state, page, nodeId) {
   const node = state.graph?.nodes?.find((n) => n.id === nodeId);
-  const relatesTo = [...(page?.relatesTo ?? [])];
-  const seen = new Set(relatesTo.map((r) => normalizeLink(r.path)));
+  const relatesTo = [];
+  const seen = new Set();
+  const addRelation = (path, kind) => {
+    if (!path) return;
+    const key = normalizeLink(resolveNodeId(state, path, nodeId) || path);
+    if (seen.has(key)) return;
+    seen.add(key);
+    relatesTo.push({ path, kind });
+  };
+  for (const relation of page?.relatesTo ?? []) addRelation(relation.path, relation.kind);
   if (!relatesTo.length && node) {
     for (const r of node.refs ?? []) {
       if (r.kind !== "relates" && r.kind !== "mesh") continue;
-      const path = r.raw;
-      if (!path || seen.has(normalizeLink(path))) continue;
-      seen.add(normalizeLink(path));
-      relatesTo.push({ path, kind: r.relKind || r.kind });
+      const path = r.kind === "mesh" && r.relKind ? `atlas://${r.relKind}/${r.raw}` : r.raw;
+      addRelation(path, r.relKind || r.kind);
     }
   }
   for (const e of state.graph?.edges ?? []) {
@@ -276,9 +282,7 @@ function enrichPage(state, page, nodeId) {
     let other = null;
     if (e.source === nodeId) other = e.target;
     else if (e.target === nodeId) other = e.source;
-    if (!other || seen.has(normalizeLink(other))) continue;
-    seen.add(normalizeLink(other));
-    relatesTo.push({ path: other, kind: e.relKind || e.kind });
+    addRelation(other, e.relKind || e.kind);
   }
   const sources =
     page?.sources?.length
@@ -346,9 +350,12 @@ export async function startServer(instanceId, state, options = {}) {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
     try {
       if (await entry.activity.handle(req, res, url.pathname)) return;
-      const canvasRoutes = { "/api/ui": "POST", "/api/probe": "POST", "/api/page": "POST", "/api/graph": "GET" };
+      const canvasRoutes = {
+        "/api/ui": "POST", "/api/probe": "POST", "/api/page": "POST",
+        "/api/graph": "GET", "/api/bootstrap": "GET", "/events": "GET",
+      };
       if (canvasRoutes[url.pathname]) {
-        requireCanvas(req, entry.url);
+        requireCanvas(req, entry.url, { allowEventSource: url.pathname === "/events" });
         if (req.method !== canvasRoutes[url.pathname]) {
           sendJson(res, 405, { error: "Method not allowed." });
           return;

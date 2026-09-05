@@ -234,7 +234,7 @@ test("bootstrap reports picker errors while keeping the last valid graph accessi
   t.after(() => entry.close());
   rmSync(join(cwd, ".atlas"), { recursive: true });
   writeFileSync(join(cwd, ".atlas"), "not a directory");
-  const response = await fetch(new URL("/api/bootstrap", entry.url));
+  const response = await fetch(new URL("/api/bootstrap", entry.url), { headers: { "X-Cartograph-Client": "canvas" } });
   assert.equal(response.status, 200);
   const boot = await response.json();
   assert.equal(state.graph, graph);
@@ -282,7 +282,7 @@ test("standalone dev serves discovered mounts and lets the CLI path override the
         child.once("error", (error) => { clearTimeout(timer); reject(error); });
         child.once("exit", (code) => { clearTimeout(timer); reject(new Error(`Dev server exited (${code}): ${stderr}`)); });
       });
-      const response = await fetch(new URL("/api/bootstrap", url));
+      const response = await fetch(new URL("/api/bootstrap", url), { headers: { "X-Cartograph-Client": "canvas" } });
       assert.equal(response.status, 200);
       const { state } = await response.json();
       assert.equal(state.phase, "map");

@@ -603,7 +603,7 @@ es.onmessage = (e) => {
   if (next.phase === "jump" && was !== "jump") armJump();
 };
 
-fetch("/api/bootstrap")
+fetch("/api/bootstrap", { headers: { "X-Cartograph-Client": "canvas" } })
   .then((r) => r.json())
   .then((boot) => {
     applyState(boot.state || boot);

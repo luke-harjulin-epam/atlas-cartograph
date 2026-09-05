@@ -42,6 +42,10 @@ behavior, selection, and the return to baseline after activity expires.
 Preserve visible keyboard focus and local-only assets. HTTP route changes must
 retain same-origin/custom-header checks and JSON-only mutation requests;
 page-loading changes must preserve mounted-root containment and Atlas identity.
+Cover bootstrap and SSE snapshot authorisation before filesystem work or stream
+registration. Native EventSource needs `Accept: text/event-stream` and the
+browser-controlled `Sec-Fetch-Site: same-origin`; other clients must send the
+canvas header. Neither route may bypass canonical Host or Origin validation.
 Cover duplicate mount rejection and recovery, missing explicit Atlas targets,
 single-store URI navigation, and unique edge IDs/degrees. Chat regressions must
 exercise overlapping success/failure replies and pending entries trimmed from

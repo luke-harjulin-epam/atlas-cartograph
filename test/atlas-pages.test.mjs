@@ -258,6 +258,67 @@ test("same-path mesh links remain distinct from explicit Atlas references", (t) 
   assert.equal(new Set(graph.edges.map((edge) => edge.id)).size, 2);
 });
 
+test("frontmatter Atlas URIs retain relationship kinds without generating duplicate mesh edges", (t) => {
+  const cwd = workspace(t);
+  const first = store(cwd, "one");
+  const second = store(cwd, "two");
+  page(first, "work/source.md", "Source");
+  page(second, "work/task.md", "Task");
+  writeFileSync(join(first, "index.md"), [
+    "---", "title: Index", "sources:", "  - atlas://one/work/source", "relates_to:",
+    "  - path: atlas://two/work/task", "    kind: depends-on",
+    "unrelated_metadata: atlas://two/work/task", "---",
+    "# Index", "[Source](atlas://one/work/source)", "[Task](atlas://two/work/task)",
+  ].join("\n"));
+  const single = loadFullGraph(first, cwd);
+  assert.deepEqual(single.edges.map((edge) => edge.kind), ["source"]);
+  assert.equal(single.edges[0].target, "work/source");
+  const graph = loadCombinedGraphs([first, second], cwd);
+  assert.deepEqual(graph.edges.map((edge) => edge.kind).sort(), ["relates", "source"]);
+  assert.equal(graph.edges.find((edge) => edge.kind === "relates").relKind, "depends-on");
+  assert.equal(graph.nodes.find((node) => node.id === "one::index").degree, 2);
+});
+
+test("URI-valued frontmatter lists are scalars, not YAML mapping entries", (t) => {
+  const cwd = workspace(t);
+  const root = store(cwd, "one");
+  page(root, "work/source.md", "Source");
+  page(root, "work/task.md", "Task");
+  writeFileSync(join(root, "index.md"), [
+    "---", "sources:", "  - atlas://one/work/source",
+    "relates_to:", "  - atlas://one/work/task", "---", "# Index",
+  ].join("\n"));
+  const result = loadPage(root, "index", cwd);
+  assert.deepEqual(result.sources, ["atlas://one/work/source"]);
+  assert.deepEqual(result.relatesTo, [{ path: "atlas://one/work/task", kind: "related" }]);
+  assert.deepEqual(loadFullGraph(root, cwd).edges.map((edge) => edge.kind).sort(), ["relates", "source"]);
+});
+
+test("explicit qualifiers use the effective Atlas key, not a label alias for a declared ID", (t) => {
+  const cwd = workspace(t);
+  const first = store(cwd, "one");
+  const second = store(cwd, "two");
+  page(first, "work/task.md", "First", "First body");
+  page(second, "work/task.md", "Second", "Second body");
+  const previous = process.env.ATLAS_PRESETS;
+  process.env.ATLAS_PRESETS = `shared-label:${first},shared-label:${second}`;
+  t.after(() => {
+    if (previous === undefined) delete process.env.ATLAS_PRESETS;
+    else process.env.ATLAS_PRESETS = previous;
+  });
+  const graph = loadCombinedGraphs([first, second], cwd);
+  assert.deepEqual(graph.stores.map((item) => item.label), ["shared-label", "shared-label"]);
+  for (const id of ["atlas://shared-label/work/task", "shared-label::work/task"]) {
+    assert.equal(loadPage(first, id, cwd), null);
+    assert.equal(loadPageFromRoots([first, second], id, cwd), null);
+  }
+  assert.equal(loadPageFromRoots([first, second], "atlas://two/work/task", cwd)?.body, "Second body");
+  page(first, "index.md", "Index");
+  rmSync(join(first, "SCHEMA.json"));
+  assert.equal(loadPage(first, "atlas://shared-label/work/task", cwd)?.body, "First body",
+    "a label is still the key when no atlas_id is declared");
+});
+
 test("full graph scans retain all 3200 pages and relationships beyond forty batches", (t) => {
   const cwd = workspace(t);
   const root = store(cwd, "large");

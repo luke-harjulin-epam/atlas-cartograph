@@ -17,7 +17,7 @@ function parseFrontmatter(text) {
   };
   for (const line of block.split("\n")) {
     const objField = line.match(/^\s{2,}([A-Za-z0-9_-]+):\s*(.*)$/);
-    const listObj = line.match(/^\s+-\s+([A-Za-z0-9_-]+):\s*(.*)$/);
+    const listObj = line.match(/^\s+-\s+([A-Za-z0-9_-]+):(?:\s+(.*))?$/);
     const listScalar = line.match(/^\s+-\s+(.*)$/);
     if (listObj && listKey) {
       flushObj();

@@ -1,4 +1,5 @@
 import { normalizeLink } from "./parse.mjs";
+import { pageIdentity } from "./identity.mjs";
 
 function addAlias(map, alias, node) {
   if (!alias) return;
@@ -23,7 +24,10 @@ function linkGraph(nodes) {
     const n = normalizeLink(raw);
     if (!n) return null;
     if (n.startsWith("atlas://") || n.includes("::")) {
-      return pickAlias(aliasToIds.get(n), source);
+      const identity = pageIdentity(raw);
+      return identity?.atlas
+        ? aliasToIds.get(identity.id)?.find((node) => node.atlasKey === identity.atlas)?.id ?? null
+        : null;
     }
     return (
       pickAlias(aliasToIds.get(n), source) ||
@@ -38,13 +42,7 @@ function linkGraph(nodes) {
       let tid = null;
       if (ref.kind === "mesh") {
         if (!ref.relKind) continue;
-        const path = normalizeLink(ref.raw);
-        const hit = nodes.find(
-          (o) =>
-            o.atlasKey === ref.relKind &&
-            (o.localId === path || normalizeLink(o.path || "") === path || (o.aliases || []).includes(path)),
-        );
-        tid = hit?.id ?? null;
+        tid = resolveRef(`atlas://${ref.relKind}/${ref.raw}`, n);
       } else {
         tid = resolveRef(ref.raw, n);
       }

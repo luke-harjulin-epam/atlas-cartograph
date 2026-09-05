@@ -32,7 +32,7 @@ test("connection tokens require a same-origin canvas request and never enter sna
   assert.match(connection.command, /^sudo \/usr\/bin\/eslogger open close \| CARTOGRAPH_ACTIVITY_TOKEN=/);
   assert.match(connection.command, / \/usr\/bin\/env node '[^']+\/\.apm\/extensions\/cartograph\/activity\/collector\.mjs' --url /);
   assert.ok(!connection.command.includes(process.execPath));
-  const boot = await (await request("/api/bootstrap")).text();
+  const boot = await (await request("/api/bootstrap", { headers: canvasHeaders })).text();
   assert.ok(!boot.includes(connection.token));
 });
 
@@ -94,7 +94,7 @@ test("same-millisecond batches expose coalesced observation metadata in bootstra
   assert.deepEqual(await (await post({
     status: "live", events: [otherEvent, indexEvent],
   })).json(), { ok: true, accepted: 2 });
-  const { state: bootstrap } = await (await request("/api/bootstrap")).json();
+  const { state: bootstrap } = await (await request("/api/bootstrap", { headers: canvasHeaders })).json();
   assert.deepEqual(bootstrap.activity.nodes, [
     { ...common, id: "index", sequence: 6, count: 4, firstSequence: 1 },
     { ...common, id: other.id, sequence: 5, count: 2, firstSequence: 2 },
@@ -170,7 +170,7 @@ test("activity updates use lightweight SSE without resending the graph", async (
   const { request, post, entry } = await fixture(t);
   const abort = new AbortController();
   t.after(() => abort.abort());
-  const response = await request("/events", { signal: abort.signal });
+  const response = await request("/events", { signal: abort.signal, headers: canvasHeaders });
   const reader = response.body.getReader();
   const first = new TextDecoder().decode((await reader.read()).value);
   assert.match(first, /"graph":/);
@@ -225,7 +225,7 @@ test("server graph remapping preserves metadata while file deletion starts a new
   entry.activity.sync();
   assert.deepEqual(state.activity.nodes, [{ ...before, id: "atlas::index" }]);
   await post({ status: "live", events: [event] });
-  assert.deepEqual((await (await request("/api/bootstrap")).json()).state.activity.nodes, [{
+  assert.deepEqual((await (await request("/api/bootstrap", { headers: canvasHeaders })).json()).state.activity.nodes, [{
     ...before, id: "atlas::index", sequence: 3, count: 3,
   }]);
   state.graph = {

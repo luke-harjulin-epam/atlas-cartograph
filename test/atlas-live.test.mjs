@@ -100,7 +100,7 @@ test("live scans add, edit and delete nodes while preserving query, grouping and
   assert.equal(state.graphChanges.deleted[0].storeRoot, root);
   assert.deepEqual(state.graphChanges.created, []);
   assert.equal(state.query, "my filter");
-  const response = await fetch(new URL("/api/bootstrap", entry.url));
+  const response = await fetch(new URL("/api/bootstrap", entry.url), { headers: { "X-Cartograph-Client": "canvas" } });
   const boot = await response.json();
   assert.deepEqual(boot.state.graphChanges, state.graphChanges);
   assert.equal(boot.state.graphWatch.status, "live");
@@ -377,7 +377,9 @@ test("deleting the defining index of an already mounted Atlas does not delete it
 test("existing SSE clients receive graph deltas without reconnecting or polling", async (t) => {
   const { entry, root, change } = await setup(t);
   const abort = new AbortController();
-  const response = await fetch(new URL("/events", entry.url), { signal: abort.signal });
+  const response = await fetch(new URL("/events", entry.url), {
+    signal: abort.signal, headers: { "X-Cartograph-Client": "canvas" },
+  });
   const reader = response.body.getReader();
   try {
     const initial = new TextDecoder().decode((await reader.read()).value);

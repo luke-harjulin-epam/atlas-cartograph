@@ -17,6 +17,10 @@
 - Load all graph batches instead of silently truncating large stores. Correct
   installation-directory detection on Windows.
 - Remove remote font loading and restore visible keyboard focus for inputs.
+- Protect bootstrap and event-stream snapshots before discovery or subscription,
+  preserving native browser EventSource through same-origin Fetch Metadata.
+- Preserve explicit Atlas keys and sidebar targets; avoid duplicate frontmatter
+  relationships and parse URI-valued lists without losing their relationship kind.
 - Preserve active and queued playback across multi-Atlas ID remapping; keep
   hidden observations consumed so revealing a layer does not replay them.
 - Move canonical runtime source into `.apm/extensions/cartograph/` and add an
