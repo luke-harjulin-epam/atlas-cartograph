@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cartograph</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <section id="phase-crawl" class="phase">
+        <canvas id="crawl-sky" class="phase" aria-hidden="true"></canvas>
+        <p class="crawl-foreword">A long time ago, in a skill library far, far away…</p>
+        <div class="crawl-sky">
+          <div class="crawl-lane">
+            <div class="crawl-text">
+              <p class="crawl-kicker">Autogenesis</p>
+              <h1 class="crawl-title">Episode Atlas</h1>
+              <p id="crawl-body" class="crawl-body"></p>
+            </div>
+          </div>
+        </div>
+        <button id="skip-crawl" class="skip" type="button">Skip</button>
+      </section>
+
+      <section id="phase-welcome" class="phase hidden welcome">
+        <canvas id="welcome-sky" class="phase" aria-hidden="true" style="pointer-events:none"></canvas>
+        <header class="welcome-header">
+          <p class="kicker">Autogenesis</p>
+          <h1>Open an Atlas</h1>
+          <p class="muted">Atlases in this session worktree. Open one, then add more from the map.</p>
+        </header>
+        <p id="welcome-error" class="danger hidden"></p>
+        <div id="store-grid" class="store-grid"></div>
+        <form id="open-path" class="path-row">
+          <label class="field">
+            <input id="path-input" placeholder="Or paste any Atlas root" spellcheck="false" aria-label="Atlas store path" />
+          </label>
+          <button class="btn" type="submit">Open path</button>
+        </form>
+      </section>
+
+      <section id="phase-jump" class="phase hidden">
+        <canvas id="jump-sky" class="phase" aria-hidden="true"></canvas>
+        <button id="skip-jump" class="skip" type="button">Skip</button>
+      </section>
+
+      <section id="phase-map" class="phase hidden map">
+        <div id="graph-wrap">
+          <p class="hint">Tap an island or a chip to fly there · drag to orbit</p>
+          <div class="zoom-bar">
+            <button type="button" data-zoom-out aria-label="Zoom out">−</button>
+            <span data-zoom>100%</span>
+            <button type="button" data-zoom-in aria-label="Zoom in">+</button>
+            <button type="button" data-zoom-reset aria-label="Reset view">⌂</button>
+          </div>
+        </div>
+        <div class="toolbar">
+          <button id="toggle-panel" class="icon-btn" type="button" aria-label="Show options">☰</button>
+          <div class="search field">
+            <input id="search" placeholder="Search stars" aria-label="Search graph" />
+          </div>
+          <button id="chat-toggle" class="icon-btn" type="button" aria-label="Chat with the graph" aria-pressed="false" title="Chat with the graph">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v7A2.5 2.5 0 0 1 16.5 16H11l-4.2 3.2c-.7.54-1.8.04-1.8-.83V6.5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+        <details id="activity-controls" class="activity-controls">
+          <summary>Knowledge Activation <span id="activity-status" role="status" aria-live="polite">Waiting</span> · <span id="graph-watch-status" role="status" aria-live="polite">Changes idle</span><span id="activity-playback-status" aria-label="Knowledge activation playback queue">400 ms</span></summary>
+          <div class="activity-body">
+            <label class="activity-toggle"><input id="activity-auto-focus" type="checkbox" checked aria-describedby="activity-camera-help" /> Automatically frame changing nodes</label>
+            <p id="activity-camera-help" class="subtle">Gently frame active reads and node/relationship changes, turning their surface toward you. Drag to rotate while automatic framing continues; your angle takes priority for 5 seconds after release. Manual zoom, reset and island navigation pause following for 5 seconds. Selected nodes keep focus. Returns to the previous framing after activity, preserving your manual angle. Disabled by reduced-motion preferences. Resets to on when this page reloads.</p>
+            <h3>Filesystem changes</h3>
+            <p id="graph-watch-message" class="muted"></p>
+            <p id="graph-watch-help" class="subtle"></p>
+            <h3>Read activity</h3>
+            <p id="activity-message" class="muted"></p>
+            <p id="activity-scope" class="subtle"></p>
+            <p id="activity-spacing" class="subtle"></p>
+            <p id="activity-playback-detail" class="subtle"></p>
+            <ul id="activity-repeat-counts" class="subtle"></ul>
+            <p id="activity-repeat-more" class="subtle"></p>
+            <label class="activity-toggle"><input id="activity-enabled" type="checkbox" checked /> Highlight external file access</label>
+            <form id="activity-form">
+              <label for="activity-duration">Highlight duration (seconds)</label>
+              <div class="activity-duration-row">
+                <input id="activity-duration" type="number" min="0.1" max="300" step="any" value="5" required aria-describedby="activity-duration-help" />
+                <button id="activity-save" class="btn btn-ghost" type="submit">Save</button>
+              </div>
+              <p id="activity-duration-help" class="subtle">0.1–300 seconds. Each file has its own expiry.</p>
+            </form>
+            <p id="activity-config-error" class="danger hidden" role="alert"></p>
+            <h3 id="activity-setup-title">Activity provider setup</h3>
+            <p id="activity-provider-label" class="subtle hidden"></p>
+            <p id="activity-setup-description" class="muted">Waiting for provider setup information.</p>
+            <ol id="activity-setup-steps" class="muted"></ol>
+            <p id="activity-setup-notice" class="subtle">Connection details are private. Do not share them.</p>
+            <pre id="activity-command-wrap" class="hidden"><code id="activity-command"></code></pre>
+            <p id="activity-connection-status" class="muted hidden" role="status"></p>
+            <button id="activity-retry" class="btn btn-ghost" type="button">Load connection</button>
+            <p id="activity-connection-error" class="danger hidden" role="alert"></p>
+          </div>
+        </details>
+        <nav id="islands" class="islands" aria-label="Island navigation"></nav>
+        <div id="graph-chat" class="graph-chat hidden">
+          <div id="chat-panel" class="chat-panel">
+            <div class="chat-head">
+              <p class="kicker">Chat with the graph</p>
+              <button id="chat-close" type="button">Close</button>
+            </div>
+            <div id="chat-log" class="chat-log"></div>
+            <form id="chat-form" class="chat-form">
+              <input id="chat-input" autocomplete="off" placeholder="Ask this Atlas…" aria-label="Chat with the graph" />
+              <button type="submit">Send</button>
+            </form>
+          </div>
+        </div>
+        <ul id="matches" class="matches hidden" style="position:absolute;top:4rem;left:50%;transform:translateX(-50%);width:min(28rem,90%);z-index:45"></ul>
+        <aside id="panel" class="panel hidden">
+          <p class="kicker">Options</p>
+          <p class="muted" style="margin:0.5rem 0 0">Atlases</p>
+          <div id="open-atlases" class="open-atlases"></div>
+          <button id="add-atlas" class="btn-ghost btn" type="button" style="margin:0.5rem 0 0.75rem;width:100%">Add atlas</button>
+          <p class="muted" style="margin:0.5rem 0 0">Grouping</p>
+          <div class="layers" style="margin-bottom:0.75rem">
+            <button class="layer active" data-grouping="layers" type="button">Layers</button>
+            <button class="layer" data-grouping="atlases" type="button">Atlases</button>
+            <button class="layer" data-grouping="proximity" type="button">Proximity</button>
+          </div>
+          <p class="muted" style="margin:0.5rem 0 0">Layers</p>
+          <div class="layers">
+            <button class="layer active" data-layer="all" type="button">All</button>
+            <button class="layer active" data-layer="experiences" type="button">Experiences</button>
+            <button class="layer active" data-layer="decisions" type="button">Decisions</button>
+            <button class="layer active" data-layer="work" type="button">Work</button>
+            <button class="layer active" data-layer="indexes" type="button">Indexes</button>
+            <button class="layer active" data-layer="relations" type="button">Relates</button>
+            <button class="layer active" data-layer="sources" type="button">Provenance</button>
+          </div>
+          <dl class="stats">
+            <div>Nodes <span id="stat-nodes">0</span></div>
+            <div>Edges <span id="stat-edges">0</span></div>
+            <div>Format <span id="stat-format">—</span></div>
+            <div id="stat-root" class="subtle"></div>
+          </dl>
+        </aside>
+        <p id="map-error" class="danger hidden" style="position:absolute;top:4.5rem;left:1rem;right:1rem;z-index:30"></p>
+        <div id="atlas-add" class="atlas-add hidden">
+          <div class="atlas-add-card">
+            <div class="chat-head">
+              <p class="kicker">Add an Atlas</p>
+              <button id="atlas-add-close" type="button">Close</button>
+            </div>
+            <div id="atlas-add-grid" class="store-grid" style="padding:0.75rem;max-height:50vh"></div>
+          </div>
+        </div>
+        <button id="preview-backdrop" class="preview-backdrop hidden" type="button" aria-label="Dismiss preview"></button>
+        <article id="preview" class="preview hidden">
+          <div class="preview-handle" aria-hidden="true"></div>
+          <div class="preview-head">
+            <div>
+              <h2 id="preview-title"></h2>
+              <p id="preview-meta" class="subtle"></p>
+            </div>
+            <button id="preview-close" class="btn-ghost btn" type="button">Close</button>
+          </div>
+          <div class="preview-scroll">
+            <p id="preview-link-error" class="danger hidden" style="margin:0 0 0.75rem"></p>
+            <ul id="preview-relates" class="relates hidden"></ul>
+            <div id="preview-body" class="wiki-md"></div>
+          </div>
+        </article>
+      </section>
+    </div>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
