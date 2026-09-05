@@ -1,0 +1,206 @@
+import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
+import test from "node:test";
+import { createFilesystemWatcher } from "../.apm/extensions/cartograph/atlas/watch.mjs";
+import { createLiveAtlas } from "../.apm/extensions/cartograph/atlas/live.mjs";
+
+function fixture() {
+  const opened = [];
+  const events = [];
+  const statuses = [];
+  let missing = false;
+  let inode = 1;
+  const watcher = createFilesystemWatcher({
+    onChange: (root) => events.push(root),
+    onStatus: (status) => statuses.push(status),
+    stat: () => {
+      if (missing) throw Object.assign(new Error("No such directory"), { code: "ENOENT" });
+      return { dev: 1, ino: inode, isDirectory: () => true };
+    },
+    watchDirectory(path, options, notify) {
+      const handle = new EventEmitter();
+      handle.closeCount = 0;
+      handle.close = () => { handle.closeCount++; };
+      opened.push({ path, options, notify, handle });
+      return handle;
+    },
+  });
+  return { watcher, opened, events, statuses, missing: (value) => { missing = value; }, replace: () => { inode++; } };
+}
+
+test("watcher replacement interface scopes roots, ignores excluded paths, and closes resources", () => {
+  const f = fixture();
+  f.watcher.setRoots(["/one/atlas", "/two/atlas", "/one/atlas"]);
+  assert.equal(f.opened.length, 4);
+  assert.equal(f.statuses.at(-1).status, "live");
+  assert.ok(f.opened.every((item) => item.options.persistent === false));
+  const root = f.opened.find((item) => item.path === "/one/atlas");
+  root.notify("change", ".git/file.md");
+  root.notify("change", "node_modules/file.md");
+  root.notify("rename", "work/.tmp.md");
+  assert.deepEqual(f.events, []);
+  root.notify("rename", "work/new.md");
+  root.notify("change", null);
+  assert.deepEqual(f.events, ["/one/atlas", "/one/atlas"]);
+  f.watcher.setRoots(["/two/atlas"]);
+  assert.equal(root.handle.closeCount, 1);
+  root.notify("rename", "late.md");
+  assert.equal(f.events.length, 2);
+  f.watcher.setRoots([]);
+  assert.equal(f.statuses.at(-1).status, "idle");
+  assert.ok(f.opened.every((item) => item.handle.closeCount === 1));
+  f.watcher.close();
+  f.watcher.setRoots(["/ignored"]);
+  assert.equal(f.opened.length, 4);
+});
+
+test("parent watcher reattaches a replaced root and ignores unrelated sibling changes", () => {
+  const f = fixture();
+  f.watcher.setRoots(["/parent/atlas"]);
+  const parent = f.opened[0];
+  const root = f.opened[1];
+  parent.notify("rename", "unrelated");
+  assert.deepEqual(f.events, []);
+  f.missing(true);
+  parent.notify("rename", "atlas");
+  assert.equal(root.handle.closeCount, 1);
+  assert.equal(f.statuses.at(-1).status, "error");
+  f.missing(false);
+  f.replace();
+  parent.notify("rename", "atlas");
+  assert.equal(f.opened.length, 3);
+  assert.equal(f.statuses.at(-1).status, "live");
+  assert.deepEqual(f.events, ["/parent/atlas", "/parent/atlas"]);
+  f.watcher.close();
+});
+
+test("native watch failures are explicit, not a silently successful polling fallback", () => {
+  const statuses = [];
+  const watcher = createFilesystemWatcher({
+    onChange() {},
+    onStatus: (status) => statuses.push(status),
+    stat: () => ({ dev: 1, ino: 1, isDirectory: () => true }),
+    watchDirectory() { throw new Error("Access denied"); },
+  });
+  watcher.setRoots(["/atlas"]);
+  assert.equal(statuses.at(-1).status, "error");
+  assert.match(statuses.at(-1).message, /Access denied/);
+  watcher.close();
+});
+
+test("runtime errors close failed watcher handles and stop claiming Live", () => {
+  const f = fixture();
+  f.watcher.setRoots(["/parent/atlas"]);
+  f.opened[1].handle.emit("error", new Error("Watcher resource limit"));
+  assert.equal(f.opened[1].handle.closeCount, 1);
+  assert.equal(f.statuses.at(-1).status, "error");
+  assert.match(f.statuses.at(-1).message, /resource limit/);
+  f.watcher.close();
+});
+
+test("unchanged roots retry failed handles without replacing healthy watchers", () => {
+  const f = fixture();
+  f.watcher.setRoots(["/parent/atlas"]);
+  const [parent, root] = f.opened;
+  root.handle.emit("error", new Error("Root failure"));
+  f.watcher.setRoots(["/parent/atlas"]);
+  assert.equal(f.opened.length, 3);
+  assert.equal(parent.handle.closeCount, 0);
+  assert.equal(f.statuses.at(-1).status, "live");
+  parent.handle.emit("error", new Error("Parent failure"));
+  f.watcher.setRoots(["/parent/atlas"]);
+  assert.equal(f.opened.length, 4);
+  assert.equal(f.opened[2].handle.closeCount, 0);
+  assert.equal(f.statuses.at(-1).status, "live");
+  const notifications = f.events.length;
+  root.notify("change", "late.md");
+  parent.notify("rename", "atlas");
+  parent.handle.emit("error", new Error("Late parent failure"));
+  assert.equal(f.events.length, notifications);
+  assert.equal(f.statuses.at(-1).status, "live");
+  f.watcher.setRoots(["/parent/atlas"]);
+  assert.equal(f.opened.length, 4);
+  f.watcher.close();
+  assert.ok(f.opened.every((item) => item.handle.closeCount === 1));
+});
+
+test("unchanged roots retry initial attachment failures", () => {
+  let denied = true;
+  const statuses = [];
+  let opened = 0;
+  const watcher = createFilesystemWatcher({
+    onChange() {},
+    onStatus: (status) => statuses.push(status),
+    stat: () => ({ dev: 1, ino: 1, isDirectory: () => true }),
+    watchDirectory() {
+      if (denied) throw new Error("Access denied");
+      opened++;
+      return Object.assign(new EventEmitter(), { close() {} });
+    },
+  });
+  watcher.setRoots(["/parent/atlas"]);
+  assert.equal(statuses.at(-1).status, "error");
+  denied = false;
+  watcher.setRoots(["/parent/atlas"]);
+  assert.equal(statuses.at(-1).status, "live");
+  assert.equal(opened, 2);
+  watcher.close();
+});
+
+test("explicit sync retries unchanged roots without an automatic error retry loop", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const entry = { state: { cwd: "/", roots: ["/atlas"], graph: { nodes: [] } } };
+  let source;
+  let sets = 0;
+  let scans = 0;
+  const live = createLiveAtlas(entry, () => { scans++; return false; },
+    () => live.syncRoots({ retry: false }), {
+      debounceMs: 10,
+      watcherFactory(callbacks) {
+        source = callbacks;
+        return {
+          setRoots() { sets++; source.onStatus({ status: "live", message: "Watching" }); },
+          close() {},
+        };
+      },
+    });
+  t.after(() => live.close());
+  live.syncRoots();
+  t.mock.timers.tick(10);
+  await Promise.resolve();
+  source.onStatus({ status: "error", message: "Watch failed" });
+  await Promise.resolve();
+  assert.equal(sets, 1, "status publication must not automatically retry");
+  live.syncRoots();
+  assert.equal(sets, 2, "explicit same-root sync reattaches the source");
+  assert.equal(entry.state.graphWatch.status, "live");
+  t.mock.timers.tick(10);
+  assert.equal(scans, 2, "retry reconciles files changed while the source was unavailable");
+});
+
+test("debounce has a maximum wait, suppresses late callbacks and releases the replacement source", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const entry = { state: { cwd: "/", roots: ["/atlas"], graph: { nodes: [] } } };
+  let source;
+  let scans = 0;
+  let closes = 0;
+  const watcherFactory = (callbacks) => {
+    source = callbacks;
+    return { setRoots() {}, close() { closes++; } };
+  };
+  const live = createLiveAtlas(entry, () => { scans++; return false; }, () => {}, {
+    watcherFactory, debounceMs: 100, maxWaitMs: 300,
+  });
+  live.syncRoots();
+  for (let i = 0; i < 6; i++) {
+    source.onChange("/atlas");
+    t.mock.timers.tick(50);
+  }
+  assert.equal(scans, 1, "continuous events cannot starve a refresh forever");
+  source.onChange("/atlas");
+  live.close();
+  source.onChange("/atlas");
+  t.mock.timers.tick(1000);
+  assert.equal(scans, 1);
+  assert.equal(closes, 1);
+});

@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  merge_group:
+    types: [checks_requested]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    uses: ./.github/workflows/validate.yml
+  package:
+    needs: validate
+    uses: ./.github/workflows/package.yml
+  ci:
+    name: CI
+    if: always()
+    needs: [validate, package]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every validation and packaging job
+        env:
+          VALIDATE_RESULT: ${{ needs.validate.result }}
+          PACKAGE_RESULT: ${{ needs.package.result }}
+        run: |
+          test "$VALIDATE_RESULT" = success
+          test "$PACKAGE_RESULT" = success
