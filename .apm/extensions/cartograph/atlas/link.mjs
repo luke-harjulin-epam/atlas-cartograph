@@ -22,6 +22,9 @@ function linkGraph(nodes) {
   const resolveRef = (raw, source) => {
     const n = normalizeLink(raw);
     if (!n) return null;
+    if (n.startsWith("atlas://") || n.includes("::")) {
+      return pickAlias(aliasToIds.get(n), source);
+    }
     return (
       pickAlias(aliasToIds.get(n), source) ||
       pickAlias(aliasToIds.get(n.replace(/^\.\.\//, "")), source) ||
@@ -33,7 +36,8 @@ function linkGraph(nodes) {
   for (const n of nodes) {
     for (const ref of n.refs || []) {
       let tid = null;
-      if (ref.kind === "mesh" && ref.relKind) {
+      if (ref.kind === "mesh") {
+        if (!ref.relKind) continue;
         const path = normalizeLink(ref.raw);
         const hit = nodes.find(
           (o) =>
@@ -41,8 +45,9 @@ function linkGraph(nodes) {
             (o.localId === path || normalizeLink(o.path || "") === path || (o.aliases || []).includes(path)),
         );
         tid = hit?.id ?? null;
+      } else {
+        tid = resolveRef(ref.raw, n);
       }
-      if (!tid) tid = resolveRef(ref.raw, n);
       if (!tid || tid === n.id) continue;
       const key = `${ref.kind}:${n.id}->${tid}:${ref.relKind ?? ""}`;
       if (seen.has(key)) continue;

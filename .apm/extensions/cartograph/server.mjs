@@ -2,7 +2,8 @@ import { createServer } from "node:http";
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { dirname, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { defaultRoot, inspectRoot, listPresets, loadCombinedGraphs, loadFullGraph, loadPage, loadPageFromRoots, sanitizeRoot } from "./atlas/scan.mjs";
+import { defaultRoot, inspectRoot, listPresets, loadCombinedGraphs, loadFullGraph, loadPage, loadPageFromRoots, pageIdentity, sanitizeRoot } from "./atlas/scan.mjs";
+import { DuplicateAtlasKeyError } from "./atlas/merge.mjs";
 import { allPresetSpecs, discoverAtlasPresets } from "./atlas/catalog.mjs";
 import { normalizeLink } from "./atlas/parse.mjs";
 import { answerQuery } from "./atlas/chat.mjs";
@@ -184,9 +185,11 @@ export function addAtlas(state, root) {
 }
 
 export function dropAtlas(state, root) {
-  state.graphChanges = mountGraphChanges(state.graphChanges);
   const trimmed = sanitizeRoot(root, state.cwd);
-  state.roots = normalizeRoots(state).filter((r) => r !== trimmed);
+  const roots = normalizeRoots(state).filter((r) => r !== trimmed);
+  const graph = roots.length ? loadCombinedGraphs(roots, state.cwd) : null;
+  state.graphChanges = mountGraphChanges(state.graphChanges);
+  state.roots = roots;
   state.root = state.roots[0] || "";
   state.selectedId = null;
   state.previewOpen = false;
@@ -197,7 +200,7 @@ export function dropAtlas(state, root) {
     return state;
   }
   if (state.roots.length === 1 && state.grouping === "atlases") state.grouping = "layers";
-  return applyGraph(state, loadCombinedGraphs(state.roots, state.cwd), { jump: false });
+  return applyGraph(state, graph, { jump: false });
 }
 
 export function refreshAtlases(state) {
@@ -233,7 +236,11 @@ function resolveNodeId(state, raw) {
   const nodes = state.graph?.nodes ?? [];
   const qualified = key.includes("::") || key.startsWith("atlas://");
   if (qualified) {
-    return nodes.find((node) => node.id === key || (node.aliases ?? []).some((alias) => normalizeLink(alias) === key))?.id ?? key;
+    const identity = pageIdentity(raw);
+    if (!identity) return null;
+    return nodes.find((node) => node.atlasKey === identity.atlas &&
+      (node.localId === identity.id || normalizeLink(node.path || "") === identity.id ||
+        (node.aliases ?? []).some((alias) => normalizeLink(alias) === identity.id)))?.id ?? key;
   }
   const matches = nodes.filter(
     (n) =>
@@ -399,8 +406,8 @@ export async function startServer(instanceId, state, options = {}) {
       if (url.pathname === "/api/ui" && req.method === "POST") {
         const body = await readJsonBody(req);
         if (body.action === "open") {
-          entry.state.phase = "jump";
           openAtlas(entry.state, body.root);
+          if (entry.state.graph?.store?.available) entry.state.phase = "jump";
         } else if (body.action === "add") {
           addAtlas(entry.state, body.root);
           if (entry.state.phase === "jump") entry.state.phase = "map";
@@ -424,7 +431,8 @@ export async function startServer(instanceId, state, options = {}) {
           if (text) {
             const chat = Array.isArray(entry.state.chat) ? entry.state.chat : [];
             chat.push({ role: "user", text });
-            chat.push({ role: "graph", text: "Searching the Atlas…", pending: true, hits: [] });
+            const pending = { role: "graph", text: "Searching the Atlas…", pending: true, hits: [] };
+            chat.push(pending);
             entry.state.chat = chat.slice(-50);
             broadcast(entry);
             sendJson(res, 200, snapshot(entry.state));
@@ -433,22 +441,17 @@ export async function startServer(instanceId, state, options = {}) {
               .then(() => (ask ? ask(text, entry.state) : answerQuery(entry.state, text)))
               .then((reply) => {
                 const cur = Array.isArray(entry.state.chat) ? entry.state.chat : [];
-                const pending = [...cur].reverse().find((m) => m.role === "graph" && m.pending);
-                if (pending) {
+                if (cur.includes(pending)) {
                   pending.text = reply.text || "No reply.";
                   pending.hits = reply.hits || [];
                   pending.pending = false;
-                } else {
-                  cur.push({ role: "graph", text: reply.text || "No reply.", hits: reply.hits || [] });
                 }
-                entry.state.chat = cur;
                 broadcast(entry);
               })
               .catch((err) => {
                 const cur = Array.isArray(entry.state.chat) ? entry.state.chat : [];
-                const pending = [...cur].reverse().find((m) => m.role === "graph" && m.pending);
                 const msg = err instanceof Error ? err.message : String(err);
-                if (pending) {
+                if (cur.includes(pending)) {
                   pending.text = `Session query failed: ${msg}`;
                   pending.pending = false;
                 }
@@ -464,6 +467,10 @@ export async function startServer(instanceId, state, options = {}) {
 
       serveStatic(req, res);
     } catch (err) {
+      if (err instanceof DuplicateAtlasKeyError) {
+        entry.state.error = err.message;
+        broadcast(entry);
+      }
       sendJson(res, err.statusCode ?? 500, { error: String(err?.message ?? err) });
     }
   });

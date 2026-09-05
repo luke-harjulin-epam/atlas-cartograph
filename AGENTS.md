@@ -20,6 +20,9 @@
   re-exports it. Do not load third-party fonts or other UI assets at runtime.
 - Keep page reads inside their mounted store, including canonical symlink
   targets. Preserve the originating Atlas in navigation and chat references.
+- Reject duplicate mount keys before changing the mounted graph or selection.
+  Explicit Atlas links must not fall back to another store; generate each mesh
+  relationship once. Chat completions must update their own request placeholder.
 - Guard path-scanning and state-changing HTTP routes with the shared canvas
   request validation; do not rely on CORS or JSON parsing as authorization.
 - Keep WebGL and Canvas 2D activity behavior equivalent, including reduced motion.

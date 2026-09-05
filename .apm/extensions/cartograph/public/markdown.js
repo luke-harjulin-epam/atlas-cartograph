@@ -88,6 +88,10 @@ function listKind(line) {
   return null;
 }
 
+function isStandalone(line) {
+  return /^#{1,6}\s/.test(line) || /^(---+|___+|\*\*\*+)$/.test(line.trim());
+}
+
 function splitBlocks(src) {
   const lines = src.replace(/\r\n/g, "\n").split("\n");
   const out = [];
@@ -124,7 +128,8 @@ function splitBlocks(src) {
     const prevTable = buf.length > 0 && /^\s*\|/.test(buf[0]);
     if (buf.length && isTable !== prevTable) flush();
     if (buf.length && listKind(line) !== listKind(buf[0])) flush();
-    if (buf.length && /^(#{1,6}\s|---$|___$|\*\*\*$|>\s)/.test(line)) flush();
+    if (buf.length && (isStandalone(line) || isStandalone(buf[0]) ||
+        /^>/.test(line) !== /^>/.test(buf[0]))) flush();
     buf.push(line);
   }
   flush();

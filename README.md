@@ -27,6 +27,12 @@ is a development shim for `.apm/extensions/cartograph/extension.mjs`.
 The installed user extension is left unchanged.
 If both extensions are listed, select `project:cartograph` explicitly.
 
+Mounted stores must have distinct `atlas_id` values (or distinct labels when
+no ID is declared). A duplicate key is rejected with both conflicting paths,
+without replacing the current graph. Change the conflicting store's
+`SCHEMA.json` ID or open the stores separately. Explicit `atlas://id/page`
+links stay within the named Atlas and work with one or multiple stores open.
+
 ## Install with APM
 
 Use an APM version with experimental canvas support (validated with 0.29.0),

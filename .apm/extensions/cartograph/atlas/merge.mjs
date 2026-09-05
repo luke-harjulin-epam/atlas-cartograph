@@ -2,6 +2,13 @@ import { basename } from "node:path";
 import { countKinds, linkGraph, withDegrees } from "./link.mjs";
 import { normalizeLink } from "./parse.mjs";
 
+export class DuplicateAtlasKeyError extends Error {
+  constructor(key, firstRoot, secondRoot) {
+    super(`Duplicate Atlas key "${key}" in "${firstRoot}" and "${secondRoot}". Each mounted store must have a unique atlas_id (or label when no atlas_id is set).`);
+    this.statusCode = 409;
+  }
+}
+
 export function atlasKeyOf(store, node) {
   return (
     node?.atlasKey ||
@@ -50,21 +57,7 @@ export function crossAtlasEdges(nodes) {
     edges.push({ id: key, source: a.id, target: b.id, kind, relKind: relKind || "mesh" });
   };
 
-  for (const n of nodes) {
-    for (const ref of n.refs || []) {
-      if (ref.kind !== "mesh" || !ref.relKind) continue;
-      const path = normalizeLink(ref.raw);
-      const hit = nodes.find(
-        (o) =>
-          o.atlasKey === ref.relKind &&
-          (o.localId === path ||
-            normalizeLink(o.path || "") === path ||
-            (o.aliases || []).includes(path)),
-      );
-      add(n, hit, "mesh", ref.relKind);
-    }
-  }
-
+  // Explicit atlas:// references belong to linkGraph; infer only same-path links here.
   const byLocal = new Map();
   for (const n of nodes) {
     const local = normalizeLink(n.localId || n.path || "");
@@ -106,6 +99,14 @@ export function combineAtlases(graphs) {
     return graphs[0] || { store: { available: false }, nodes: [], edges: [] };
   }
   if (available.length === 1) return available[0];
+  const rootsByKey = new Map();
+  for (const graph of available) {
+    const key = atlasKeyOf(graph.store);
+    if (rootsByKey.has(key)) {
+      throw new DuplicateAtlasKeyError(key, rootsByKey.get(key), graph.store.root);
+    }
+    rootsByKey.set(key, graph.store.root);
+  }
   const qualified = available.map(qualifyGraph);
   const nodes = qualified.flatMap((g) => g.nodes);
   const edges = [...linkGraph(nodes), ...crossAtlasEdges(nodes)];

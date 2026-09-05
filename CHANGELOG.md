@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Reject duplicate Atlas mount keys without changing the active graph, keep
+  explicit Atlas references scoped to their target, and emit mesh edges once.
+  Support `atlas://` page navigation with a single store open.
+- Keep overlapping chat replies and failures attached to their original prompts,
+  without reviving responses removed from the bounded history.
+- Separate adjacent headings, thematic breaks, and blockquotes from ordinary
+  text while keeping consecutive quoted lines together.
 - Render Markdown lists directly after paragraphs/headings and preserve items
   when ordered and unordered lists meet. Separate activity-summary status text
   for accessible reading and share one universe layout implementation.

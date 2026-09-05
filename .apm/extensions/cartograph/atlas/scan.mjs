@@ -222,7 +222,7 @@ function parseFiles(storeRoot, files, format, atlasId, atlasLabel, strict = fals
         relKind: r.kind,
       })),
       ...links
-        .filter((raw) => !sources.includes(raw) && !relates.some((r) => normalizeLink(r.path) === raw))
+        .filter((raw) => !raw.startsWith("atlas://") && !sources.includes(raw) && !relates.some((r) => normalizeLink(r.path) === raw))
         .map((raw) => ({ raw, kind: "link" })),
       ...mesh.map((m) => ({
         raw: m.path,
@@ -284,11 +284,13 @@ export function loadGraph(rawRoot, opts, cwd) {
   };
 }
 
-function pageIdentity(nodeId) {
+export function pageIdentity(nodeId) {
   const raw = String(nodeId ?? "").trim();
+  const uri = raw.match(/^atlas:\/\/([A-Za-z0-9._-]+)\/(.*)$/);
+  if (raw.startsWith("atlas://") && !uri) return null;
   const separator = raw.indexOf("::");
-  const atlas = separator < 0 ? null : raw.slice(0, separator);
-  const slug = (separator < 0 ? raw : raw.slice(separator + 2)).trim().replace(/\\/g, "/");
+  const atlas = uri ? uri[1] : separator < 0 ? null : raw.slice(0, separator);
+  const slug = (uri ? uri[2] : separator < 0 ? raw : raw.slice(separator + 2)).trim().replace(/\\/g, "/");
   // Validate before normalizeLink strips leading slashes or any filesystem lookup.
   if (atlas === "" || !slug || slug.includes("\0") || isAbsolute(slug) ||
       win32.isAbsolute(slug) || /^[a-z]:/i.test(slug) || slug.split("/").includes("..")) return null;

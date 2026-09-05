@@ -42,6 +42,10 @@ behavior, selection, and the return to baseline after activity expires.
 Preserve visible keyboard focus and local-only assets. HTTP route changes must
 retain same-origin/custom-header checks and JSON-only mutation requests;
 page-loading changes must preserve mounted-root containment and Atlas identity.
+Cover duplicate mount rejection and recovery, missing explicit Atlas targets,
+single-store URI navigation, and unique edge IDs/degrees. Chat regressions must
+exercise overlapping success/failure replies and pending entries trimmed from
+history. Markdown blocks must work without blank lines around headings or quotes.
 Use fake clocks to cover normal 400 ms spacing and adaptive 200/100/50 ms targets,
 queue-age pressure, smooth acceleration/recovery, full displayed lifetimes,
 repeat coalescing, endpoint pulse expiry, and pending-event cancellation.

@@ -71,6 +71,19 @@ test("nested .atlas stores mount together once with distinct IDs and no legacy s
   assert.equal(openDefaultAtlases(freshState(cwd), { skipIntro: false }).phase, "jump");
 });
 
+test("duplicate Atlas keys during default discovery leave the picker with an actionable error", (t) => {
+  const cwd = workspace(t);
+  const first = store(join(cwd, ".atlas", "local", "first"), "duplicate");
+  const second = store(join(cwd, ".atlas", "local", "second"), "duplicate");
+  const state = openDefaultAtlases(freshState(cwd));
+  assert.equal(state.phase, "welcome");
+  assert.equal(state.graph, null);
+  assert.deepEqual(state.roots, []);
+  assert.match(state.error, /Duplicate Atlas key "duplicate"/);
+  assert.ok(state.error.includes(first));
+  assert.ok(state.error.includes(second));
+});
+
 test(".atlas itself is a store, not an extra mount for each content directory", (t) => {
   const cwd = workspace(t);
   const root = store(join(cwd, ".atlas"), "workspace");

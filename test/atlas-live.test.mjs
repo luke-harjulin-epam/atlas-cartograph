@@ -182,6 +182,34 @@ test("invalid or unreadable scans preserve the last graph and surface an indepen
   }
 });
 
+test("a live duplicate Atlas key preserves the last valid graph and recovers after correction", async (t) => {
+  const { state, entry, root, temp, source } = await setup(t);
+  const other = join(temp, "second");
+  mkdirSync(other);
+  writeFileSync(join(other, "SCHEMA.json"), '{"atlas_id":"two"}');
+  writeFileSync(join(other, "index.md"), page("Second"));
+  addAtlas(state, other);
+  entry.broadcast();
+  selectNode(state, "two::index");
+  const before = state.graph;
+  const selectedPage = state.page;
+  const revision = state.graphChanges.revision;
+  writeFileSync(join(other, "SCHEMA.json"), '{"atlas_id":"one"}');
+  source.change(other);
+  await until(() => state.graphWatch.status === "error", "duplicate key is reported");
+  assert.match(state.graphWatch.message, /Duplicate Atlas key "one"/);
+  assert.equal(state.graph, before);
+  assert.equal(state.page, selectedPage);
+  assert.equal(state.selectedId, "two::index");
+  assert.equal(state.graphChanges.revision, revision);
+  assert.deepEqual(state.roots, [root, other]);
+  writeFileSync(join(other, "SCHEMA.json"), '{"atlas_id":"two"}');
+  source.change(other);
+  await until(() => state.graphWatch.status === "live", "unique keys restore live updates");
+  assert.equal(state.graph, before);
+  assert.equal(state.graphChanges.revision, revision);
+});
+
 test("watcher failures are surfaced and pending refreshes cancel when the Atlas is closed", async (t) => {
   const { state, entry, root, source, change } = await setup(t);
   source.status({ status: "error", message: "Permission denied by filesystem" });

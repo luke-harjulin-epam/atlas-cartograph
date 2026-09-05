@@ -3,8 +3,9 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSy
 import { tmpdir } from "node:os";
 import { request } from "node:http";
 import { join } from "node:path";
+import { setImmediate as nextTurn } from "node:timers/promises";
 import test from "node:test";
-import { addAtlas, freshState, openAtlas, selectNode, startServer } from "../.apm/extensions/cartograph/server.mjs";
+import { addAtlas, dropAtlas, freshState, openAtlas, selectNode, startServer } from "../.apm/extensions/cartograph/server.mjs";
 
 function fixture(t) {
   const cwd = realpathSync(mkdtempSync(join(tmpdir(), "cartograph-ui-")));
@@ -25,10 +26,11 @@ function fixture(t) {
   state.phase = "map";
   return {
     state, roots,
-    start: async () => {
+    start: async (options = {}) => {
       entry = await startServer("ui-review", state, {
         activity: { platform: "unsupported" },
         graphWatch: { watcherFactory: () => ({ setRoots() {}, close() {} }) },
+        ...options,
       });
       return entry;
     },
@@ -54,6 +56,130 @@ test("unqualified links prefer the currently selected Atlas; explicit IDs overri
   selectNode(state, "");
   selectNode(state, "shared");
   assert.equal(state.selectedId, "one::work/shared", "no current selection preserves first-match behavior");
+});
+
+test("explicit Atlas page selection works with a single mounted store", (t) => {
+  const { state, roots } = fixture(t);
+  openAtlas(state, roots[0]);
+  for (const id of ["atlas://one/work/shared", "atlas://one/work/shared.md", "one::work/shared"]) {
+    selectNode(state, id);
+    assert.equal(state.linkError, null, id);
+    assert.equal(state.selectedId, "work/shared", "selection must use the graph's actual local ID");
+    assert.equal(state.page.body, "Body from one.");
+  }
+  selectNode(state, "atlas://two/work/shared");
+  assert.match(state.linkError, /No page/);
+  assert.equal(state.selectedId, "work/shared");
+});
+
+test("duplicate Atlas mounts fail visibly without altering the mounted graph or selection", async (t) => {
+  const { state, roots, start } = fixture(t);
+  openAtlas(state, roots[0]);
+  state.phase = "map";
+  selectNode(state, "work/shared");
+  const graph = state.graph;
+  const page = state.page;
+  const changes = state.graphChanges;
+  writeFileSync(join(roots[1], "SCHEMA.json"), '{"atlas_id":"one"}');
+  const entry = await start();
+  const response = await fetch(new URL("/api/ui", entry.url), {
+    method: "POST",
+    headers: { "X-Cartograph-Client": "canvas", "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "add", root: roots[1] }),
+  });
+  assert.equal(response.status, 409);
+  assert.match((await response.json()).error, /Duplicate Atlas key "one"/);
+  assert.match(state.error, /Duplicate Atlas key "one"/, "the SSE snapshot must surface the failure");
+  assert.equal(state.graph, graph);
+  assert.equal(state.page, page);
+  assert.equal(state.graphChanges, changes);
+  assert.equal(state.selectedId, "work/shared");
+  assert.equal(state.phase, "map");
+  assert.deepEqual(state.roots, [roots[0]]);
+});
+
+test("dropping a store leaves state intact if the remaining stores have conflicting keys", (t) => {
+  const { state, roots } = fixture(t);
+  const third = join(state.cwd, "three");
+  mkdirSync(third);
+  writeFileSync(join(third, "SCHEMA.json"), '{"atlas_id":"three"}');
+  writeFileSync(join(third, "index.md"), "# Three");
+  addAtlas(state, third);
+  selectNode(state, "three::index");
+  const baseline = JSON.stringify(state);
+  writeFileSync(join(roots[1], "SCHEMA.json"), '{"atlas_id":"one"}');
+  assert.throws(() => dropAtlas(state, third), /Duplicate Atlas key "one"/);
+  assert.equal(JSON.stringify(state), baseline);
+  dropAtlas(state, roots[1]);
+  assert.deepEqual(state.roots, [roots[0], third], "removing the conflicting store remains possible");
+});
+
+for (const order of [[0, 1], [1, 0]]) {
+  for (const failFirst of [false, true]) {
+    test(`concurrent chat replies stay paired with their prompts (${order}, failure=${failFirst})`, async (t) => {
+      const { state, start } = fixture(t);
+      const requests = new Map();
+      const entry = await start({ onChat: (text) => {
+        const deferred = Promise.withResolvers();
+        requests.set(text, deferred);
+        return deferred.promise;
+      } });
+      for (const text of ["first", "second"]) {
+        const response = await fetch(new URL("/api/ui", entry.url), {
+          method: "POST",
+          headers: { "X-Cartograph-Client": "canvas", "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "chat", text }),
+        });
+        assert.equal(response.status, 200);
+        await response.json();
+      }
+      assert.equal(requests.size, 2);
+      const placeholders = [state.chat[1], state.chat[3]];
+      for (const [step, index] of order.entries()) {
+        const text = ["first", "second"][index];
+        if (failFirst && index === 0) requests.get(text).reject(new Error("first failure"));
+        else requests.get(text).resolve({ text: `Answer to ${text}`, hits: [{ id: text }] });
+        await nextTurn();
+        assert.equal(placeholders[index].pending, false);
+        assert.equal(placeholders[index].text, failFirst && index === 0
+          ? "Session query failed: first failure" : `Answer to ${text}`);
+        assert.deepEqual(placeholders[index].hits, failFirst && index === 0 ? [] : [{ id: text }]);
+        if (step === 0) assert.equal(placeholders[1 - index].pending, true);
+      }
+      assert.equal(state.chat.length, 4);
+      assert.equal(state.chat[1], placeholders[0]);
+      assert.equal(state.chat[3], placeholders[1]);
+    });
+  }
+}
+
+test("trimmed chat requests cannot overwrite newer placeholders or reappear in history", async (t) => {
+  const { state, start } = fixture(t);
+  const requests = [];
+  const entry = await start({ onChat: () => {
+    const deferred = Promise.withResolvers();
+    requests.push(deferred);
+    return deferred.promise;
+  } });
+  for (let i = 0; i < 27; i++) {
+    const response = await fetch(new URL("/api/ui", entry.url), {
+      method: "POST",
+      headers: { "X-Cartograph-Client": "canvas", "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "chat", text: `Prompt ${i}` }),
+    });
+    assert.equal(response.status, 200);
+    await response.json();
+  }
+  assert.equal(state.chat.length, 50);
+  assert.equal(state.chat[0].text, "Prompt 2");
+  const baseline = JSON.stringify(state.chat);
+  requests[0].resolve({ text: "Trimmed answer" });
+  requests[1].reject(new Error("Trimmed failure"));
+  await nextTurn();
+  assert.equal(JSON.stringify(state.chat), baseline);
+  for (const deferred of requests.slice(2)) deferred.resolve({ text: "Retained answer" });
+  await nextTurn();
+  assert.ok(state.chat.filter((item) => item.role === "graph").every((item) => !item.pending));
 });
 
 test("cross-origin UI requests cannot mutate state, including text/plain JSON", async (t) => {

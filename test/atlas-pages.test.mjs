@@ -49,8 +49,9 @@ test("page identifiers reject traversal and absolute paths without basename fall
     assert.equal(loadPage(root, id, cwd), null, id);
     assert.equal(loadPage(root, `one::${id}`, cwd), null, `one::${id}`);
     assert.equal(loadPageFromRoots([root], id, cwd), null, id);
+    assert.equal(loadPage(root, `atlas://one/${id}`, cwd), null, `atlas://one/${id}`);
   }
-  for (const id of ["", ".", "::secret", "missing/secret"]) {
+  for (const id of ["", ".", "::secret", "missing/secret", "atlas:///secret", "atlas://one", "atlas://one/"]) {
     assert.equal(loadPage(root, id, cwd), null, id);
   }
   assert.equal(loadPage(root, "secret", cwd)?.path, "work/secret.md");
@@ -61,7 +62,7 @@ test("ordinary page IDs, Markdown links and basename aliases still load", (t) =>
   const root = store(cwd, "one");
   page(root, "index.md", "Index", "[Task](./work/task.md)\n[[task]]");
   page(root, "work/task.md", "Task", "The task content is available.");
-  for (const id of ["work/task", "work/task.md", "./work/task.md", "work\\task.md", "task", "one::work/task"]) {
+  for (const id of ["work/task", "work/task.md", "./work/task.md", "work\\task.md", "task", "one::work/task", "atlas://one/work/task.md"]) {
     const result = loadPage(root, id, cwd);
     assert.equal(result?.path, "work/task.md", id);
     assert.equal(result.body, "The task content is available.");
@@ -151,7 +152,9 @@ test("qualified queries use their own Atlas for snippets, lead excerpts and Mark
   assert.match(reply.text, /\[Shared Second\]\(two::work\/shared\)/);
   assert.doesNotMatch(reply.text, /First Atlas|\]\(work\/shared\.md\)/);
   assert.equal(loadPage(first, "two::work/shared", cwd), null);
+  assert.equal(loadPage(first, "atlas://two/work/shared", cwd), null);
   assert.equal(loadPageFromRoots(roots, "two::work/shared", cwd)?.storeRoot, second);
+  assert.equal(loadPageFromRoots(roots, "atlas://two/work/shared", cwd)?.storeRoot, second);
   const withoutLegacyRoot = answerQuery({ roots, cwd, graph }, "second");
   assert.equal(withoutLegacyRoot.text, reply.text);
 });
@@ -165,7 +168,7 @@ test("missing qualified pages never fall back to other mounts, including stale q
   const roots = [first, second];
   const graph = loadCombinedGraphs(roots, cwd, { strict: true });
   rmSync(join(second, "work/shared.md"));
-  for (const id of ["two::work/shared", "unknown::work/shared", "::work/shared"]) {
+  for (const id of ["two::work/shared", "unknown::work/shared", "::work/shared", "atlas://two/work/shared", "atlas://unknown/work/shared"]) {
     assert.equal(loadPageFromRoots(roots, id, cwd), null, id);
   }
   const secondLabel = graph.stores.find((item) => item.root === second).label;
@@ -186,6 +189,73 @@ test("single-Atlas query links retain ordinary Markdown page paths", (t) => {
   const graph = loadFullGraph(root, cwd);
   const reply = answerQuery({ root, cwd, graph }, "task");
   assert.match(reply.text, /\[Task\]\(work\/task\.md\)/);
+});
+
+test("duplicate Atlas keys are rejected before pages from different roots can collide", (t) => {
+  const cwd = workspace(t);
+  const first = store(cwd, "one");
+  const second = store(cwd, "two");
+  page(first, "work/shared.md", "First");
+  page(second, "work/shared.md", "Second");
+  writeFileSync(join(second, "SCHEMA.json"), '{"atlas_id":"one"}');
+  for (const roots of [[first, second], [second, first]]) {
+    assert.throws(() => loadCombinedGraphs(roots, cwd), (error) => {
+      assert.match(error.message, /Duplicate Atlas key "one"/);
+      assert.ok(error.message.includes(first));
+      assert.ok(error.message.includes(second));
+      return true;
+    });
+  }
+});
+
+test("explicit Atlas references never fall back to a page in the source or another Atlas", (t) => {
+  const cwd = workspace(t);
+  const first = store(cwd, "one");
+  const second = store(cwd, "two");
+  page(first, "index.md", "Index", [
+    "[Missing Atlas](atlas://absent/work/task)",
+    "[[atlas://two/work/task]]",
+    "[Missing path](atlas://two/missing/task)",
+  ].join("\n"));
+  page(first, "work/task.md", "Local decoy");
+  page(second, "other/task.md", "Basename decoy");
+  for (const roots of [[first], [first, second]]) {
+    const graph = loadCombinedGraphs(roots, cwd);
+    assert.deepEqual(graph.edges, [], "explicit identity and full path must match");
+  }
+});
+
+test("explicit Atlas references produce one edge each with accurate degrees", (t) => {
+  const cwd = workspace(t);
+  const first = store(cwd, "one");
+  const second = store(cwd, "two");
+  page(first, "index.md", "Index", [
+    "[Local](atlas://one/work/local)",
+    "[Remote](atlas://two/work/task)",
+    "[[atlas://two/work/task]]",
+  ].join("\n"));
+  page(first, "work/local.md", "Local");
+  page(second, "work/task.md", "Remote");
+  const single = loadFullGraph(first, cwd);
+  assert.equal(single.edges.length, 1);
+  assert.equal(single.edges[0].target, "work/local");
+  const graph = loadCombinedGraphs([first, second], cwd);
+  assert.equal(graph.edges.length, 2);
+  assert.equal(new Set(graph.edges.map((edge) => edge.id)).size, 2);
+  assert.deepEqual(graph.edges.map((edge) => edge.target).sort(), ["one::work/local", "two::work/task"]);
+  assert.equal(graph.nodes.find((node) => node.id === "one::index").degree, 2);
+  assert.ok(graph.nodes.filter((node) => node.localId !== "index").every((node) => node.degree === 1));
+});
+
+test("same-path mesh links remain distinct from explicit Atlas references", (t) => {
+  const cwd = workspace(t);
+  const first = store(cwd, "one");
+  const second = store(cwd, "two");
+  page(first, "work/task.md", "First", "[Remote](atlas://two/work/task)");
+  page(second, "work/task.md", "Second");
+  const graph = loadCombinedGraphs([first, second], cwd);
+  assert.deepEqual(graph.edges.map((edge) => edge.relKind).sort(), ["same-path", "two"]);
+  assert.equal(new Set(graph.edges.map((edge) => edge.id)).size, 2);
 });
 
 test("full graph scans retain all 3200 pages and relationships beyond forty batches", (t) => {
