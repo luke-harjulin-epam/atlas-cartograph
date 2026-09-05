@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { mountGraphCanvas } from "../.apm/extensions/cartograph/public/graph-canvas.js";
 import { createGraphGL, GraphGL } from "../.apm/extensions/cartograph/public/graph-gl.js";
 import { ActivityPlayback, ACTIVITY_SPACING_MS } from "../.apm/extensions/cartograph/public/activity-playback.js";
+import { ActivityCamera } from "../.apm/extensions/cartograph/public/activity-camera.js";
 import { GraphLifecycle } from "../.apm/extensions/cartograph/public/graph-lifecycle.js";
 
 const start = 1800000000000;
@@ -252,6 +253,29 @@ test("mounted WebGL uses one paced playback/lifecycle frame, retains counts and 
   assert.equal(latest.renderer.lifecycle, undefined);
   assert.equal(statuses.length, 2);
 });
+
+for (const supported of [true, false]) {
+  test(`${supported ? "WebGL" : "2D"} activity framing reaches a close view during the highlight lifetime`, (t) => {
+    const move = t.mock.method(ActivityCamera.prototype, "move");
+    const { map, wrap, frames, step, clock } = fixture(t, { supported, reduce: false });
+    map.setGraph(nodes, edges, "atlases", changes(0));
+    for (let time = 0; time < 2000; time += 1000 / 60) step(time);
+    clock(2000);
+    map.setActivity({ enabled: true, durationMs: 5000, nodes: [
+      { id: "a", accessedAt: start + 2000, expiresAt: start + 7000, sequence: 1, firstSequence: 1, count: 1 },
+    ] });
+    for (let time = 2000; time <= 6000; time += 1000 / 60) step(time);
+    const camera = move.mock.calls.at(-1).arguments[0];
+    assert.ok(camera.k > 19 && camera.k <= 20, `Expected a close bounded view, got ${camera.k}`);
+    assert.equal(wrap.dataset.renderer, supported ? "webgl" : "2d");
+    if (supported) {
+      const frame = frames.at(-1);
+      const [, x, y] = frame.positions.find(([id]) => id === "a");
+      assert.ok(x > 80 && x < 720 && y > 90 && y < 510, `Active node left the padded view: ${x}, ${y}`);
+      assert.ok(frame.frame.activityFrame.nodes.has("a"));
+    }
+  });
+}
 
 test("WebGL labels retain birth/deletion effects, reduced motion and lifecycle expiry", (t) => {
   const { map, canvases, frames, step, clock, preference } = fixture(t, { reduce: false });

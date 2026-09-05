@@ -130,7 +130,7 @@ test("disconnected proximity nodes index labels without rescanning assignments",
   assert.equal(new Set(laid.map((node) => `${node.lon}:${node.lat}`)).size, count);
 });
 
-test("Atlas homes preserve first labels, fallbacks, separate keys, and positions", () => {
+test("Atlas homes preserve first labels, fallbacks, and separate keys", () => {
   const nodes = [
     { id: "raw/a", atlasKey: "z", atlasLabel: "First" },
     { id: "raw/b", atlasKey: "z", atlasLabel: "Later" },
@@ -141,15 +141,73 @@ test("Atlas homes preserve first labels, fallbacks, separate keys, and positions
     { id: "raw/g" },
     { id: "raw/h", atlasKey: "a", atlasLabel: "First" },
   ].map((node) => ({ kind: "raw", degree: 1, sourceCount: 0, ...node }));
+  const laid = browser.layoutUniverse(nodes, [], "atlases");
+  assert.deepEqual(laid.map((node) => node.galaxyLabel), [
+    "First", "First", "b", "b", "Label only", "ID only", "Atlas", "First",
+  ]);
+  assert.ok(laid.every((node) => node.mass === 0.5384));
+  assert.equal(new Set(laid.map((node) => `${node.lon}:${node.lat}:${node.targetShell}`)).size, nodes.length);
+  assert.notEqual(laid[0].lon, laid[7].lon, "Distinct keys do not share a home when labels match");
+});
+
+function orbitBounds(nodes) {
+  const groups = new Map();
+  for (const node of nodes) {
+    if (!groups.has(node.atlasKey)) groups.set(node.atlasKey, []);
+    groups.get(node.atlasKey).push([
+      node.targetShell * Math.sin(node.lat) * Math.cos(node.lon),
+      node.targetShell * Math.cos(node.lat),
+      node.targetShell * Math.sin(node.lat) * Math.sin(node.lon),
+    ]);
+  }
+  return [...groups.values()].map((points) => {
+    const center = [0, 1, 2].map((axis) => points.reduce((sum, point) => sum + point[axis], 0) / points.length);
+    const radius = Math.max(...points.map((point) => Math.hypot(...point.map((value, axis) => value - center[axis]))));
+    return { center, radius };
+  });
+}
+
+function atlasNodes(counts) {
+  return counts.flatMap((count, atlas) => Array.from({ length: count }, (_, index) => ({
+    id: `atlas-${atlas}/page-${index}`, path: `page-${index}.md`,
+    atlasKey: `atlas-${atlas}`, atlasLabel: `Atlas ${atlas}`,
+    kind: "work", degree: index % 8, sourceCount: index % 3,
+  })));
+}
+
+test("large and small Atlases have disjoint orbital volumes with a visible gap", () => {
+  for (const counts of [[505, 14], [505, 505], [3200, 1]]) {
+    const nodes = atlasNodes(counts);
+    const laid = browser.layoutUniverse(nodes, [], "atlases");
+    const [a, b] = orbitBounds(laid);
+    const gap = Math.hypot(...a.center.map((value, axis) => value - b.center[axis])) - a.radius - b.radius;
+    assert.ok(gap > 0.3, `${counts.join("/")} Atlas volumes overlap or crowd each other: ${gap}`);
+    assert.deepEqual(browser.layoutUniverse([...nodes].reverse(), [], "atlases").reverse(), laid);
+    assert.ok(laid.every((node) => [node.lon, node.lat, node.targetShell].every(Number.isFinite)));
+    if (counts[0] > counts[1]) assert.ok(a.radius > b.radius, "Population affects orbital size within the cap");
+  }
+});
+
+test("many populated Atlas orbits retain separation, including near polar homes", () => {
+  const laid = browser.layoutUniverse(atlasNodes(Array.from({ length: 64 }, () => 64)), [], "atlases");
+  const bounds = orbitBounds(laid);
+  for (let i = 0; i < bounds.length; i++) {
+    for (let j = i + 1; j < bounds.length; j++) {
+      const a = bounds[i], b = bounds[j];
+      const distance = Math.hypot(...a.center.map((value, axis) => value - b.center[axis]));
+      assert.ok(distance > a.radius + b.radius + 0.02, `Atlas ${i} overlaps Atlas ${j}`);
+    }
+  }
+});
+
+test("one Atlas retains its existing orbital layout", () => {
+  const nodes = Array.from({ length: 3 }, (_, i) => ({
+    id: `work/${i}`, kind: "work", degree: 1, sourceCount: 0, atlasKey: "one",
+  }));
   assertLayout(nodes, browser.layoutUniverse(nodes, [], "atlases"), [
-    ["First", 0.5384, 5.774797342299137, 2.556429224716077, 0.807696],
-    ["First", 0.5384, 5.658114857980122, 2.555292690885352, 0.807696],
-    ["b", 0.5384, 3.3750671393916964, 2.0949786347584536, 0.727696],
-    ["b", 0.5384, 3.2588509358373425, 2.0939642242264687, 0.727696],
-    ["Label only", 0.5384, 4.857626451977686, 1.403748951083736, 0.807696],
-    ["ID only", 0.5384, 2.4580131599981137, 1.0476891349204434, 0.727696],
-    ["Atlas", 0.5384, 0.057933321885458966, 0.5861467150355143, 0.647696],
-    ["First", 0.5384, 0.9759290820334465, 1.7385654625094555, 0.647696],
+    ["one", 0.8196, 0.0632991681414401, 1.4225965571198114, 0.630824],
+    ["one", 0.8196, 6.248274254071295, 1.454721901738202, 0.630824],
+    ["one", 0.8196, 6.254674924394455, 1.383246557412424, 0.630824],
   ]);
 });
 

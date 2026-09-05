@@ -39,18 +39,43 @@ test("framing centers all endpoints with padding and zooms out for a wider set",
   const camera = cam();
   const one = activationCameraTarget([a], camera, 800, 600);
   const wide = activationCameraTarget([a, b], camera, 800, 600);
-  assert.equal(one.k, 3);
-  assert.ok(wide.k < camera.k);
+  assert.equal(one.k, 20);
+  assert.ok(wide.k < one.k);
   for (const p of [a, b]) {
     const x = 400 + wide.x + (p.sx - 400 - camera.x) / camera.k * wide.k;
     const y = 300 + wide.y + (p.sy - 300 - camera.y) / camera.k * wide.k;
-    assert.ok(x >= 140 && x <= 660);
-    assert.ok(y >= 120 && y <= 480);
+    assert.ok(x >= 80 && x <= 720);
+    assert.ok(y >= 90 && y <= 510);
   }
   const x = 400 + one.x + (a.sx - 400 - camera.x) / camera.k * one.k;
   const y = 300 + one.y + (a.sy - 300 - camera.y) / camera.k * one.k;
   assert.ok(Math.abs(x - 400) < 1e-9);
   assert.ok(Math.abs(y - 300) < 1e-9);
+});
+
+test("compact related activations occupy a readable area instead of stopping at three-times zoom", () => {
+  const camera = { x: 0, y: 0, k: 1 };
+  // Four nearby nodes on an Atlas surface, matching a roughly 24 by 18 pixel patch at home zoom.
+  const patch = [point("a", 388, 291), point("b", 412, 291), point("c", 388, 309), point("d", 412, 309)];
+  const target = activationCameraTarget(patch, camera, 800, 600);
+  assert.equal(target.k, 20, "Use the existing manual zoom ceiling for a tight active patch");
+  assert.equal(24 * target.k, 480);
+  assert.equal(18 * target.k, 360);
+  assert.equal(Math.abs(target.x), 0);
+  assert.equal(Math.abs(target.y), 0);
+
+  const wider = patch.map((node) => ({ ...node, sx: 400 + (node.sx - 400) * 4, sy: 300 + (node.sy - 300) * 4 }));
+  const fitted = activationCameraTarget(wider, camera, 800, 600);
+  assert.ok(fitted.k < target.k, "Fit every active endpoint rather than applying a minimum zoom");
+  assert.equal(72 * fitted.k, 420, "Use 70% of the viewport height, preserving control/label padding");
+});
+
+test("close manual framing is retained when the active group can fit at that scale", () => {
+  const camera = { x: 0, y: 0, k: 12 };
+  const patch = [point("a", 280, 240), point("b", 520, 360)];
+  const target = activationCameraTarget(patch, camera, 800, 600);
+  assert.ok(target.k >= camera.k, "An already-close camera must not be pulled back to three-times zoom");
+  assert.ok(target.k <= 20);
 });
 
 test("camera targets are invariant under the current pan/zoom; invalid and empty geometry is ignored", () => {
@@ -71,7 +96,7 @@ test("camera targets are invariant under the current pan/zoom; invalid and empty
 test("auto framing defaults on and throttles geometry fitting under heavy activity", () => {
   const follower = new ActivityCamera();
   const first = follower.update([a], cam(), 800, 600, 0);
-  assert.equal(first.k, 3);
+  assert.equal(first.k, 20);
   assert.equal(follower.update([a, b], cam(), 800, 600, 199), first);
   const next = follower.update([a, b], cam(), 800, 600, 200);
   assert.ok(next.k < first.k);
@@ -171,7 +196,7 @@ test("manual orbit preserves automatic framing and overrides only angle for five
   camera.pitch = 0.3;
   follower.orbit(200, camera);
   const target = follower.update(targets, camera, 800, 600, 400);
-  assert.equal(target.k, 3);
+  assert.equal(target.k, 20);
   assert.equal(target.yaw, 1);
   assert.deepEqual(follower.saved, { ...cam(), yaw: 1, pitch: 0.3 });
   follower.move(camera, target, 0.02, { now: 400 });
@@ -244,6 +269,6 @@ test("zoom-in waits for sustained shrinkage but zoom-out immediately accepts a w
   const wide = follower.update([a, b], camera, 800, 600, 0);
   assert.equal(follower.update([a], camera, 800, 600, 200).k, wide.k);
   assert.equal(follower.update([a], camera, 800, 600, 600).k, wide.k);
-  assert.equal(follower.update([a], camera, 800, 600, 800).k, 3);
+  assert.equal(follower.update([a], camera, 800, 600, 800).k, 20);
   assert.equal(follower.update([a, b], camera, 800, 600, 1000).k, wide.k);
 });
