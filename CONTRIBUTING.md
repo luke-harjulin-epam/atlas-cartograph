@@ -102,6 +102,9 @@ callbacks from replaced handles, and the absence of automatic retry loops.
 Zero-byte page creation, selection and truncation must retain graph nodes.
 Collector tests should use synthetic OS records and temporary Atlas fixtures,
 not privileged monitoring of other users' files.
+Provider recreation must retain the selected implementation and fail if it is
+missing. Empty, excluded and paused batches must not establish Live status;
+empty heartbeats after an accepted access must still work.
 
 Live macOS collector testing is an explicit manual step requiring administrator
 authorization and Full Disk Access. Keep only the system logger privileged.

@@ -16,7 +16,7 @@ export function createActivityService(entry, sendJson, {
   now = Date.now,
   platform = process.platform,
   registry = monitorProviders,
-  providerId = entry.state.activity?.providerId ?? registry.defaultId,
+  providerId = entry.state.activity?.providerId ?? entry.state.activity?.provider?.id ?? registry.defaultId,
   scope: requestedScope,
 } = {}) {
   const provider = registry.get(providerId);
@@ -42,6 +42,7 @@ export function createActivityService(entry, sendJson, {
   });
   let collector = { status: "waiting", message: provider.waitingMessage };
   let lastHeartbeat = null;
+  let observedAccess = false;
   let revision = Number.isSafeInteger(entry.state.activity?.revision) && entry.state.activity.revision >= 0
     ? entry.state.activity.revision : 0;
 
@@ -131,8 +132,12 @@ export function createActivityService(entry, sendJson, {
       for (const event of body.events) {
         if (eventInProcessScope(event, scope) && model.record(event)) accepted++;
       }
+      observedAccess ||= accepted > 0;
       lastHeartbeat = now();
-      collector = {
+      collector = body.status === "live" && !observedAccess ? {
+        status: "waiting",
+        message: "Waiting for the first valid file access in the open Atlases.",
+      } : {
         status: body.status,
         message: body.message ?? (body.status === "live" ? "Receiving external file accesses." : "Collector is not streaming."),
       };

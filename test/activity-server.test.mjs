@@ -103,6 +103,43 @@ test("same-millisecond batches expose coalesced observation metadata in bootstra
   assert.deepEqual(bootstrap.activity.nodes, state.activity.nodes);
 });
 
+test("Live needs an accepted scoped access, not empty, excluded or paused batches", async (t) => {
+  const { state, entry, post, request, advance } = await fixture(t, {
+    scope: { mode: "session", rootPid: 400, excludePids: [500] },
+  });
+  const event = { path: join(root, "index.md"), pid: 401, ancestors: [400], kind: "read" };
+  for (const events of [
+    [], [{ ...event, path: "/outside/page.md" }], [{ ...event, pid: 500 }],
+    [{ ...event, pid: 300, ancestors: [1] }], [{ ...event, pid: process.pid }],
+  ]) {
+    assert.deepEqual(await (await post({ status: "live", message: "Already live", events })).json(), { ok: true, accepted: 0 });
+    assert.equal(state.activity.collector.status, "waiting");
+    assert.match(state.activity.collector.message, /first valid file access/);
+  }
+  const configure = async (enabled) => {
+    const response = await request("/api/activity/config", {
+      method: "POST",
+      headers: { ...canvasHeaders, "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    });
+    assert.equal(response.status, 200);
+  };
+  await configure(false);
+  assert.deepEqual(await (await post({ status: "live", events: [event] })).json(), { ok: true, accepted: 0 });
+  assert.equal(state.activity.collector.status, "paused");
+  await configure(true);
+  await post({ status: "live", events: [] });
+  assert.equal(state.activity.collector.status, "waiting");
+  assert.deepEqual(await (await post({ status: "live", events: [event] })).json(), { ok: true, accepted: 1 });
+  assert.equal(state.activity.collector.status, "live");
+  advance(5000);
+  entry.activity.sync();
+  assert.deepEqual(state.activity.nodes, []);
+  await post({ status: "live", events: [], message: "Still connected" });
+  assert.equal(state.activity.collector.status, "live", "later heartbeats do not need to repeat expired observations");
+  assert.equal(state.activity.collector.message, "Still connected");
+});
+
 test("bad batches are rejected atomically; configuration validates without false success", async (t) => {
   const { state, request, post } = await fixture(t);
   const event = { path: join(root, "index.md"), pid: 123, kind: "read" };

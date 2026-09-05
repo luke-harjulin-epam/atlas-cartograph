@@ -122,12 +122,16 @@
   The receiver supplies its own `viewerPid`; require a current viewer-to-root
   lineage before seeding the collector, not just the root PID's presence.
   Process lifecycle records update ancestry but cannot make monitoring Live.
+- Empty or excluded batches cannot make monitoring Live before the service
+  accepts an access; later empty heartbeats can maintain an established stream.
 - Isolate monitor-specific parsing, permissions and setup in
   `.apm/extensions/cartograph/activity/providers/`. Use the shared normalized event protocol; do not
   couple the model, renderers or transport to a particular OS logger.
 - Keep `macos-eslogger` as the default unless a default change is explicitly
   requested. Alternative implementations belong behind the provider registry,
   not silent fallbacks with different read/write coverage.
+- Preserve a chosen provider from public snapshot metadata when recreating its
+  service; a missing provider must fail rather than select a different default.
 - Never auto-elevate the OS collector, retain system-wide access logs, expose
   collector tokens in snapshots, or describe opens as individual read syscalls.
 - Run targeted Node tests with `node --test test/<file>.test.mjs`; `npm test`

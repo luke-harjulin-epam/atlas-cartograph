@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Preserve the selected monitor provider when recreating an activity service
+  from its public snapshot; fail explicitly if that provider is unavailable.
+- Require an accepted file access before reporting Live, including for direct
+  providers; empty heartbeats maintain Live only after that first observation.
 - Retry failed root and parent watchers when the same Atlas is reopened, without
   replacing healthy handles or retrying continuously on status broadcasts.
 - Include zero-byte Markdown pages in initial and live graphs with filename

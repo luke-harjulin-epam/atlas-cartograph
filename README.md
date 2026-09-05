@@ -129,7 +129,9 @@ other sessions, and the host application's separate background scans are not
 included. The standalone development server retains all-application scope.
 Collector startup verifies that the live viewer still belongs to the selected
 session; a reused session PID alone is not sufficient. Live status requires a
-valid file-access observation, not just process creation, execution or exit.
+first accepted file-access observation, not just process creation, execution,
+exit or an empty heartbeat. Later empty heartbeats can maintain Live after
+that observation, even when its highlight has expired.
 
 Read monitoring is not a normal filesystem watcher. The bundled collector uses
 macOS 13+ `eslogger`, requires administrator authorization and Full Disk Access,

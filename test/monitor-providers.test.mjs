@@ -6,6 +6,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { runCollector, parseCollectorArgs } from "../.apm/extensions/cartograph/activity/collector.mjs";
 import { CollectorError } from "../.apm/extensions/cartograph/activity/protocol.mjs";
+import { createActivityService } from "../.apm/extensions/cartograph/activity/service.mjs";
 import { esloggerProvider, parseEsloggerLine } from "../.apm/extensions/cartograph/activity/providers/eslogger.mjs";
 import {
   createMonitorRegistry, DEFAULT_MONITOR_PROVIDER, monitorMetadata, monitorProviders,
@@ -144,6 +145,47 @@ test("a selected unavailable provider does not fall back to another registered m
   assert.equal(response.status, 409);
   assert.equal(entry.state.activity.provider.id, DEFAULT_MONITOR_PROVIDER);
   assert.equal(entry.state.activity.collector.status, "unsupported");
+});
+
+test("recreating a service preserves the selected provider from its public snapshot", (t) => {
+  const registry = createMonitorRegistry([esloggerProvider, testProvider], DEFAULT_MONITOR_PROVIDER);
+  const entry = { state: freshState(root, { monitorProvider: testProvider.metadata.id }), clients: new Set() };
+  const create = (options = {}) => {
+    const result = createActivityService(entry, () => {}, { registry, platform: "linux", ...options });
+    t.after(() => result.close());
+    return result;
+  };
+  const original = create();
+  assert.equal(entry.state.activity.providerId, undefined);
+  assert.equal(entry.state.activity.provider.id, testProvider.metadata.id);
+  original.close();
+  const replacement = create();
+  assert.equal(entry.state.activity.provider.id, testProvider.metadata.id);
+  assert.equal(entry.state.activity.collector.status, "waiting");
+  replacement.close();
+  assert.throws(() => create({ registry: monitorProviders }), /Unknown monitor provider: test-component/);
+  create({ providerId: DEFAULT_MONITOR_PROVIDER });
+  assert.equal(entry.state.activity.provider.id, DEFAULT_MONITOR_PROVIDER, "explicit configuration still takes precedence");
+});
+
+test("a direct-reporting component cannot claim Live before an accepted access", async (t) => {
+  const { stream, ...provider } = testProvider;
+  const { entry, connection, request } = await service(t, { provider });
+  const post = async (events) => {
+    const response = await request("/api/activity/events", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${connection.token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "live", events }),
+    });
+    assert.equal(response.status, 200);
+    return response.json();
+  };
+  assert.deepEqual(await post([]), { ok: true, accepted: 0 });
+  assert.equal(entry.state.activity.collector.status, "waiting");
+  assert.deepEqual(await post([event]), { ok: true, accepted: 1 });
+  assert.equal(entry.state.activity.collector.status, "live");
+  assert.deepEqual(await post([]), { ok: true, accepted: 0 });
+  assert.equal(entry.state.activity.collector.status, "live");
 });
 
 test("a direct-reporting component needs no stream parser or privileged collector", async (t) => {
