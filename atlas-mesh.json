@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "stores": [
+    {
+      "id": "github.com/sergio-sisternes-epam/atlas-cartograph-atlas",
+      "ref": "main",
+      "path": ".atlas/github.com/sergio-sisternes-epam/atlas-cartograph-atlas"
+    }
+  ]
+}
