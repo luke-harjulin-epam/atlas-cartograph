@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.1 - 2026-09-07
+
 - Frame compact Knowledge Activation groups more closely, using the existing
   20x manual zoom ceiling instead of a 3x automatic cap and fitting the active
   set into a larger padded area without changing manual overrides or reduced motion.
