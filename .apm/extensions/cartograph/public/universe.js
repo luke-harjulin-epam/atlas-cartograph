@@ -58,6 +58,23 @@ function islandOf(n) {
   return KIND_HOME[n.kind] ?? KIND_HOME.page;
 }
 
+function atlasOrbit(home, node, index, count, mass) {
+  const extent = Math.min(home.orbitRadius, 0.045 + Math.sqrt(count) * 0.02);
+  const radius = extent * 0.98 * Math.sqrt((index + 0.5) / count);
+  const theta = index * Math.PI * (3 - Math.sqrt(5)) + hash01(node.id, 3) * 0.2;
+  const u = Math.cos(theta) * radius;
+  const v = Math.sin(theta) * radius;
+  const radial = home.shell + extent * (0.5 - mass) * 0.12;
+  const sinLat = Math.sin(home.lat), cosLat = Math.cos(home.lat);
+  const sinLon = Math.sin(home.lon), cosLon = Math.cos(home.lon);
+  // Pack a bounded local orbit in its home's tangent plane, including near the poles.
+  const x = radial * sinLat * cosLon - u * sinLon + v * cosLat * cosLon;
+  const y = radial * cosLat - v * sinLat;
+  const z = radial * sinLat * sinLon + u * cosLon + v * cosLat * sinLon;
+  const shell = Math.hypot(x, y, z);
+  return { lon: Math.atan2(z, x), lat: Math.acos(Math.max(-1, Math.min(1, y / shell))), shell };
+}
+
 function packInHome(nodes, homeFor) {
   const maxDegree = nodes.reduce((m, n) => Math.max(m, n.degree || 0), 1);
   const maxSources = nodes.reduce((m, n) => Math.max(m, n.sourceCount || 0), 1);
@@ -85,14 +102,19 @@ function packInHome(nodes, homeFor) {
     const siblings = byKey.get(key) ?? [n];
     const i = indicesByKey.get(key)?.get(n.id) ?? 0;
     const count = Math.max(1, siblings.length);
-    const ring = Math.floor(i / 8);
-    const onRing = Math.min(8, count - ring * 8);
-    const slot = i % Math.max(1, onRing);
-    const theta = (slot / Math.max(1, onRing)) * Math.PI * 2 + hash01(n.id, 3) * 0.2;
-    const radius = 0.04 + ring * 0.055 + hash01(n.id, 11) * 0.03;
-    const lon = home.lon + Math.cos(theta) * radius;
-    const lat = home.lat + Math.sin(theta) * radius * 0.65;
-    const shell = home.shell + (1 - mass) * 0.06 + ring * 0.03;
+    let lon, lat, shell;
+    if (home.orbitRadius !== undefined) {
+      ({ lon, lat, shell } = atlasOrbit(home, n, i, count, mass));
+    } else {
+      const ring = Math.floor(i / 8);
+      const onRing = Math.min(8, count - ring * 8);
+      const slot = i % Math.max(1, onRing);
+      const theta = (slot / Math.max(1, onRing)) * Math.PI * 2 + hash01(n.id, 3) * 0.2;
+      const radius = 0.04 + ring * 0.055 + hash01(n.id, 11) * 0.03;
+      lon = home.lon + Math.cos(theta) * radius;
+      lat = Math.max(0.15, Math.min(Math.PI - 0.15, home.lat + Math.sin(theta) * radius * 0.65));
+      shell = home.shell + (1 - mass) * 0.06 + ring * 0.03;
+    }
     return {
       ...n,
       mass,
@@ -100,7 +122,7 @@ function packInHome(nodes, homeFor) {
       galaxyLabel: home.label,
       clusterKind: n.kind,
       lon: (lon + Math.PI * 2) % (Math.PI * 2),
-      lat: Math.max(0.15, Math.min(Math.PI - 0.15, lat)),
+      lat,
       targetShell: Math.min(1.05, shell),
     };
   });
@@ -215,9 +237,11 @@ function layoutAtlases(nodes) {
   }
   const keys = [...labels.keys()].sort();
   const homes = new Map();
+  // Fibonacci home spacing scales with 1/sqrt(count); reserve a gap without pairwise scans.
+  const orbitRadius = keys.length > 1 ? Math.min(0.38, 0.7 / Math.sqrt(keys.length)) : undefined;
   keys.forEach((key, i) => {
     const fib = fibonacciHome(i, Math.max(keys.length, 1));
-    homes.set(key, { ...fib, label: labels.get(key), key });
+    homes.set(key, { ...fib, label: labels.get(key), key, orbitRadius });
   });
   return packInHome(nodes, (n) => {
     const key = n.atlasKey || n.atlasLabel || n.atlasId || "Atlas";

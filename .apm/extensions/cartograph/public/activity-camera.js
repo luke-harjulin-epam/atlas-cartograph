@@ -2,7 +2,7 @@ const FRAME_INTERVAL_MS = 200;
 const MANUAL_PAUSE_MS = 5000;
 const IDLE_HOLD_MS = 1000;
 const MIN_ZOOM = 0.22;
-const MAX_AUTO_ZOOM = 3;
+const MAX_AUTO_ZOOM = 20;
 const ZOOM_IN_HOLD_MS = 600;
 const identity = (node) => JSON.stringify([node.storeRoot ?? "", node.path ?? node.id]);
 export const angleDelta = (to, from) => Math.atan2(Math.sin(to - from), Math.cos(to - from));
@@ -73,8 +73,8 @@ export function activationCameraTarget(nodes, cam, width, height) {
   if (!Number.isFinite(minX) || width <= 0 || height <= 0) return null;
   // Leave room for glow, labels and the map's top/bottom controls.
   const k = Math.max(MIN_ZOOM, Math.min(MAX_AUTO_ZOOM,
-    width * 0.65 / Math.max(1, maxX - minX),
-    height * 0.6 / Math.max(1, maxY - minY)));
+    width * 0.8 / Math.max(1, maxX - minX),
+    height * 0.7 / Math.max(1, maxY - minY)));
   return { x: -(minX + maxX) / 2 * k, y: -(minY + maxY) / 2 * k, k };
 }
 

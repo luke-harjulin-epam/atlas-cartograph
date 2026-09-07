@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.1.1 - 2026-09-07
+
+- Frame compact Knowledge Activation groups more closely, using the existing
+  20x manual zoom ceiling instead of a 3x automatic cap and fitting the active
+  set into a larger padded area without changing manual overrides or reduced motion.
+- Keep multiple Atlases in separate, size-aware orbital groups in Atlases
+  grouping, preventing large stores from expanding into smaller ones. Preserve
+  single-Atlas, Layers and Proximity positioning.
 - Include the mini and 505-node stress development Atlases under tracked
   `.atlas/local/` paths, so a fresh repository clone opens both automatically.
   Keep the packaged mini Atlas self-contained and give the stress fixture a

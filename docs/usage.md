@@ -70,6 +70,18 @@ The map uses WebGL where available, with the same labels, camera and controls
 as its 2D fallback. If WebGL is interrupted, rendering continues in 2D with a
 status notice; graph selection and playback are retained.
 
+## Atlas grouping
+
+Choose **Atlases** grouping to give each mounted store its own orbital group.
+With multiple Atlases, each group's size reflects its node count but stays
+within a bounded region, leaving space between groups. Large stores such as the
+505-node stress Atlas no longer spread around the globe into smaller Atlases.
+Relationships between stores remain visible across the gaps.
+
+Single-Atlas positioning and the **Layers** and **Proximity** layouts are
+unchanged. The separation is in 3D: groups can still line up in projection while
+you orbit the camera. Use an Atlas's island-navigation button to inspect it.
+
 ## Live graph updates
 
 Folder watching starts automatically for every open Atlas. No read collector,
@@ -133,6 +145,10 @@ than chasing individual events under load. Search matches and visible layers
 constrain the targets. It also gently turns the activated surface toward the
 viewer. When activity covers opposing sides or is widely dispersed, there is
 no single useful face, so the angle stays stable instead of flipping.
+Compact active groups can zoom up to **20x**, the same ceiling as manual zoom,
+instead of stopping at 3x. The changing set uses up to about 80% of the view's
+width and 70% of its height, leaving padding for glows, labels and controls.
+Wider sets zoom out as needed to keep their nodes and connecting paths together.
 Speed-limited, damped motion and delayed zoom-in reduce sudden shifts as the
 active set changes. Read highlights keep their configured lifetime; lifecycle
 effects stay at 2000 ms.

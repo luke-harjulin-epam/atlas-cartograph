@@ -21,7 +21,7 @@ function filesIn(root, prefix = "") {
 test("repository development Atlases mount together on a fresh checkout without running a workload", (t) => {
   const cwd = realpathSync(mkdtempSync(join(tmpdir(), "cartograph-development-")));
   t.after(() => rmSync(cwd, { recursive: true, force: true }));
-  cpSync(join(repository, ".atlas"), join(cwd, ".atlas"), { recursive: true });
+  cpSync(fixtures, join(cwd, ".atlas", "local"), { recursive: true });
   const expectedRoots = ["mini-atlas", "stress-test-atlas"].map((name) => join(cwd, ".atlas", "local", name));
   assert.deepEqual(discoverAtlasPresets(cwd).map(({ root }) => root), expectedRoots);
   const state = openDefaultAtlases(freshState(cwd));
