@@ -235,6 +235,10 @@ approved policy explicitly rather than infer compliance from these audits.
 
 ## Release procedure
 
+The next prepared release is v0.2.0. A local archive with that version is only a
+candidate until the reviewed source reaches `main` and the tag workflow publishes
+it. Do not reuse the earlier 0.1.1 native-acceptance archive as a release asset.
+
 1. Update `package.json`, `.apm/extensions/cartograph/package.json`, and the
    double-quoted top-level version in `apm.yml` together. Move the corresponding
    `Unreleased` changelog entries into a dated version section.

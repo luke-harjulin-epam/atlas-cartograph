@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.0 - 2026-09-09
+
 - Remove native startup's optional lifecycle-hook dependency. Resolve each
   panel's workspace from canvas context or matching session metadata, rejecting
   missing/invalid directories and installation paths without scanning fallback

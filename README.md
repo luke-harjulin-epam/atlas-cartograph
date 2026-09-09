@@ -15,6 +15,10 @@ Unknown and legacy pages remain available without declaring a schema.
 Untyped `index.md` pages appear as **Navigation indexes**, not undeclared types.
 See [schema layers](docs/usage.md#schema-and-type-layers) for behavior and limits.
 
+The v0.2.0 release line adds schema-aware layers, hookless native startup and
+state-preserving reload, with APM 0.30.0 distribution.
+See the [changelog](CHANGELOG.md#020---2026-09-09) for the release changes.
+
 ## Run
 
 Requires Node.js 22 or later. No npm dependency installation or build is needed.
@@ -87,8 +91,8 @@ apm experimental enable canvas
 apm install sergio-sisternes-epam/atlas-cartograph --target copilot
 ```
 
-Install from a ref containing `apm.yml` (the default branch after this change
-is merged). Use `#<tag-or-commit>` on the package reference to pin a version.
+Install from a ref containing `apm.yml`. Use `#<tag-or-commit>` on the package
+reference to pin a version; use `#v0.2.0` after that release is published.
 
 Reload project extensions and open **Cartograph**. APM deploys the complete
 runtime to `.github/extensions/cartograph/`; it does not deploy the development
