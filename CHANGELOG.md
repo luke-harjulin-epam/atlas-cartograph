@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Discover Core and installed contribution type layers from `SCHEMA.json` and
+  `schema.d/*.json`, excluding ownership receipts. Show store-qualified schema
+  groups, per-type counts (including empty types), and undeclared/legacy layers.
+- Refresh schema membership without page edits or restart, prune removed layer
+  keys, and reveal pages whose declaration disappears. Preserve page types,
+  relationships, selection and relationship/provenance toggle semantics.
+- Report confined, content-free schema diagnostics. Ambiguous declarations are
+  omitted rather than assigned to an arbitrary owner; pages remain renderable.
+
 ## 0.1.1 - 2026-09-07
 
 - Frame compact Knowledge Activation groups more closely, using the existing

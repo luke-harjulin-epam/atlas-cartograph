@@ -48,6 +48,12 @@ export function createStateControls({ field, initial, normalize, isValid }, send
   return {
     get revision() { return serverRevision; },
     get value() { return normalize(desired); },
+    reconcile(transform = (value) => value) {
+      const nextDesired = normalize(transform(desired));
+      if (sending && JSON.stringify(nextDesired) !== JSON.stringify(desired)) intentRevision++;
+      confirmed = normalize(transform(confirmed));
+      desired = nextDesired;
+    },
     snapshot(value, revision) {
       accept(value, revision);
       if (!sending) desired = confirmed;

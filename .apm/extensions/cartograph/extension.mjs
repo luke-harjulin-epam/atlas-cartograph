@@ -12,6 +12,7 @@ import {
   openDefaultAtlases,
   selectNode,
   setQuery,
+  setLayers,
   startServer,
 } from "./server.mjs";
 import { EXTENSION_ROOT } from "./atlas/catalog.mjs";
@@ -97,6 +98,22 @@ const session = await joinSession({
         additionalProperties: false,
       },
       actions: [
+        {
+          name: "set_layers",
+          description: "Set node type or relationship layers using keys from get_state. Omitted keys retain their values.",
+          inputSchema: {
+            type: "object",
+            properties: { layers: { type: "object", additionalProperties: { type: "boolean" } } },
+            required: ["layers"],
+            additionalProperties: false,
+          },
+          handler: async (ctx) => {
+            const entry = requireEntry(ctx.instanceId);
+            setLayers(entry.state, ctx.input.layers);
+            entry.broadcast();
+            return { layers: entry.state.layers, layersRevision: entry.state.layersRevision };
+          },
+        },
         {
           name: "configure_activity",
           description: "Enable or pause file-access highlighting and set its lifetime (default 5000 ms).",
@@ -185,6 +202,10 @@ const session = await joinSession({
               queryRevision: entry.state.queryRevision,
               selectedId: entry.state.selectedId,
               error: entry.state.error,
+              layers: entry.state.layers,
+              layersRevision: entry.state.layersRevision,
+              schemas: g?.schemas ?? [],
+              schemaDiagnostics: g?.schemaDiagnostics ?? [],
               activity: entry.activity.sync(),
               graphWatch: entry.state.graphWatch,
               graphChanges: entry.state.graphChanges,
@@ -199,7 +220,10 @@ const session = await joinSession({
                     sources: entry.state.page.sources,
                   }
                 : null,
-              nodes: (g?.nodes ?? []).map((n) => ({ id: n.id, title: n.title, kind: n.kind })),
+              nodes: (g?.nodes ?? []).map((n) => ({
+                id: n.id, title: n.title, kind: n.kind, type: n.type, declaredType: n.declaredType,
+                typeKey: n.typeKey, schemaKey: n.schemaKey, schemaLabel: n.schemaLabel, atlasKey: n.atlasKey,
+              })),
             };
           },
         },

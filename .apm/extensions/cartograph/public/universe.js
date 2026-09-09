@@ -120,6 +120,7 @@ function packInHome(nodes, homeFor) {
       mass,
       galaxy: home.label,
       galaxyLabel: home.label,
+      galaxyKey: home.key || home.label,
       clusterKind: n.kind,
       lon: (lon + Math.PI * 2) % (Math.PI * 2),
       lat,
@@ -226,7 +227,20 @@ export function assignProximity(nodes, edges) {
 }
 
 function layoutLayers(nodes) {
-  return packInHome(nodes, (n) => islandOf(n));
+  if (!nodes.some((node) => node.typeKey)) return packInHome(nodes, (n) => islandOf(n));
+  const labels = new Map();
+  for (const node of nodes) {
+    const key = node.typeKey || islandOf(node).label;
+    if (!labels.has(key)) labels.set(key, node.typeKey
+      ? `${node.atlasKey || node.atlasLabel} / ${node.schemaLabel} / ${node.type}`
+      : `${islandOf(node).label} (undeclared / legacy)`);
+  }
+  const keys = [...labels.keys()].sort();
+  const homes = new Map(keys.map((key, i) => [key, {
+    ...fibonacciHome(i, keys.length), key, label: labels.get(key),
+    orbitRadius: Math.min(0.38, 0.7 / Math.sqrt(keys.length)),
+  }]));
+  return packInHome(nodes, (node) => homes.get(node.typeKey || islandOf(node).label));
 }
 
 function layoutAtlases(nodes) {

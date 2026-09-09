@@ -154,13 +154,20 @@
           <p class="muted" style="margin:0.5rem 0 0">Layers</p>
           <div class="layers">
             <button class="layer active" data-layer="all" type="button">All</button>
-            <button class="layer active" data-layer="experiences" type="button">Experiences</button>
-            <button class="layer active" data-layer="decisions" type="button">Decisions</button>
-            <button class="layer active" data-layer="work" type="button">Work</button>
-            <button class="layer active" data-layer="indexes" type="button">Indexes</button>
             <button class="layer active" data-layer="relations" type="button">Relates</button>
             <button class="layer active" data-layer="sources" type="button">Provenance</button>
           </div>
+          <p class="subtle">Choose a schema or type to isolate it from All; then toggle to combine layers. Newly discovered types start visible.</p>
+          <div id="schema-layers" aria-label="Schema and type layers"></div>
+          <p class="muted">Undeclared / legacy</p>
+          <div class="layers">
+            <button class="layer active" data-layer="experiences" data-legacy-layer="Experiences" type="button">Experiences</button>
+            <button class="layer active" data-layer="decisions" data-legacy-layer="Decisions" type="button">Decisions</button>
+            <button class="layer active" data-layer="work" data-legacy-layer="Work" type="button">Work</button>
+            <button class="layer active" data-layer="indexes" data-legacy-layer="Indexes" type="button">Indexes</button>
+            <button class="layer active" data-layer="other" data-legacy-layer="Other" type="button">Other</button>
+          </div>
+          <p id="schema-diagnostics" class="danger hidden" role="status"></p>
           <p id="layer-status" class="muted" role="status" aria-live="polite"></p>
           <p id="layer-error" class="danger hidden" role="alert"></p>
           <dl class="stats">

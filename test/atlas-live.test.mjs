@@ -182,27 +182,28 @@ test("multiple Atlases watch and reconcile independently, including colliding lo
   assert.equal(state.graphChanges.revision, revision);
 });
 
-test("invalid or unreadable scans preserve the last graph and surface an independent error", async (t) => {
+test("invalid schemas surface diagnostics while unreadable pages preserve the last graph", async (t) => {
   const { state, root, change, node } = await setup(t);
   const before = state.graph;
-  const revision = state.graphChanges.revision;
   writeFileSync(join(root, "SCHEMA.json"), "{ incomplete");
   change();
-  await until(() => state.graphWatch.status === "error", "parse failure is visible");
-  assert.equal(state.graph, before);
-  assert.equal(state.graphChanges.revision, revision);
-  assert.match(state.graphWatch.message, /keeping the last graph/);
+  await until(() => state.graph.schemaDiagnostics.length > 0, "parse failure is visible");
+  assert.deepEqual(state.graph.nodes, before.nodes);
+  assert.deepEqual(state.graph.edges, before.edges);
+  assert.deepEqual(state.graphChanges.deleted, []);
+  assert.ok(!JSON.stringify(state.graph.schemaDiagnostics).includes("incomplete"));
   assert.notEqual(state.activity.collector.status, "live");
   writeFileSync(join(root, "SCHEMA.json"), '{"atlas_id":"one"}');
   change();
-  await until(() => state.graphWatch.status === "live", "watcher recovers after a valid save");
+  await until(() => state.graph.schemaDiagnostics.length === 0, "schema metadata recovers after a valid save");
   if (process.getuid?.() !== 0 && process.platform !== "win32") {
     const file = join(root, "index.md");
+    const lastValid = state.graph;
     chmodSync(file, 0);
     t.after(() => { if (node("index.md")) { try { chmodSync(file, 0o600); } catch (error) { if (error.code !== "ENOENT") throw error; } } });
     change();
     await until(() => state.graphWatch.status === "error", "permission failure is visible");
-    assert.equal(state.graph, before);
+    assert.equal(state.graph, lastValid);
     assert.deepEqual(state.graphChanges.deleted, []);
     chmodSync(file, 0o600);
     change();

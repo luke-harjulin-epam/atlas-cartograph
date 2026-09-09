@@ -5,7 +5,7 @@ function describeNode(node, state) {
   const atlas = node.atlasLabel || store?.label || node.atlasKey || store?.atlasId || "Atlas";
   const key = node.atlasKey || store?.atlasId;
   const root = node.storeRoot || store?.root || state.root;
-  return `${node.title || node.id} · ${node.kind || "page"} · Atlas: ${atlas}${key && key !== atlas ? ` [${key}]` : ""}${root ? ` (${root})` : ""} · ${node.path || node.localId || node.id}`;
+  return `${node.title || node.id} · ${node.type || node.kind || "page"} · ${node.schemaLabel || "Undeclared / legacy"} · Atlas: ${atlas}${key && key !== atlas ? ` [${key}]` : ""}${root ? ` (${root})` : ""} · ${node.path || node.localId || node.id}`;
 }
 
 export function mountNodeBrowser(panel, toggle, actions) {
@@ -71,7 +71,7 @@ export function mountNodeBrowser(panel, toggle, actions) {
         rows.set(node.id, row);
       }
       const button = row.firstElementChild;
-      const hidden = state.layers?.[layerFor(node.kind)] === false;
+      const hidden = state.layers?.[node.typeKey || layerFor(node.kind)] === false;
       text(button, `${describeNode(node, state)}${hidden ? " · Hidden layer (select to show)" : ""}`);
       button.setAttribute("aria-pressed", String(node.id === state.selectedId));
       if (list.children[index] !== row) list.insertBefore(row, list.children[index] || null);

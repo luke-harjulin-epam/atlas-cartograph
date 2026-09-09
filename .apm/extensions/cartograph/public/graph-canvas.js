@@ -151,11 +151,13 @@ function drawStarfield(ctx, s) {
   }
   ctx.restore();
 }
+const clusterKey = (node) => node?.galaxyKey || node?.galaxyLabel || node?.galaxy || node?.kind;
+
 function drawClusters(ctx, s) {
   const groups = new Map();
   for (const n of s.sim) {
     if (n.depth < 0.38) continue;
-    const gid = n.galaxyLabel || n.galaxy || n.kind;
+    const gid = clusterKey(n);
     if (!groups.has(gid)) groups.set(gid, []);
     groups.get(gid).push(n);
   }
@@ -163,7 +165,8 @@ function drawClusters(ctx, s) {
   ctx.globalCompositeOperation = "lighter";
   for (const members of groups.values()) {
     const label = members[0].galaxyLabel || members[0].galaxy;
-    const featured = !s.featured || s.featured.has(label) || label === s.focusCluster;
+    const key = clusterKey(members[0]);
+    const featured = !s.featured || s.featured.has(key) || key === s.focusCluster;
     if (!featured) continue;
     let sx = 0;
     let sy = 0;
@@ -207,11 +210,11 @@ function beaconCenter(s) {
   let members = s.sim;
   if (s.selectedId) {
     const n = s.sim.find((x) => x.id === s.selectedId);
-    const label = n?.galaxyLabel || n?.galaxy;
-    if (label) members = s.sim.filter((x) => (x.galaxyLabel || x.galaxy) === label);
+    const key = clusterKey(n);
+    if (key) members = s.sim.filter((x) => clusterKey(x) === key);
     else if (n) members = [n];
   } else if (s.focusCluster) {
-    members = s.sim.filter((x) => (x.galaxyLabel || x.galaxy) === s.focusCluster);
+    members = s.sim.filter((x) => clusterKey(x) === s.focusCluster);
   }
   const vis = members.filter((n) => n.depth > 0.32);
   if (vis.length) members = vis;
@@ -521,6 +524,7 @@ export function mountGraphCanvas(wrap, options) {
       };
     });
     s.edges = edges;
+    if (s.focusCluster && !s.sim.some((node) => clusterKey(node) === s.focusCluster)) flyTo(null, false);
     s.playback.setGraph(nodes, edges);
     if (!s.sim.some((node) => node.id === s.hover)) s.hover = null;
     if (s.spin?.hitId && !s.sim.some((node) => node.id === s.spin.hitId)) s.spin.hitId = null;
@@ -533,7 +537,7 @@ export function mountGraphCanvas(wrap, options) {
 
   function clusterMembers(label) {
     if (!label) return s.sim;
-    return s.sim.filter((n) => (n.galaxyLabel || n.galaxy) === label);
+    return s.sim.filter((n) => clusterKey(n) === label);
   }
 
   function clusterWorld(label) {
@@ -569,8 +573,9 @@ export function mountGraphCanvas(wrap, options) {
     const by = new Map();
     for (const n of s.sim) {
       const label = n.galaxyLabel || n.galaxy || n.kind;
-      if (!by.has(label)) by.set(label, { label, kind: n.kind, count: 0 });
-      by.get(label).count += 1;
+      const key = clusterKey(n);
+      if (!by.has(key)) by.set(key, { key, label, kind: n.kind, count: 0 });
+      by.get(key).count += 1;
     }
     return [...by.values()];
   }
@@ -580,7 +585,7 @@ export function mountGraphCanvas(wrap, options) {
     const groups = new Map();
     for (const n of s.sim) {
       if (n.depth < 0.38) continue;
-      const label = n.galaxyLabel || n.galaxy || n.kind;
+      const label = clusterKey(n);
       if (!groups.has(label)) groups.set(label, []);
       groups.get(label).push(n);
     }

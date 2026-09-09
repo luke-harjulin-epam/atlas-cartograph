@@ -1,6 +1,7 @@
 import { basename } from "node:path";
 import { countKinds, linkGraph, withDegrees } from "./link.mjs";
 import { normalizeLink } from "./parse.mjs";
+import { graphSchemas } from "./schema.mjs";
 
 export class DuplicateAtlasKeyError extends Error {
   constructor(key, firstRoot, secondRoot) {
@@ -84,6 +85,7 @@ export function mergeGraphs(base, extra) {
   const edges = linkGraph(nodes);
   return {
     store: { ...base.store, ...extra.store, ...countKinds(nodes) },
+    ...graphSchemas([extra.store]),
     nodes: withDegrees(nodes, edges),
     edges,
     nextOffset: extra.nextOffset,
@@ -112,6 +114,7 @@ export function combineAtlases(graphs) {
   const edges = [...linkGraph(nodes), ...crossAtlasEdges(nodes)];
   const pages = available.reduce((n, g) => n + (g.store.pages || g.nodes.length), 0);
   return {
+    ...graphSchemas(available.map((graph) => graph.store)),
     store: {
       ...available[0].store,
       label: available.map((g) => g.store.label).join(" + "),

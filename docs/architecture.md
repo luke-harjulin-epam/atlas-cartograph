@@ -9,12 +9,15 @@ hand-authored; there is no generated marketplace site or documentation generator
 | `extension.mjs` | Copilot canvas lifecycle, actions, session working directory |
 | `server.mjs` | Per-canvas loopback HTTP server, Atlas state, full-state SSE |
 | `atlas/` | Store discovery, Markdown parsing, node linking and multi-Atlas merge |
+| `atlas/schema.mjs` | Confined metadata-only schema catalog and deterministic ownership diagnostics |
 | `atlas/watch.mjs` | Replaceable, unprivileged open-root filesystem change source |
 | `atlas/live.mjs` | Debounced rescans, watcher status and explicit creation/deletion deltas |
 | `public/` | Browser UI, graph layout, WebGL and Canvas 2D renderers |
 | `public/universe.js` | Canonical universe layout; `atlas/universe.mjs` re-exports it for Node |
 | `public/state-controls.js` | Shared serialised/coalesced optimistic state edits and revision-aware reconciliation |
 | `public/layer-controls.js` | Node/relationship layer semantics using the shared state controller |
+| `public/node-layers.js` | Shared type-key membership, counts and accepted layer-key normalization |
+| `public/schema-layers.js` | Store-qualified schema/type controls with stable focus and diagnostics |
 | `public/content-navigation.js` | Single delegated preview/wiki/external click handling |
 | `public/node-browser.js` | Filtered, paginated native node controls and live focus preservation |
 | `http.mjs` | Shared request authorisation and bounded JSON object parsing |
@@ -30,6 +33,30 @@ hand-authored; there is no generated marketplace site or documentation generator
 | `activity/collector.mjs` | Provider-independent line-stream transport, scoping, batching and lifecycle |
 | `dev.mjs` | Standalone development server using the same implementation |
 | `fixtures/mini-atlas/` | Small local demonstration store |
+
+## Schema metadata flow
+
+`readSchemaCatalog(root)` extracts type IDs from the base and contribution
+`templates.by_type` objects. `store.schemaCatalog` contains schemas and
+sanitized diagnostics; the merged graph exposes `schemas` and
+`schemaDiagnostics` with originating Atlas labels. Descriptor keys are scoped
+to the mounted root, with separate core/contribution and type components.
+They identify controls and islands independently of display labels.
+
+Nodes retain `type` and rendering `kind`, and expose `declaredType` plus optional
+`typeKey`, `schemaKey` and `schemaLabel`. A missing or ambiguous declaration
+leaves the node in a legacy bucket. No template contracts or additional schema
+payloads are sent as catalog metadata. The `get_state` canvas action exposes
+descriptors; `set_layers` accepts boolean updates keyed by type or relationship.
+Schema group clicks expand into updates for their member type keys.
+
+Schema-only filesystem changes use the existing full-state revision pipeline.
+Server and browser reconcile layer keys and reveal newly undeclared pages.
+Catalog changes during an in-flight edit rebase the desired layer state and
+queue a corrected update rather than allowing the old acknowledgement to
+restore removed keys or hide fallback pages.
+
+## Runtime data flow
 
 ```mermaid
 flowchart LR

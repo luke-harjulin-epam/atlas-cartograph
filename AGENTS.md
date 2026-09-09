@@ -47,6 +47,13 @@
 - Resolve source-relative page links consistently in graph edges and preview
   navigation before basename aliases, without crossing mount boundaries.
 - Keep zero-byte Markdown files as selectable graph nodes with filename titles.
+- Read only visualization metadata from base and contribution schemas in
+  `atlas/schema.mjs`. Ignore ownership receipts; never infer node membership
+  from claimed folders or interpret template paths/constraints. Keep actual type,
+  rendering kind and store-qualified schema/type identity separate.
+- Include empty declared types in Layers. Surface sanitized schema diagnostics,
+  preserve undeclared pages, prune obsolete filter keys on schema changes and
+  retain stable keyed navigation across identically named contributions.
 - Guard path-scanning and state-changing HTTP routes with the shared canvas
   request validation; do not rely on CORS or JSON parsing as authorization.
   Bootstrap and SSE snapshots need the same boundary. Native EventSource may

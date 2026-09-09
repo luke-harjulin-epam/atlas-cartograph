@@ -190,6 +190,31 @@ function fixture(t, { supported = true, failure, reduce = true } = {}) {
 
 const labels = (canvas) => canvas.context.operations.filter((op) => op.type === "fillText");
 
+for (const supported of [true, false]) {
+  test(`${supported ? "WebGL" : "2D"} schema islands use stable type keys and clear removed focus`, (t) => {
+    const { map, wrap, step } = fixture(t, { supported });
+    const typed = ["north", "south"].map((atlas, i) => ({
+      id: `instrument-${i}`, title: "Synthetic instrument", kind: "page", type: "instrument",
+      typeKey: `${atlas}:instrument`, schemaKey: `${atlas}:observations`, schemaLabel: "observations",
+      atlasKey: atlas, degree: 0, sourceCount: 0,
+    }));
+    map.setGraph(typed, [], "layers");
+    step();
+    assert.equal(wrap.dataset.renderer, supported ? "webgl" : "2d");
+    const clusters = map.clusters();
+    assert.deepEqual(clusters.map((cluster) => cluster.key), typed.map((node) => node.typeKey));
+    assert.ok(clusters.every((cluster) => cluster.count === 1));
+    map.setFeatured([clusters[1].key]);
+    map.flyTo(clusters[1].key);
+    step(100);
+    assert.equal(map.focusCluster(), clusters[1].key);
+    map.setGraph(typed.slice(0, 1), [], "layers");
+    step(200);
+    assert.equal(map.focusCluster(), null);
+    assert.deepEqual(map.clusters().map((cluster) => cluster.key), [typed[0].typeKey]);
+  });
+}
+
 test("production mount selects WebGL, preserves every 2D decoration/label and shares projection and picking", (t) => {
   const { map, wrap, canvases, contexts, frames, step, pointer, selected } = fixture(t);
   map.setGraph(nodes, edges);

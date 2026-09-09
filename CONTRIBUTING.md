@@ -5,6 +5,12 @@ Use Node.js 22 or later. There are no npm dependencies to install.
 Keep runtime code in `.apm/extensions/cartograph/` and documentation in `docs/`.
 There is no generated duplicate of this source. Tests use Node's built-in runner
 under `test/`; run `npm test` or a targeted `node --test` invocation.
+Schema changes need `test/atlas-schema.test.mjs`, frontend interaction, live
+reload and renderer coverage. Invent synthetic domain fixtures; never copy or
+lightly anonymize consumer schemas. Exercise empty types, colliding mounted
+contributions, schema-only changes, receipts, invalid metadata and confinement.
+Do not treat `claimed_folders` as knowledge placement or add native compiler
+validation to the viewer.
 Start a development server with `npm start` for both tracked `.atlas/local/`
 development stores, or `npm start -- .atlas/local/mini-atlas` for only the sample.
 The stress store has 505 baseline nodes and 1508 relationships; opening it does

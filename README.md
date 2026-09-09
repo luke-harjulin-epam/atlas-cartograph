@@ -9,6 +9,10 @@ Graph search updates immediately while serialising edits, so delayed replies
 cannot replace newer typed text.
 Full-state ordering also prevents delayed responses from restoring deleted nodes
 or stale previews.
+**Layers** discovers Core types from `SCHEMA.json` and installed contributions
+from `schema.d/`, with store-qualified schema/type controls and live updates.
+Unknown and legacy pages remain available without declaring a schema.
+See [schema layers](docs/usage.md#schema-and-type-layers) for behavior and limits.
 
 ## Run
 

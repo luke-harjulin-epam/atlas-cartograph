@@ -194,6 +194,12 @@ input { font: inherit; color: inherit; }
   font-size: 12px; color: var(--color-muted); text-align: left;
 }
 .layer.active { border-color: var(--color-border-strong); color: var(--color-fg); background: var(--color-elevated); }
+.layer { overflow-wrap: anywhere; min-width: 0; }
+.schema-layer-group { border-top: 1px solid var(--color-border); margin-top: 0.75rem; padding-top: 0.5rem; }
+.schema-layer-group p { margin: 0.25rem 0; overflow-wrap: anywhere; }
+.schema-layer-group > .layer { width: 100%; }
+.layer[aria-pressed="mixed"] { border-style: dashed; }
+#schema-diagnostics { white-space: pre-line; overflow-wrap: anywhere; }
 .stats { font-family: var(--font-mono); font-size: 12px; color: var(--color-muted); display: grid; gap: 0.25rem; margin-top: 0.75rem; }
 .stats span { color: var(--color-fg); }
 

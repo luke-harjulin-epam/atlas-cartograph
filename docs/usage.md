@@ -78,9 +78,60 @@ within a bounded region, leaving space between groups. Large stores such as the
 505-node stress Atlas no longer spread around the globe into smaller Atlases.
 Relationships between stores remain visible across the gaps.
 
-Single-Atlas positioning and the **Layers** and **Proximity** layouts are
-unchanged. The separation is in 3D: groups can still line up in projection while
+**Layers** groups declared types by store and schema, while undeclared/legacy
+pages retain their rendering categories. **Proximity** still uses existing
+folder/relationship neighborhoods, not schema ownership. The separation is in
+3D: groups can still line up in projection while
 you orbit the camera. Use an Atlas's island-navigation button to inspect it.
+
+## Schema and type layers
+
+In Options, **Layers** lists **Core** from `SCHEMA.json` and each installed
+contribution from `schema.d/*.json`. The base and contributions declare types
+in `templates.by_type`; contributions identify themselves with
+`contribution_id`. Ownership files ending in `.receipt.json` are ignored.
+Every declared type is listed, even with no current pages. Each schema shows
+its originating Atlas and relative source file; duplicate names in different
+stores are independent controls.
+
+Choose a schema or individual type while **All** is active to isolate it, then
+toggle other types or schemas to combine them. A dashed schema button means
+only some of its types are enabled. Counts show total nodes in each layer,
+independent of search and visibility. **All** restores every type and legacy
+category without changing **Relates** or **Provenance**. **Undeclared / legacy**
+contains pages without an available declaration, including unknown types;
+**Other** exposes generic rendering categories. The node browser and previews
+show the actual page type rather than its fallback rendering style.
+
+Membership uses an exact match between page frontmatter `type` and a declared
+type ID. Rendering style remains backward compatible. A synthetic observatory
+could declare `instrument` in Core and `calibration` in a contribution, while
+freely nesting either type and ordinary pages in the same folders. Folder
+ownership (`claimed_folders`) does not assign pages to a contribution or create
+another Atlas. Cross-type links use the same graph relationship rules.
+
+Saving, installing or removing schema files refreshes the catalog through the
+existing filesystem watcher, without touching pages or restarting Cartograph.
+Unchanged type keys retain their filter settings for the current canvas;
+new declarations start visible. Removed keys are discarded, and pages whose
+declaration disappears are revealed in their undeclared/legacy category.
+Selecting a hidden node from navigation reveals its layer. Browser reloads
+retain the server's current canvas filters; a new canvas starts with All.
+
+Metadata reads remain inside the mounted store, including symlink targets.
+Malformed, unreadable, oversized or conflicting metadata produces a visible
+diagnostic in Options. Files are limited to 1 MiB. Conflicting type IDs are
+omitted from all claimants, and duplicate contribution identities are omitted;
+there is no last-file-wins override. Valid independent declarations remain
+available and affected pages remain renderable as undeclared. Diagnostics do
+not include JSON payloads or parser excerpts. A failed page read still retains
+the last valid graph and reports a separate filesystem refresh error.
+
+This is visualization metadata discovery, not Atlas compiler validation.
+Cartograph does not validate required fields, sections, dates or `relates_to`
+target constraints, load template files, execute/fetch schema content, or
+interpret additional namespaced metadata. Legacy Atlas and okf-wiki remain
+usable without schema type declarations.
 
 ## Live graph updates
 
