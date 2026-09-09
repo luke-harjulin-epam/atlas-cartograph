@@ -9,6 +9,8 @@ Schema changes need `test/atlas-schema.test.mjs`, frontend interaction, live
 reload and renderer coverage. Invent synthetic domain fixtures; never copy or
 lightly anonymize consumer schemas. Exercise empty types, colliding mounted
 contributions, schema-only changes, receipts, invalid metadata and confinement.
+Cover untyped `index.md`, explicit undeclared `type: index`, and declared index
+types separately; labels must agree across controls, islands and navigation.
 Do not treat `claimed_folders` as knowledge placement or add native compiler
 validation to the viewer.
 Start a development server with `npm start` for both tracked `.atlas/local/`

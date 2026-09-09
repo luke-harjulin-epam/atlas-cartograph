@@ -45,7 +45,9 @@ They identify controls and islands independently of display labels.
 
 Nodes retain `type` and rendering `kind`, and expose `declaredType` plus optional
 `typeKey`, `schemaKey` and `schemaLabel`. A missing or ambiguous declaration
-leaves the node in a legacy bucket. No template contracts or additional schema
+leaves an explicitly typed node in **Undeclared types**. The shared
+`nodeCategory` helper distinguishes those nodes from untyped navigation indexes
+and other untyped pages across controls, previews and layout. No template contracts or additional schema
 payloads are sent as catalog metadata. The `get_state` canvas action exposes
 descriptors; `set_layers` accepts boolean updates keyed by type or relationship.
 Schema group clicks expand into updates for their member type keys.

@@ -58,7 +58,7 @@ test("shared layout preserves all grouping modes without mutating graph data", (
     assert.deepEqual(laid.map((node) => node.id), nodes.map((node) => node.id));
     assert.ok(laid.every((node) => [node.mass, node.lat, node.lon, node.targetShell].every(Number.isFinite)));
   }
-  assert.deepEqual(server.layoutUniverse(nodes, edges).map((node) => node.galaxy), ["Index", "Work", "Decisions"]);
+  assert.deepEqual(server.layoutUniverse(nodes, edges).map((node) => node.galaxy), ["Navigation indexes", "Work", "Decisions"]);
   assert.deepEqual(server.layoutUniverse(nodes, edges, "atlases").map((node) => node.galaxy), ["one", "one", "two"]);
   assert.deepEqual({ nodes, edges }, original);
 });

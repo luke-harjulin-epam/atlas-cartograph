@@ -1,18 +1,32 @@
 export const LEGACY_NODE_LAYERS = ["experiences", "decisions", "work", "indexes", "other"];
 export const RELATION_LAYERS = ["relations", "sources"];
 
-export function nodeLayer(node) {
-  if (node.typeKey) return node.typeKey;
+const FALLBACK_LABELS = {
+  experiences: "Experiences", decisions: "Decisions", work: "Work",
+  indexes: "Navigation indexes", other: "Untyped pages", undeclared: "Undeclared types",
+};
+
+export const fallbackLayerLabel = (key) => FALLBACK_LABELS[key];
+
+export function nodeCategory(node) {
+  if (node.typeKey) return { key: node.typeKey, label: node.schemaLabel || "Declared type" };
   const kind = node.kind;
-  if (kind === "experience" || kind === "raw") return "experiences";
-  if (kind === "decision") return "decisions";
-  if (kind === "work" || kind === "module") return "work";
-  if (kind === "index") return "indexes";
-  return "other";
+  const key = node.declaredType ? "undeclared"
+    : kind === "experience" || kind === "raw" ? "experiences"
+    : kind === "decision" ? "decisions"
+    : kind === "work" || kind === "module" ? "work"
+    : kind === "index" ? "indexes" : "other";
+  return { key, label: fallbackLayerLabel(key) };
+}
+
+export function nodeLayer(node) {
+  return nodeCategory(node).key;
 }
 
 export function nodeLayerKeys(graph) {
-  return [...LEGACY_NODE_LAYERS, ...(graph?.schemas ?? []).flatMap((schema) => schema.types.map((type) => type.key))];
+  return [...new Set([...LEGACY_NODE_LAYERS,
+    ...(graph?.schemas ?? []).flatMap((schema) => schema.types.map((type) => type.key)),
+    ...(graph?.nodes ?? []).map(nodeLayer)])];
 }
 
 export function normalizeLayers(layers, keys = LEGACY_NODE_LAYERS) {

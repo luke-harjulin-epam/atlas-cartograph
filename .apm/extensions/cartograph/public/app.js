@@ -6,7 +6,7 @@ import { allNodeLayersOn, createLayerControls } from "./layer-controls.js";
 import { createStateControls } from "./state-controls.js";
 import { handleContentClick } from "./content-navigation.js";
 import { mountNodeBrowser } from "./node-browser.js";
-import { nodeLayer, layerCounts } from "./node-layers.js";
+import { fallbackLayerLabel, nodeCategory, nodeLayer, layerCounts } from "./node-layers.js";
 import { mountSchemaLayers } from "./schema-layers.js";
 
 const CRAWL_BODY = `Compiled memory, mapped as sky.
@@ -252,7 +252,7 @@ function renderPreview() {
   const node = state.graph?.nodes?.find((n) => n.id === state.selectedId);
   const page = state.page;
   $("preview-title").textContent = page?.title || node?.title || state.selectedId;
-  $("preview-meta").textContent = `${page?.type || node?.type || node?.kind || ""}${node?.schemaLabel ? ` · ${node.schemaLabel}` : " · Undeclared / legacy"} · ${page?.path || node?.path || ""}`;
+  $("preview-meta").textContent = `${page?.type || node?.type || node?.kind || ""} · ${nodeCategory(node || page || {}).label} · ${page?.path || node?.path || ""}`;
   const err = $("preview-link-error");
   if (err) {
     err.textContent = state.linkError || "";
@@ -301,7 +301,8 @@ function renderMapChrome() {
   const counts = layerCounts(state.graph);
   document.querySelectorAll("[data-legacy-layer]").forEach((btn) => {
     const key = btn.getAttribute("data-layer");
-    btn.textContent = `${btn.getAttribute("data-legacy-layer")} · ${counts.get(key) ?? 0}`;
+    btn.textContent = `${fallbackLayerLabel(key)} · ${counts.get(key) ?? 0}`;
+    btn.classList.toggle("hidden", key === "undeclared" && !counts.has(key));
   });
   document.querySelectorAll("[data-layer]").forEach((btn) => {
     const key = btn.getAttribute("data-layer");
@@ -310,7 +311,7 @@ function renderMapChrome() {
     btn.setAttribute("aria-pressed", String(on));
   });
   schemaLayers.render(state.graph, state.layers);
-  nodeBrowser.setState(state, (kind) => nodeLayer({ kind }));
+  nodeBrowser.setState(state);
   renderIslands();
 }
 

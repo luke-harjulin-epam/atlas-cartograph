@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Label untyped navigation indexes separately from undeclared types and untyped
+  pages across Layers, islands, previews and the node browser. Index filenames
+  do not imply missing schema declarations or outdated content.
+
 - Discover Core and installed contribution type layers from `SCHEMA.json` and
   `schema.d/*.json`, excluding ownership receipts. Show store-qualified schema
   groups, per-type counts (including empty types), and undeclared/legacy layers.

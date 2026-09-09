@@ -52,6 +52,8 @@
   from claimed folders or interpret template paths/constraints. Keep actual type,
   rendering kind and store-qualified schema/type identity separate.
 - Include empty declared types in Layers. Surface sanitized schema diagnostics,
+  distinguish untyped navigation indexes from explicit undeclared types using
+  the shared node category helper,
   preserve undeclared pages, prune obsolete filter keys on schema changes and
   retain stable keyed navigation across identically named contributions.
 - Guard path-scanning and state-changing HTTP routes with the shared canvas

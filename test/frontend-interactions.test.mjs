@@ -6,7 +6,7 @@ import { allNodeLayersOn, applyLayerClick, createLayerControls } from "../.apm/e
 import { createStateControls } from "../.apm/extensions/cartograph/public/state-controls.js";
 import { handleContentClick } from "../.apm/extensions/cartograph/public/content-navigation.js";
 import { mountNodeBrowser } from "../.apm/extensions/cartograph/public/node-browser.js";
-import { nodeLayer, layerCounts } from "../.apm/extensions/cartograph/public/node-layers.js";
+import { fallbackLayerLabel, nodeCategory, nodeLayer, layerCounts } from "../.apm/extensions/cartograph/public/node-layers.js";
 import { mountSchemaLayers } from "../.apm/extensions/cartograph/public/schema-layers.js";
 import { escapeHtml, renderMarkdown } from "../.apm/extensions/cartograph/public/markdown.js";
 import { FrontendEvent, frontendDocument } from "./helpers/frontend-dom.mjs";
@@ -70,7 +70,7 @@ function appFixture({ reducedMotion = false, phase = "map" } = {}) {
   const bootstrap = deferred();
   const context = vm.createContext({
     document, allNodeLayersOn, createLayerControls, createStateControls, handleContentClick, mountNodeBrowser, escapeHtml, renderMarkdown,
-    nodeLayer, layerCounts, mountSchemaLayers,
+    fallbackLayerLabel, nodeCategory, nodeLayer, layerCounts, mountSchemaLayers,
     window: { matchMedia: () => motion, open: (...args) => opened.push(args) },
     performance: { now: () => clock },
     requestAnimationFrame(callback) { frames.set(++frameId, callback); return frameId; },
@@ -138,14 +138,36 @@ function schemaGraph() {
         types: [{ id: "instrument", key: "instrument-type" }, { id: "calibration", key: "calibration-type" }] },
     ],
     nodes: [
-      { id: "guide", title: "Guide", kind: "page", type: "document", typeKey: "document-type",
+      { id: "guide", title: "Guide", kind: "page", type: "document", declaredType: "document", typeKey: "document-type",
         schemaLabel: "Core", path: "guide.md", storeRoot: "/atlas" },
-      { id: "telescope", title: "Telescope Alpha", kind: "page", type: "instrument", typeKey: "instrument-type",
+      { id: "telescope", title: "Telescope Alpha", kind: "page", type: "instrument", declaredType: "instrument", typeKey: "instrument-type",
         schemaLabel: "observations", path: "telescope.md", storeRoot: "/atlas" },
-      { id: "note", title: "Field note", kind: "page", type: "field-note", path: "note.md", storeRoot: "/atlas" },
+      { id: "note", title: "Field note", kind: "page", type: "field-note", declaredType: "field-note", path: "note.md", storeRoot: "/atlas" },
     ],
   };
 }
+
+test("navigation labeling is consistent in controls, previews and searchable browser entries", () => {
+  const { apply, document } = appFixture();
+  const graph = schemaGraph();
+  const navigation = { id: "index", path: "index.md", title: "Navigation home", type: "index",
+    declaredType: "", kind: "index", storeRoot: "/atlas" };
+  graph.nodes.push(navigation, { id: "typed-index", path: "typed-index.md", title: "Explicit index",
+    type: "index", declaredType: "index", kind: "index", storeRoot: "/atlas" });
+  apply({ graph, layers: all, layersRevision: 1, selectedId: "index", previewOpen: true,
+    page: { ...navigation, body: "# Navigation home" } });
+  assert.equal(document.querySelector('[data-layer="indexes"]').textContent, "Navigation indexes · 1");
+  assert.equal(document.querySelector('[data-layer="undeclared"]').textContent, "Undeclared types · 2");
+  assert.match(document.getElementById("preview-meta").textContent, /Navigation indexes/);
+  assert.doesNotMatch(document.getElementById("preview-meta").textContent, /legacy|undeclared/i);
+  document.getElementById("browse-nodes").click();
+  const filter = document.getElementById("node-filter");
+  filter.value = "Navigation indexes";
+  filter.dispatchEvent(new FrontendEvent("input"));
+  const rows = document.getElementById("node-list").children;
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].firstElementChild.getAttribute("data-browse-node"), "index");
+});
 
 test("dynamic schema/type buttons render empty declarations and filter the graph", async () => {
   const { apply, document, calls, graphs, state } = appFixture();
@@ -206,17 +228,17 @@ test("schema removal during an in-flight layer update reveals fallback pages and
   delete removed.nodes[1].schemaLabel;
   controls.configure(removed);
   const current = controls.snapshot({ ...all, "document-type": false }, 3);
-  assert.equal(current.other, true, "newly undeclared pages stay visible while the old request is pending");
+  assert.equal(current.undeclared, true, "newly undeclared pages stay visible while the old request is pending");
   assert.equal(Object.hasOwn(current, "instrument-type"), false);
   calls[0].resolve({ layers: calls[0].layers, layersRevision: 2 });
   await settle();
   assert.equal(calls.length, 2);
-  assert.equal(calls[1].layers.other, true);
+  assert.equal(calls[1].layers.undeclared, true);
   assert.equal(Object.hasOwn(calls[1].layers, "instrument-type"), false);
   calls[1].resolve({ layers: calls[1].layers, layersRevision: 4 });
   await settle();
   assert.equal(changes.at(-1).pending, false);
-  assert.equal(changes.at(-1).layers.other, true);
+  assert.equal(changes.at(-1).layers.undeclared, true);
 });
 
 test("newer collector SSE survives delayed full HTTP snapshots without dropping graph updates or errors", async () => {

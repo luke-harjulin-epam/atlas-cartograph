@@ -159,13 +159,14 @@
           </div>
           <p class="subtle">Choose a schema or type to isolate it from All; then toggle to combine layers. Newly discovered types start visible.</p>
           <div id="schema-layers" aria-label="Schema and type layers"></div>
-          <p class="muted">Undeclared / legacy</p>
+          <p class="muted">Pages without schema declarations</p>
           <div class="layers">
-            <button class="layer active" data-layer="experiences" data-legacy-layer="Experiences" type="button">Experiences</button>
-            <button class="layer active" data-layer="decisions" data-legacy-layer="Decisions" type="button">Decisions</button>
-            <button class="layer active" data-layer="work" data-legacy-layer="Work" type="button">Work</button>
-            <button class="layer active" data-layer="indexes" data-legacy-layer="Indexes" type="button">Indexes</button>
-            <button class="layer active" data-layer="other" data-legacy-layer="Other" type="button">Other</button>
+            <button class="layer active" data-layer="experiences" data-legacy-layer="experience" type="button">Experiences</button>
+            <button class="layer active" data-layer="decisions" data-legacy-layer="decision" type="button">Decisions</button>
+            <button class="layer active" data-layer="work" data-legacy-layer="work" type="button">Work</button>
+            <button class="layer active" data-layer="indexes" data-legacy-layer="index" type="button">Navigation indexes</button>
+            <button class="layer active" data-layer="other" data-legacy-layer="page" type="button">Untyped pages</button>
+            <button class="layer active hidden" data-layer="undeclared" data-legacy-layer="undeclared" type="button">Undeclared types</button>
           </div>
           <p id="schema-diagnostics" class="danger hidden" role="status"></p>
           <p id="layer-status" class="muted" role="status" aria-live="polite"></p>

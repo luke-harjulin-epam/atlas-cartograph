@@ -7,7 +7,7 @@ import { readSchemaCatalog } from "../.apm/extensions/cartograph/atlas/schema.mj
 import { loadCombinedGraphs, loadFullGraph, loadPage } from "../.apm/extensions/cartograph/atlas/scan.mjs";
 import { freshState, openAtlas, refreshAtlases, selectNode, setLayers, startServer } from "../.apm/extensions/cartograph/server.mjs";
 import { allNodeLayersOn, applyLayerClick } from "../.apm/extensions/cartograph/public/layer-controls.js";
-import { layerCounts, nodeLayer, nodeLayerKeys, normalizeLayers } from "../.apm/extensions/cartograph/public/node-layers.js";
+import { layerCounts, nodeCategory, nodeLayer, nodeLayerKeys, normalizeLayers } from "../.apm/extensions/cartograph/public/node-layers.js";
 import { layoutUniverse } from "../.apm/extensions/cartograph/public/universe.js";
 
 const declarations = (...ids) => Object.fromEntries(ids.map((id) => [id, {
@@ -73,6 +73,31 @@ test("base declarations include types outside the legacy rendering set and empty
   assert.equal(layerCounts(graph).get(node.typeKey), 1);
   assert.ok(nodeLayerKeys(graph).includes(graph.schemas[0].types.find((type) => type.id === "protostar").key));
   assert.deepEqual(graph.schemaDiagnostics, []);
+});
+
+test("navigation indexes, undeclared types and untyped pages remain distinct without changing type identity", (t) => {
+  const { root, cwd } = fixture(t);
+  put(root, "typed/index.md", "---\ntype: index\ntitle: Explicit index\n---\n");
+  put(root, "plain.md", "# Untyped note\n");
+  put(root, "unknown.md", "---\ntype: field-note\ntitle: Unclassified\n---\n");
+  let graph = loadFullGraph(root, cwd);
+  const category = (path) => nodeCategory(graph.nodes.find((node) => node.path === path));
+  assert.deepEqual(category("index.md"), { key: "indexes", label: "Navigation indexes" });
+  assert.deepEqual(category("typed/index.md"), { key: "undeclared", label: "Undeclared types" });
+  assert.deepEqual(category("unknown.md"), { key: "undeclared", label: "Undeclared types" });
+  assert.deepEqual(category("plain.md"), { key: "other", label: "Untyped pages" });
+  const laid = layoutUniverse(graph.nodes, graph.edges, "layers");
+  assert.equal(laid.find((node) => node.path === "index.md").galaxyLabel, "Navigation indexes");
+  assert.equal(laid.find((node) => node.path === "typed/index.md").galaxyLabel, "Undeclared types");
+  assert.equal(laid.find((node) => node.path === "plain.md").galaxyLabel, "Untyped pages");
+  const keys = nodeLayerKeys(graph);
+  const layers = applyLayerClick(normalizeLayers({}, keys), "indexes", keys);
+  assert.deepEqual(graph.nodes.filter((node) => layers[nodeLayer(node)]).map((node) => node.path), ["index.md"]);
+  overlay(root, "navigation", ["index"]);
+  graph = loadFullGraph(root, cwd);
+  assert.equal(category("typed/index.md").label, "navigation");
+  assert.notEqual(category("typed/index.md").key, "indexes");
+  assert.deepEqual(category("index.md"), { key: "indexes", label: "Navigation indexes" });
 });
 
 test("custom records retain identity and links independently of their folders", (t) => {
@@ -266,12 +291,13 @@ test("removing declarations prunes old filters and reveals undeclared pages with
   const node = state.graph.nodes.find((item) => item.type === "instrument");
   const oldKey = node.typeKey;
   selectNode(state, node.id);
-  setLayers(state, { [oldKey]: false, other: false, sources: false });
+  setLayers(state, { [oldKey]: false, other: false, undeclared: false, sources: false });
   const previous = state.layersRevision;
   rmSync(join(root, "schema.d/observations.json"));
   assert.equal(refreshAtlases(state), true);
   assert.equal(Object.hasOwn(state.layers, oldKey), false);
-  assert.equal(state.layers.other, true);
+  assert.equal(state.layers.undeclared, true);
+  assert.equal(state.layers.other, false);
   assert.equal(state.layers.sources, false);
   assert.ok(state.layersRevision > previous);
   assert.equal(state.selectedId, node.id);

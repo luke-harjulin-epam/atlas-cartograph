@@ -98,9 +98,14 @@ Choose a schema or individual type while **All** is active to isolate it, then
 toggle other types or schemas to combine them. A dashed schema button means
 only some of its types are enabled. Counts show total nodes in each layer,
 independent of search and visibility. **All** restores every type and legacy
-category without changing **Relates** or **Provenance**. **Undeclared / legacy**
-contains pages without an available declaration, including unknown types;
-**Other** exposes generic rendering categories. The node browser and previews
+category without changing **Relates** or **Provenance**. **Pages without schema
+declarations** separates **Navigation indexes** (untyped `index.md` files),
+**Undeclared types** (explicit types without a matching declaration), and
+**Untyped pages** (ordinary untyped pages). Neutral Experiences, Decisions and
+Work categories retain filename-derived navigation for older store layouts.
+An explicit undeclared `type: index` belongs to Undeclared types, not Navigation
+indexes; a declared index type belongs to its schema. These labels do not imply
+that content is outdated or invalid. The node browser and previews
 show the actual page type rather than its fallback rendering style.
 
 Membership uses an exact match between page frontmatter `type` and a declared
@@ -114,7 +119,7 @@ Saving, installing or removing schema files refreshes the catalog through the
 existing filesystem watcher, without touching pages or restarting Cartograph.
 Unchanged type keys retain their filter settings for the current canvas;
 new declarations start visible. Removed keys are discarded, and pages whose
-declaration disappears are revealed in their undeclared/legacy category.
+declaration disappears are revealed in **Undeclared types**.
 Selecting a hidden node from navigation reveals its layer. Browser reloads
 retain the server's current canvas filters; a new canvas starts with All.
 
