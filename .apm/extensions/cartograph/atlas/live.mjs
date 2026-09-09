@@ -1,7 +1,8 @@
 import { resolve } from "node:path";
 import { createFilesystemWatcher } from "./watch.mjs";
+import { GRAPH_LIFECYCLE_DURATION_MS, GRAPH_BIRTH_GLOW_DURATION_MS } from "../public/graph-lifecycle.js";
 
-export const GRAPH_CHANGE_DURATION_MS = 2000;
+export const GRAPH_CHANGE_DURATION_MS = GRAPH_LIFECYCLE_DURATION_MS;
 export const graphFileKey = (node) => resolve(node.storeRoot, node.path);
 
 function relationships(graph) {
@@ -21,6 +22,7 @@ export function graphChanges(previous, next, revision, occurredAt) {
   const nextEdges = relationships(next);
   return {
     revision, origin: "filesystem", occurredAt, durationMs: GRAPH_CHANGE_DURATION_MS,
+    createdNodeGlowDurationMs: GRAPH_BIRTH_GLOW_DURATION_MS,
     created: (next?.nodes ?? []).filter((node) => !before.has(graphFileKey(node))),
     deleted: (previous?.nodes ?? []).filter((node) => !after.has(graphFileKey(node))),
     createdEdges: [...nextEdges].filter(([key]) => !previousEdges.has(key)).map(([, edge]) => edge),
@@ -32,6 +34,7 @@ export function mountGraphChanges(previous) {
   return {
     revision: (previous?.revision ?? 0) + 1, origin: "mount", occurredAt: Date.now(),
     durationMs: GRAPH_CHANGE_DURATION_MS, created: [], deleted: [], createdEdges: [], deletedEdges: [],
+    createdNodeGlowDurationMs: GRAPH_BIRTH_GLOW_DURATION_MS,
   };
 }
 

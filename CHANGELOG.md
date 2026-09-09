@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+## 0.3.0 - 2026-09-09
+
+### Added
+
+- Add a compact version/source-SHA and FPS footer, with safe-area clearance
+  and a local-change marker. Release archives retain their source identity.
+- Add bounded volumetric galaxies for Layers and Atlases: high-mass cores,
+  three spiral arms with substantial side-on depth, and sparse halos.
+  Keep every node and relationship, with Proximity layout unchanged.
+
+### Changed
+
+- Unify search in the always-visible toolbar field, sharing title/ID/Atlas/
+  path/type/kind matching with the map and accessible paginated results.
+  Down opens all nodes when the field is empty; Escape returns to the field.
+- Select a node once to highlight its immediate neighborhood and again to
+  open Markdown, consistently for pointer, touch and keyboard activation.
+- Fade new-node green glows over ten seconds total from creation, retaining
+  3.5-second node opacity, relationship and deletion fades.
+- Speed up single-node close-in framing while preserving other camera timing.
+- Retain the original idle rotation speed and reduced-motion/manual overrides.
+
+### Fixed
+
+- Restore the decorative pulse, anchored to galaxy cores or the selected node.
+- Keep the Atlas in view during zoom-out by coupling return pan to zoom progress.
+- Bound grouping transitions to the shortest camera turn, pausing stale
+  activation targets so they cannot fight the new layout.
+- Preserve query revisions, caret and keyboard focus through live updates;
+  selected neighborhoods stay highlighted while a search query is active.
+
 ## 0.2.0 - 2026-09-09
 
 - Remove native startup's optional lifecycle-hook dependency. Resolve each

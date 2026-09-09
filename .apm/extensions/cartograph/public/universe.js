@@ -60,26 +60,66 @@ function islandOf(n) {
   return KIND_HOME[n.kind] ?? KIND_HOME.page;
 }
 
-function atlasOrbit(home, node, index, count, mass) {
+function galaxyNoise(id, salt) {
+  let value = Math.floor(hash01(id, salt) * 4294967296);
+  value = Math.imul(value ^ (value >>> 16), 0x85ebca6b);
+  value = Math.imul(value ^ (value >>> 13), 0xc2b2ae35);
+  return ((value ^ (value >>> 16)) >>> 0) / 4294967296;
+}
+
+export function galaxyDetailOpacity(nodes, zoom = 1, query = "", selectedId = null) {
+  if (!nodes?.[0]?.galaxyCore || nodes.length <= 80 || query || selectedId) return 1;
+  return 0.28 + 0.72 * Math.max(0, Math.min(1, (zoom - 1) / 2));
+}
+
+function galaxyOrbit(home, node, index, count, mass) {
   const extent = Math.min(home.orbitRadius, 0.045 + Math.sqrt(count) * 0.02);
-  const radius = extent * 0.98 * Math.sqrt((index + 0.5) / count);
-  const theta = index * Math.PI * (3 - Math.sqrt(5)) + hash01(node.id, 3) * 0.2;
-  const u = Math.cos(theta) * radius;
-  const v = Math.sin(theta) * radius;
-  const radial = home.shell + extent * (0.5 - mass) * 0.12;
+  const coreCount = Math.max(1, Math.ceil(count * 0.24));
+  let u, v, height;
+  if (index < coreCount) {
+    const radius = extent * 0.28 * Math.cbrt((index + 0.5) / coreCount) * (1 - mass * 0.2);
+    const z = 1 - 2 * (index + 0.5) / coreCount;
+    const theta = index * Math.PI * (3 - Math.sqrt(5));
+    const ring = radius * Math.sqrt(1 - z * z);
+    u = Math.cos(theta) * ring;
+    v = Math.sin(theta) * ring;
+    height = radius * z;
+  } else {
+    const armIndex = index - coreCount;
+    const progress = (Math.floor(armIndex / 3) + 0.5) / Math.ceil((count - coreCount) / 3);
+    const radius = extent * (0.18 + 0.78 * Math.sqrt(progress) + (galaxyNoise(node.id, 11) - 0.5) * 0.035);
+    const halo = armIndex % 11 === 10;
+    const theta = halo ? galaxyNoise(node.id, 7) * Math.PI * 2
+      : armIndex % 3 * Math.PI * 2 / 3 + Math.sqrt(progress) * Math.PI * 1.65
+        + (galaxyNoise(node.id, 3) - 0.5) * 0.3;
+    u = Math.cos(theta) * radius;
+    v = Math.sin(theta) * radius;
+    const maxHeight = Math.sqrt(Math.max(0, (extent * 0.98) ** 2 - radius ** 2));
+    height = maxHeight * ((galaxyNoise(node.id, 19) * 2 - 1) * (halo ? 0.98 : 0.9)
+      + Math.sin(theta * 2) * 0.02);
+  }
+  const bound = Math.min(1, extent * 0.98 / Math.hypot(u, v, height));
+  u *= bound;
+  v *= bound;
+  height *= bound;
+  const radial = home.shell + height;
   const sinLat = Math.sin(home.lat), cosLat = Math.cos(home.lat);
   const sinLon = Math.sin(home.lon), cosLon = Math.cos(home.lon);
-  // Pack a bounded local orbit in its home's tangent plane, including near the poles.
+  // A thick spiral disk and spherical bulge share a bounded, pole-safe local frame.
   const x = radial * sinLat * cosLon - u * sinLon + v * cosLat * cosLon;
   const y = radial * cosLat - v * sinLat;
   const z = radial * sinLat * sinLon + u * cosLon + v * cosLat * sinLon;
   const shell = Math.hypot(x, y, z);
-  return { lon: Math.atan2(z, x), lat: Math.acos(Math.max(-1, Math.min(1, y / shell))), shell };
+  return {
+    lon: Math.atan2(z, x), lat: Math.acos(Math.max(-1, Math.min(1, y / shell))), shell,
+    galaxyCore: { lon: home.lon, lat: home.lat, shell: home.shell }, galaxyRadius: extent,
+  };
 }
 
 function packInHome(nodes, homeFor) {
   const maxDegree = nodes.reduce((m, n) => Math.max(m, n.degree || 0), 1);
   const maxSources = nodes.reduce((m, n) => Math.max(m, n.sourceCount || 0), 1);
+  const masses = new Map(nodes.map((node) => [node.id, massOf(node, maxDegree, maxSources)]));
   const byKey = new Map();
   for (const n of nodes) {
     const home = homeFor(n);
@@ -89,7 +129,9 @@ function packInHome(nodes, homeFor) {
   }
   const indicesByKey = new Map();
   for (const [key, list] of byKey) {
-    list.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    const galactic = homeFor(list[0]).orbitRadius !== undefined;
+    list.sort((a, b) => (galactic ? masses.get(b.id) - masses.get(a.id) : 0)
+      || String(a.id).localeCompare(String(b.id)));
     const indices = new Map();
     list.forEach((node, i) => {
       if (!indices.has(node.id)) indices.set(node.id, i);
@@ -98,15 +140,16 @@ function packInHome(nodes, homeFor) {
   }
 
   return nodes.map((n) => {
-    const mass = massOf(n, maxDegree, maxSources);
+    const mass = masses.get(n.id);
     const home = homeFor(n);
     const key = home.key || home.label;
     const siblings = byKey.get(key) ?? [n];
     const i = indicesByKey.get(key)?.get(n.id) ?? 0;
     const count = Math.max(1, siblings.length);
     let lon, lat, shell;
+    let galaxy = {};
     if (home.orbitRadius !== undefined) {
-      ({ lon, lat, shell } = atlasOrbit(home, n, i, count, mass));
+      ({ lon, lat, shell, ...galaxy } = galaxyOrbit(home, n, i, count, mass));
     } else {
       const ring = Math.floor(i / 8);
       const onRing = Math.min(8, count - ring * 8);
@@ -123,6 +166,7 @@ function packInHome(nodes, homeFor) {
       galaxy: home.label,
       galaxyLabel: home.label,
       galaxyKey: home.key || home.label,
+      ...galaxy,
       clusterKind: n.kind,
       lon: (lon + Math.PI * 2) % (Math.PI * 2),
       lat,
@@ -231,7 +275,7 @@ export function assignProximity(nodes, edges) {
 function layoutLayers(nodes) {
   if (!nodes.some((node) => node.typeKey || node.declaredType)) {
     return packInHome(nodes, (node) => ({
-      ...islandOf(node), key: islandOf(node).label,
+      ...islandOf(node), key: islandOf(node).label, orbitRadius: 0.28,
       label: node.kind === "index" || node.kind === "page" ? nodeCategory(node).label : islandOf(node).label,
     }));
   }
@@ -245,7 +289,7 @@ function layoutLayers(nodes) {
   const keys = [...labels.keys()].sort();
   const homes = new Map(keys.map((key, i) => [key, {
     ...fibonacciHome(i, keys.length), key, label: labels.get(key),
-    orbitRadius: Math.min(0.38, 0.7 / Math.sqrt(keys.length)),
+    orbitRadius: keys.length === 1 ? 0.56 : Math.min(0.38, 0.7 / Math.sqrt(keys.length)),
   }]));
   return packInHome(nodes, (node) => homes.get(nodeLayer(node)));
 }
@@ -259,7 +303,7 @@ function layoutAtlases(nodes) {
   const keys = [...labels.keys()].sort();
   const homes = new Map();
   // Fibonacci home spacing scales with 1/sqrt(count); reserve a gap without pairwise scans.
-  const orbitRadius = keys.length > 1 ? Math.min(0.38, 0.7 / Math.sqrt(keys.length)) : undefined;
+  const orbitRadius = keys.length > 1 ? Math.min(0.38, 0.7 / Math.sqrt(keys.length)) : 0.56;
   keys.forEach((key, i) => {
     const fib = fibonacciHome(i, Math.max(keys.length, 1));
     homes.set(key, { ...fib, label: labels.get(key), key, orbitRadius });

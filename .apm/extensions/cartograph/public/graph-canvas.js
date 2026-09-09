@@ -1,9 +1,10 @@
-import { layoutUniverse } from "./universe.js";
+import { layoutUniverse, galaxyDetailOpacity } from "./universe.js";
 import { activityNodeStyle, activityEdgeOpacity, activityPulse } from "./activity-rendering.js";
 import { ActivityPlayback, PLAYBACK_STATUS_INTERVAL_MS } from "./activity-playback.js";
 import { GraphLifecycle, lifecyclePoints, lifecycleNodeOpacity, lifecycleEdgeOpacity, lifecycleEdgeGlows } from "./graph-lifecycle.js";
-import { ActivityCamera, activationFocusNodes } from "./activity-camera.js";
+import { ActivityCamera, activationFocusNodes, activationSurfaceAngle, angleDelta, moveCameraLook } from "./activity-camera.js";
 import { createGraphGL } from "./graph-gl.js";
+import { matchesNodeQuery } from "./node-search.js";
 
 const KIND_CORE = {
   experience: "#d4e4ff",
@@ -179,6 +180,14 @@ function drawClusters(ctx, s) {
     sx /= members.length;
     sy /= members.length;
     depth /= members.length;
+    const galactic = Boolean(members[0].galaxyCore);
+    if (galactic) {
+      const core = { ...members[0].galaxyCore };
+      projectGlobe(s, [core]);
+      sx = core.sx;
+      sy = core.sy;
+      depth = core.depth;
+    }
     let spread = 0;
     for (const n of members) spread = Math.max(spread, Math.hypot(n.sx - sx, n.sy - sy));
     const r = Math.max(36, spread + 28);
@@ -191,11 +200,24 @@ function drawClusters(ctx, s) {
     ctx.beginPath();
     ctx.arc(sx, sy, r, 0, Math.PI * 2);
     ctx.fill();
-    ctx.beginPath();
-    ctx.arc(sx, sy, r, 0, Math.PI * 2);
-    ctx.strokeStyle = glow.replace(/[\d.]+\)$/, `${0.35 * depth})`);
-    ctx.lineWidth = 1.4;
-    ctx.stroke();
+    if (galactic) {
+      const coreRadius = Math.max(10, r * 0.3);
+      const core = ctx.createRadialGradient(sx, sy, 0, sx, sy, coreRadius);
+      core.addColorStop(0, `rgba(255, 238, 199, ${Math.min(0.55, 0.42 * depth)})`);
+      core.addColorStop(0.2, `rgba(248, 198, 124, ${0.22 * depth})`);
+      core.addColorStop(0.55, `rgba(156, 151, 224, ${0.09 * depth})`);
+      core.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = core;
+      ctx.beginPath();
+      ctx.arc(sx, sy, coreRadius, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.arc(sx, sy, r, 0, Math.PI * 2);
+      ctx.strokeStyle = glow.replace(/[\d.]+\)$/, `${0.35 * depth})`);
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
+    }
     if (!label || depth < 0.42) continue;
     ctx.font = '600 12px "IBM Plex Sans", "Segoe UI", sans-serif';
     ctx.textAlign = "center";
@@ -210,9 +232,7 @@ function beaconCenter(s) {
   let members = s.sim;
   if (s.selectedId) {
     const n = s.sim.find((x) => x.id === s.selectedId);
-    const key = clusterKey(n);
-    if (key) members = s.sim.filter((x) => clusterKey(x) === key);
-    else if (n) members = [n];
+    if (n) return { sx: n.sx, sy: n.sy, r: Math.max(48, Math.min(180, globeR(s) * (n.galaxyRadius ?? 0.2) * n.depth * s.cam.k)) };
   } else if (s.focusCluster) {
     members = s.sim.filter((x) => clusterKey(x) === s.focusCluster);
   }
@@ -230,6 +250,22 @@ function beaconCenter(s) {
   let spread = 0;
   for (const n of members) spread = Math.max(spread, Math.hypot(n.sx - sx, n.sy - sy));
   return { sx, sy, r: Math.max(48, spread + 24) };
+}
+
+function beaconCenters(s) {
+  if (s.selectedId || !s.sim[0]?.galaxyCore) return [beaconCenter(s)];
+  const groups = new Map();
+  for (const node of s.sim) {
+    const key = clusterKey(node);
+    if (s.focusCluster && key !== s.focusCluster) continue;
+    if (s.featured && !s.featured.has(key) && key !== s.focusCluster) continue;
+    if (!groups.has(key)) groups.set(key, node);
+  }
+  return [...groups.values()].map((node) => {
+    const core = { ...node.galaxyCore };
+    projectGlobe(s, [core]);
+    return { sx: core.sx, sy: core.sy, r: Math.max(48, globeR(s) * node.galaxyRadius * core.depth * s.cam.k) };
+  });
 }
 
 function drawUniverse(ctx, s, cx, cy, radius) {
@@ -349,24 +385,26 @@ function drawBackdrop(ctx, s) {
   bg.addColorStop(0, "#122033"); bg.addColorStop(0.22, "#0a121c"); bg.addColorStop(0.6, "#05080e"); bg.addColorStop(1, "#020308");
   ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
   drawStarfield(ctx, s);
-  const beacon = beaconCenter(s);
-  drawUniverse(ctx, s, beacon.sx, beacon.sy, beacon.r);
+  for (const beacon of beaconCenters(s)) {
+    drawUniverse(ctx, s, beacon.sx, beacon.sy, beacon.r);
+  }
   drawClusters(ctx, s);
 }
 function draw2d(ctx, s) {
   const { t, cam } = s;
   drawBackdrop(ctx, s);
   const q = s.query.trim().toLowerCase();
-  const match = (n) => !q || n.title.toLowerCase().includes(q) || n.id.toLowerCase().includes(q);
   const lookup = new Map(s.sim.map((n) => [n.id, n]));
   const focusSet = neighborhood(s.selectedId, s.edges);
+  const match = (n) => focusSet.has(n.id) || matchesNodeQuery(n, q);
   const locked = Boolean(s.selectedId);
+  const detail = galaxyDetailOpacity(s.sim, cam.k, q, s.selectedId);
   ctx.save();
   ctx.globalCompositeOperation = "lighter";
   for (const e of s.edges) {
     const a = lookup.get(e.source); const b = lookup.get(e.target);
     if (!a || !b) continue;
-    ctx.globalAlpha = activityEdgeOpacity(s.activityFrame) * lifecycleEdgeOpacity(s.lifecycleFrame, e.source, e.target, e.id);
+    ctx.globalAlpha = detail * activityEdgeOpacity(s.activityFrame) * lifecycleEdgeOpacity(s.lifecycleFrame, e.source, e.target, e.id);
     const hi = locked && (e.source === s.selectedId || e.target === s.selectedId);
     drawRay(ctx, a, b, e.kind, hi, Boolean(q && (!match(a) || !match(b))) || (locked && !hi), cam.k);
   }
@@ -405,8 +443,9 @@ function draw2d(ctx, s) {
 }
 function drawLabels(ctx, s, ordered = [...s.sim].sort((a, b) => b.wz - a.wz), focusSet = neighborhood(s.selectedId, s.edges)) {
   const q = s.query.trim().toLowerCase();
-  const match = (n) => !q || n.title.toLowerCase().includes(q) || n.id.toLowerCase().includes(q);
+  const match = (n) => focusSet.has(n.id) || matchesNodeQuery(n, q);
   const locked = Boolean(s.selectedId);
+  const overview = galaxyDetailOpacity(s.sim, s.cam.k, q, s.selectedId) < 1;
   for (const n of ordered) {
     if (n.depth < 0.62) continue;
     const faded = Boolean(q && !match(n));
@@ -416,6 +455,8 @@ function drawLabels(ctx, s, ordered = [...s.sim].sort((a, b) => b.wz - a.wz), fo
     if (locked && !related && !hov) continue;
     const show = n.kind !== "raw" && n.kind !== "page" ? true : sel || hov || related;
     if (!show || (faded && !sel && !hov && !related)) continue;
+    if (overview &&
+        !sel && !hov && !related && !s.activityFrame.nodes.has(n.id) && n.mass < 0.8) continue;
     ctx.font = `${sel ? 600 : 450} 12px "Cormorant Garamond", "Newsreader", serif`;
     ctx.fillStyle = faded ? "rgba(140,170,200,0.28)" : sel ? "rgba(230, 245, 255, 0.95)" : related ? "rgba(200, 230, 255, 0.85)" : `rgba(190,220,255,${0.4 + n.depth * 0.5})`;
     ctx.textAlign = "center"; ctx.textBaseline = "top";
@@ -482,7 +523,8 @@ export function mountGraphCanvas(wrap, options) {
     lifecycle: new GraphLifecycle(), lifecycleFrame: { births: new Map(), ghosts: [] },
     activityCamera: new ActivityCamera(),
     pointers: new Map(), pinch: null,
-    focusCluster: null, targetPivot: null, targetLook: null, aimed: false, grouping: "layers", featured: null,
+    focusCluster: null, targetPivot: null, targetLook: null, lookVelocity: { yaw: 0, pitch: 0 },
+    aimed: false, grouping: "layers", featured: null,
   };
   s.activityCamera.setEnabled(options.autoFocus !== false);
   const onMotionChange = (event) => {
@@ -509,6 +551,7 @@ export function mountGraphCanvas(wrap, options) {
     if (graphKey === nextKey) return;
     graphKey = nextKey;
     const groupingChanged = grouping !== s.grouping;
+    if (groupingChanged && s.aimed) pauseAutoFocus();
     s.grouping = grouping;
     const byId = new Map(s.sim.map((n) => [n.id, n]));
     const lifecycleBorn = new Set([...s.lifecycle.births.values()].map((entry) => entry.node.id));
@@ -559,13 +602,20 @@ export function mountGraphCanvas(wrap, options) {
     s.focusCluster = label;
     const w = clusterWorld(label);
     s.targetPivot = w;
-    s.targetLook = {
+    const members = clusterMembers(label);
+    const galactic = Boolean(members[0]?.galaxyCore);
+    const look = galactic ? activationSurfaceAngle(members, homeCam()) : null;
+    s.targetLook = galactic ? {
+      yaw: look ? look.yaw + 0.35 : homeCam().yaw,
+      pitch: look ? Math.max(-1.2, Math.min(1.2, look.pitch + 0.3)) : homeCam().pitch,
+    } : {
       yaw: Math.atan2(w.z, w.x),
-      pitch: Math.atan2(w.y, Math.hypot(w.x, w.z)),
+      pitch: Math.max(-1.2, Math.min(1.2, Math.atan2(w.y, Math.hypot(w.x, w.z)))),
     };
     s.cam.targetK = label ? 1.45 : 1;
     s.cam.vYaw = 0;
     s.cam.vPitch = 0;
+    s.lookVelocity = { yaw: 0, pitch: 0 };
     options.onCluster?.(label);
   }
 
@@ -634,7 +684,7 @@ export function mountGraphCanvas(wrap, options) {
     rendererNotice.setAttribute("role", "status");
     rendererNotice.textContent = "WebGL interrupted — using 2D rendering.";
     Object.assign(rendererNotice.style, {
-      position: "absolute", left: "12px", bottom: "12px", pointerEvents: "none",
+      position: "absolute", left: "12px", bottom: "calc(12px + var(--footer-inset))", pointerEvents: "none",
       color: "#c8dcf0", background: "#0a121c", padding: "4px 8px", fontSize: "12px",
     });
     wrap.insertBefore(rendererNotice, canvas.nextSibling);
@@ -648,6 +698,10 @@ export function mountGraphCanvas(wrap, options) {
 
   let raf = 0;
   let last = performance.now();
+  let fpsStartedAt = null;
+  let fpsLastFrameAt = null;
+  let fpsFrames = 0;
+  options.onFrameRate?.(null);
   const tick = (now) => {
     if (destroyed) return;
     const dt = Math.min(0.033, (now - last) / 1000);
@@ -656,7 +710,8 @@ export function mountGraphCanvas(wrap, options) {
     for (const n of s.sim) {
       const age = Math.max(0, s.t - n.born);
       const speed = s.reduce ? 20 : 0.42 + n.mass * 0.35;
-      n.shell = s.reduce ? n.targetShell : n.shell + (n.targetShell * (1 - Math.exp(-age * speed)) - n.shell) * Math.min(1, dt * 3.2);
+      const destination = n.targetShell * (1 - Math.exp(-age * speed));
+      n.shell = s.reduce ? n.targetShell : n.shell + (destination - n.shell) * Math.min(1, dt * 3.2);
     }
     const R = globeR(s);
     const focus = s.selectedId ? s.sim.find((n) => n.id === s.selectedId) : undefined;
@@ -696,10 +751,10 @@ export function mountGraphCanvas(wrap, options) {
         }
       }
       if (s.targetLook && !s.spin) {
-        s.cam.yaw += (s.targetLook.yaw - s.cam.yaw) * ease;
-        s.cam.pitch += (s.targetLook.pitch - s.cam.pitch) * ease;
-        if (Math.abs(s.cam.yaw - s.targetLook.yaw) < 0.01 && Math.abs(s.cam.pitch - s.targetLook.pitch) < 0.01) {
+        moveCameraLook(s.cam, s.targetLook, s.lookVelocity, dt, s.reduce);
+        if (Math.abs(angleDelta(s.targetLook.yaw, s.cam.yaw)) < 0.01 && Math.abs(s.cam.pitch - s.targetLook.pitch) < 0.01) {
           s.targetLook = null;
+          s.lookVelocity = { yaw: 0, pitch: 0 };
         }
       }
       s.cam.x += (s.panTarget.x - s.cam.x) * ease;
@@ -740,6 +795,19 @@ export function mountGraphCanvas(wrap, options) {
       }
     } else {
       draw2d(ctx, s);
+    }
+    if (fpsLastFrameAt !== null && (now <= fpsLastFrameAt || now - fpsLastFrameAt > 1500)) {
+      fpsStartedAt = null;
+      fpsFrames = 0;
+      options.onFrameRate?.(null);
+    }
+    fpsLastFrameAt = now;
+    if (fpsStartedAt === null) fpsStartedAt = now;
+    else fpsFrames++;
+    if (now - fpsStartedAt >= 1000) {
+      options.onFrameRate?.(Math.round(fpsFrames * 1000 / (now - fpsStartedAt)));
+      fpsStartedAt = now;
+      fpsFrames = 0;
     }
     raf = requestAnimationFrame(tick);
   };
@@ -869,6 +937,7 @@ export function mountGraphCanvas(wrap, options) {
       if (destroyed) return;
       destroyed = true;
       cancelAnimationFrame(raf);
+      options.onFrameRate?.(null);
       ro.disconnect();
       motionPreference.removeEventListener("change", onMotionChange);
       for (const [type, handler] of [

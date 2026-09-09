@@ -3,7 +3,7 @@
 Cartograph is an Atlas knowledge-graph viewer for GitHub Copilot App canvases.
 Open one or more Atlas stores, explore their relationships, and watch recent
 external file accesses illuminate the graph.
-Use **Browse nodes** for keyboard-accessible filtering and selection across
+Use **Search** for map highlighting and keyboard-accessible selection across
 every open Atlas, including nodes on hidden layers.
 Graph search updates immediately while serialising edits, so delayed replies
 cannot replace newer typed text.
@@ -15,9 +15,10 @@ Unknown and legacy pages remain available without declaring a schema.
 Untyped `index.md` pages appear as **Navigation indexes**, not undeclared types.
 See [schema layers](docs/usage.md#schema-and-type-layers) for behavior and limits.
 
-The v0.2.0 release line adds schema-aware layers, hookless native startup and
-state-preserving reload, with APM 0.30.0 distribution.
-See the [changelog](CHANGELOG.md#020---2026-09-09) for the release changes.
+The v0.3.0 release line adds volumetric galaxies, unified toolbar search,
+two-stage node selection, anchored pulses and smoother camera behavior,
+with version/SHA/FPS visibility and APM 0.30.0 distribution.
+See the [changelog](CHANGELOG.md#030---2026-09-09) for the release changes.
 
 ## Run
 
@@ -92,7 +93,7 @@ apm install sergio-sisternes-epam/atlas-cartograph --target copilot
 ```
 
 Install from a ref containing `apm.yml`. Use `#<tag-or-commit>` on the package
-reference to pin a version; use `#v0.2.0` after that release is published.
+reference to pin a version; use `#v0.3.0` after that release is published.
 
 Reload project extensions and open **Cartograph**. APM deploys the complete
 runtime to `.github/extensions/cartograph/`; it does not deploy the development
@@ -106,6 +107,31 @@ requires a new grant. A bundle-name-only or legacy `allowExecutables` grant
 does not approve the archive.
 The viewer uses local fallback fonts; it does not fetch Google Fonts or other
 third-party UI assets.
+The small bottom-left badge shows the runtime version and abbreviated source SHA.
+Hover for the full SHA; `+ local` marks uncommitted runtime changes. Release
+archives carry their source identity. Unstamped deployments show `SHA unavailable`
+rather than borrowing the consumer project's commit.
+The adjacent FPS counter samples rendered frames once per second; `-- FPS`
+means a sample is not yet available. This measures rendering cadence, not GPU time.
+The footer has dedicated space below map controls and honours bottom safe areas.
+
+**Layers** and **Atlases** use 3D galaxy layouts: strongly connected pages form
+a dense core, surrounded by three thick spiral arms and a sparse halo. The
+default camera starts obliquely and rotates at its original idle speed; drag to
+orbit. Spiral arms have substantial vertical depth, not just a few halo outliers.
+Large overviews use subtle
+relationships and fewer labels, restoring detail through zoom, search,
+selection and activation. The toolbar **Search stars** field finds every page by title, ID,
+Atlas, path, type or kind, including hidden-layer pages; its query also drives
+map highlighting. Results appear as you type; press Down with an empty field
+to browse every node. Escape closes results without hiding the query.
+Clear the field to reset highlighting.
+This is deterministic visual organization, not a gravity simulation.
+The decorative pulse follows each galaxy's core, or the selected node.
+Select a node once to highlight it, its visible first-degree neighbors and
+their connecting relationships; select it again to open Markdown.
+Grouping changes use bounded, shortest-angle turns and briefly pause automatic
+activation following so the two camera motions cannot fight each other.
 
 ## CI and releases
 
@@ -156,6 +182,9 @@ automatic framing continues; your angle takes priority for five seconds after
 release. Manual zoom/reset/island navigation pause following for five seconds;
 selected nodes keep focus. Idle restoration preserves manual rotation. Turn the option
 off for manual framing. Reduced-motion preferences suppress automatic movement.
+Single-node close-in framing uses a faster zoom with coordinated translation;
+multi-node following, zoom-out, orbit and idle restoration keep their usual pace.
+The return pan follows zoom progress to keep the Atlas in view during zoom-out.
 
 Copilot canvases show accesses from **the current Copilot session and its tool
 processes**, excluding Cartograph and its descendants. Unrelated applications,
@@ -181,10 +210,13 @@ alternative monitor enabled automatically.
 
 Open Atlas folders are watched automatically for creates, edits, and deletes
 from **any application**, without administrator privileges or Full Disk Access
-for normally accessible directories. New nodes and relationships glow green
-for 2000 ms, fading back to their default colour. Deleted nodes and relationships
-leave non-interactive red ghosts that fade out over 2000 ms. These effects stay
+for normally accessible directories. New-node green glows fade over **10 seconds
+total from creation**; new relationships glow green for 3500 ms.
+Deleted nodes and relationships
+leave non-interactive red ghosts that fade out over 3500 ms. These effects stay
 separate from the read-activation path, including links between existing nodes.
+The whole-node fade-in remains 3500 ms; reaching the final layout position
+does not cut the ten-second glow short.
 Empty Markdown files also appear immediately, using their filenames as titles.
 
 Edits refresh node metadata, relationships, and the selected page without

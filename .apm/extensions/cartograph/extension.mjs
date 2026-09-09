@@ -162,7 +162,7 @@ const session = await joinSession({
         },
         {
           name: "set_query",
-          description: "Filter the star map by title or id substring.",
+          description: "Search the star map by title, id, Atlas, path, type or kind.",
           inputSchema: {
             type: "object",
             properties: { query: { type: "string" } },

@@ -1,10 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { fileURLToPath } from "node:url";
 import { mountGraphCanvas } from "../.apm/extensions/cartograph/public/graph-canvas.js";
 import { createGraphGL, GraphGL } from "../.apm/extensions/cartograph/public/graph-gl.js";
 import { ActivityPlayback, ACTIVITY_SPACING_MS } from "../.apm/extensions/cartograph/public/activity-playback.js";
 import { ActivityCamera } from "../.apm/extensions/cartograph/public/activity-camera.js";
 import { GraphLifecycle } from "../.apm/extensions/cartograph/public/graph-lifecycle.js";
+import { loadFullGraph } from "../.apm/extensions/cartograph/atlas/scan.mjs";
 
 const start = 1800000000000;
 const nodes = ["a", "b", "c"].map((id) => ({ id, title: id, kind: "work", degree: 2, sourceCount: 0 }));
@@ -55,7 +57,11 @@ function context2d() {
         for (const name of Object.keys(target)) delete target[name];
         Object.assign(target, stack.pop());
       };
-      if (key === "createRadialGradient") return () => ({ addColorStop() {} });
+      if (key === "createRadialGradient") return (...args) => {
+        const stops = [];
+        operations.push({ type: "radialGradient", args, stops });
+        return { addColorStop: (offset, color) => stops.push([offset, color]) };
+      };
       return (...args) => operations.push({ type: key, args, alpha: target.globalAlpha, fill: target.fillStyle, stroke: target.strokeStyle });
     },
   });
@@ -123,6 +129,7 @@ function fixture(t, { supported = true, failure, reduce = true } = {}) {
   const pending = new Map();
   const frames = [];
   const statuses = [];
+  const frameRates = [];
   const selected = [];
   const warnings = [];
   const preference = { ...element(), matches: reduce };
@@ -170,7 +177,11 @@ function fixture(t, { supported = true, failure, reduce = true } = {}) {
     frames.push({ frame, renderer: this, positions: frame.nodes.map((node) => [node.id, node.sx, node.sy]) });
     return draw.call(this, frame);
   });
-  map = mountGraphCanvas(wrap, { onPlayback: (value) => statuses.push(value), onSelect: (id) => selected.push(id) });
+  map = mountGraphCanvas(wrap, {
+    onPlayback: (value) => statuses.push(value), onSelect: (id) => selected.push(id),
+    onFrameRate: (value) => frameRates.push(value),
+  });
+  const frameOrigin = Math.ceil(performance.now());
   const step = (elapsed = 0) => {
     now = start + elapsed;
     for (const canvas of canvases) canvas.context.operations.length = 0;
@@ -178,17 +189,142 @@ function fixture(t, { supported = true, failure, reduce = true } = {}) {
     assert.equal(pending.size, 1, "Only the shared mount schedules animation");
     const [id, callback] = pending.entries().next().value;
     pending.delete(id);
-    callback(performance.now() + elapsed);
+    callback(frameOrigin + elapsed);
   };
   const pointer = (type, node) => wrap.fire(type, {
     target: { closest: () => null }, button: 0, pointerId: 1, pointerType: "mouse",
     clientX: node.sx, clientY: node.sy, preventDefault() {},
   });
-  return { map, wrap, canvases, contexts, frames, statuses, selected, warnings, preference, buttons, pending,
+  return { map, wrap, canvases, contexts, frames, statuses, frameRates, selected, warnings, preference, buttons, pending,
     step, pointer, clock: (elapsed) => { now = start + elapsed; }, disconnected: () => disconnected };
 }
 
 const labels = (canvas) => canvas.context.operations.filter((op) => op.type === "fillText");
+const pulseRings = (canvas) => canvas.context.operations.flatMap((op, index, operations) =>
+  op.type === "stroke" && String(op.stroke).startsWith("rgba(140, 190, 255,") && operations[index - 1]?.type === "arc"
+    ? [operations[index - 1].args] : []);
+
+for (const supported of [true, false]) {
+  test(`${supported ? "WebGL" : "2D"} map labels match the shared Atlas/path/type search`, (t) => {
+    const { map, canvases, step } = fixture(t, { supported });
+    const indexed = nodes.map((node, i) => ({
+      ...node, path: `docs/${node.id}.md`, atlasLabel: i === 0 ? "Northern" : "Southern",
+      type: i === 1 ? "instrument" : "work",
+    }));
+    map.setGraph(indexed, edges);
+    for (const [query, expected] of [["Northern", ["a"]], ["docs/b.md", ["b"]], ["instrument", ["b"]]]) {
+      map.setQuery(query);
+      step(0);
+      const drawn = labels(canvases[supported ? 2 : 0]).map((op) => op.args[0]).filter((text) => ["a", "b", "c"].includes(text));
+      assert.deepEqual(drawn.sort(), expected);
+    }
+  });
+
+  test(`${supported ? "WebGL" : "2D"} pulse anchors to the galaxy core or selected node and respects reduced motion`, (t) => {
+    const { map, canvases, frames, pointer, step } = fixture(t, { supported });
+    map.setGraph(nodes, edges, "layers", changes(0));
+    step(0);
+    const rings = pulseRings(canvases[0]);
+    assert.equal(rings.length, 3);
+    const core = canvases[0].context.operations.find((op) =>
+      op.type === "radialGradient" && op.stops.some(([, color]) => color.startsWith("rgba(255, 238, 199,")));
+    assert.ok(core);
+    assert.ok(rings.every(([x, y]) => x === core.args[0] && y === core.args[1]));
+    map.setSelected("b");
+    step(20);
+    const selectedPosition = () => {
+      if (supported) return frames.at(-1).positions.find(([id]) => id === "b").slice(1);
+      const ops = canvases[0].context.operations;
+      const index = ops.findIndex((op) => op.type === "fill" && op.fill === "#f4fbff");
+      assert.equal(ops[index - 1].type, "arc");
+      return ops[index - 1].args.slice(0, 2);
+    };
+    assert.ok(pulseRings(canvases[0]).every((ring) => {
+      const [x, y] = selectedPosition();
+      return ring[0] === x && ring[1] === y;
+    }));
+    pointer("pointerdown", { sx: 0, sy: 0 });
+    pointer("pointermove", { sx: 80, sy: 40 });
+    pointer("pointerup", { sx: 80, sy: 40 });
+    step(40);
+    const [x, y] = selectedPosition();
+    const rotated = pulseRings(canvases[0]);
+    assert.ok(rotated.every((ring) => ring[0] === x && ring[1] === y));
+    step(1040);
+    assert.deepEqual(pulseRings(canvases[0]), rotated, "Reduced motion freezes pulse expansion");
+    map.setSelected(null);
+    map.setGraph(nodes.map((node, i) => ({ ...node, atlasKey: i < 2 ? "one" : "two" })), edges, "atlases", changes(0));
+    step(1060);
+    assert.equal(pulseRings(canvases[0]).length, 6, "Each galaxy uses its own core, not an aggregate centroid");
+  });
+
+  test(`${supported ? "WebGL" : "2D"} reports actual render FPS once per second and resets after suspension`, (t) => {
+    const { map, step, frameRates } = fixture(t, { supported });
+    map.setGraph(nodes, edges);
+    step(0);
+    assert.deepEqual(frameRates, [null]);
+    for (let frame = 1; frame <= 60; frame++) step(frame * 1000 / 60);
+    assert.deepEqual(frameRates, [null, 60]);
+    for (let frame = 1; frame <= 5; frame++) step(1000 + frame * 200);
+    assert.deepEqual(frameRates, [null, 60, 5]);
+    step(6000);
+    assert.deepEqual(frameRates, [null, 60, 5, null]);
+    for (let frame = 1; frame <= 30; frame++) step(6000 + frame * 1000 / 30);
+    assert.equal(frameRates.at(-1), 30);
+    map.destroy();
+    assert.equal(frameRates.at(-1), null);
+  });
+}
+
+test("first-stage selection highlights only the selected node and its first-degree neighbors", (t) => {
+  const packed = [];
+  const original = GraphGL.prototype.packNodes;
+  t.mock.method(GraphGL.prototype, "packNodes", function(frame, query, match, related) {
+    packed.push({ selected: frame.selectedId, related: [...related], matched: frame.nodes.filter(match).map((node) => node.id) });
+    return original.call(this, frame, query, match, related);
+  });
+  const { map, step } = fixture(t);
+  map.setGraph(nodes.map((node) => ({ ...node, path: `${node.id}.md` })), edges);
+  map.setQuery("a.md");
+  map.setSelected("a");
+  step(0);
+  assert.equal(packed.at(-1).selected, "a");
+  assert.deepEqual(new Set(packed.at(-1).related), new Set(["a", "b"]));
+  assert.deepEqual(new Set(packed.at(-1).matched), new Set(["a", "b"]), "Search must not dim the selected node's direct neighbors");
+});
+
+test("grouping changes cancel stale activation framing and bound turns after a long manual orbit", (t) => {
+  const samples = [];
+  const original = ActivityCamera.prototype.update;
+  t.mock.method(ActivityCamera.prototype, "update", function(nodes, camera, width, height, now, options) {
+    const target = original.call(this, nodes, camera, width, height, now, options);
+    samples.push({ now, yaw: camera.yaw, automatic: Boolean(target) });
+    return target;
+  });
+  const { map, pointer, step, clock } = fixture(t, { reduce: false });
+  map.setGraph(nodes, edges, "layers", changes(0));
+  map.setActivity({ enabled: true, durationMs: 20000, nodes: [
+    { id: "a", accessedAt: start, expiresAt: start + 20000, sequence: 1, firstSequence: 1, count: 1 },
+  ] });
+  for (let time = 0; time <= 2000; time += 20) step(time);
+  assert.ok(samples.some((sample) => sample.automatic));
+  pointer("pointerdown", { sx: 0, sy: 0 });
+  pointer("pointermove", { sx: 5000, sy: 0 });
+  pointer("pointerup", { sx: 5000, sy: 0 });
+  for (const [time, grouping] of [[2020, "atlases"], [2040, "proximity"], [2060, "layers"]]) {
+    clock(time);
+    map.setGraph(nodes, edges, grouping, changes(0));
+    step(time);
+  }
+  samples.length = 0;
+  for (let time = 2080; time < 7060; time += 20) step(time);
+  assert.ok(samples.every((sample) => !sample.automatic), "Following yields for five seconds after regrouping");
+  for (let i = 1; i < samples.length; i++) {
+    assert.ok(Math.abs(samples[i].yaw - samples[i - 1].yaw) / 0.02 <= 1.5 + 1e-9, "No multi-revolution spin");
+  }
+  step(7080);
+  assert.equal(samples.at(-1).automatic, true, "Displayed activation following can resume after the pause");
+});
 
 for (const supported of [true, false]) {
   test(`${supported ? "WebGL" : "2D"} schema islands use stable type keys and clear removed focus`, (t) => {
@@ -302,23 +438,104 @@ for (const supported of [true, false]) {
   });
 }
 
+for (const supported of [true, false]) {
+  test(`${supported ? "WebGL" : "2D"} galaxy overview preserves labels for interaction and reveals detail on zoom`, (t) => {
+    const graph = loadFullGraph(fileURLToPath(new URL("../.atlas/local/stress-test-atlas", import.meta.url)));
+    const { map, canvases, frames, buttons, step } = fixture(t, { supported });
+    map.setGraph(graph.nodes, graph.edges, "layers", changes(0));
+    step(0);
+    const textCanvas = canvases[supported ? 2 : 0];
+    const overviewLabels = labels(textCanvas).map((op) => op.args[0]);
+    assert.ok(labels(canvases[0]).some((op) => op.args[0] === "Undeclared types"), "Keep the group label on the shared backdrop");
+    assert.ok(overviewLabels.length < 30, "Avoid hundreds of overlapping overview labels");
+    if (supported) {
+      const positions = frames.at(-1).positions;
+      const width = Math.max(...positions.map(([, x]) => x)) - Math.min(...positions.map(([, x]) => x));
+      const height = Math.max(...positions.map(([, , y]) => y)) - Math.min(...positions.map(([, , y]) => y));
+      assert.ok(width / height > 0.6 && width / height < 1.8, "The default view must not face the galaxy edge-on");
+      assert.equal(frames.at(-1).frame.edges.length, 1508);
+    }
+    map.setSelected("work/read-000");
+    step(20);
+    assert.ok(labels(textCanvas).some((op) => op.args[0] === "Read 000"));
+    map.setSelected(null);
+    map.setQuery("Read 001");
+    step(40);
+    assert.ok(labels(textCanvas).some((op) => op.args[0] === "Read 001"));
+    map.setQuery("");
+    for (let i = 0; i < 7; i++) buttons.get("[data-zoom-in]").fire("click");
+    step(60);
+    assert.ok(labels(textCanvas).length > 400, "Detailed zoom restores ordinary node labels");
+  });
+
+  test(`${supported ? "WebGL" : "2D"} stress Atlas single activation closes in within two seconds`, (t) => {
+    const graph = loadFullGraph(fileURLToPath(new URL("../.atlas/local/stress-test-atlas", import.meta.url)));
+    assert.equal(graph.nodes.length, 505);
+    assert.equal(graph.edges.length, 1508);
+    const move = t.mock.method(ActivityCamera.prototype, "move");
+    const { map, frames, step, clock } = fixture(t, { supported, reduce: false });
+    map.setGraph(graph.nodes, graph.edges, "layers", changes(0));
+    for (let time = 0; time < 5000; time += 1000 / 60) step(time);
+    clock(5000);
+    map.setActivity({ enabled: true, durationMs: 5000, nodes: [
+      { id: "work/read-000", accessedAt: start + 5000, expiresAt: start + 10000,
+        sequence: 1, firstSequence: 1, count: 1 },
+    ] });
+    for (let time = 5000; time <= 7000; time += 1000 / 60) step(time);
+    const camera = move.mock.calls.at(-1).arguments[0];
+    assert.ok(camera.k > 19 && camera.k <= 20, `Close-in zoom: ${camera.k}`);
+    if (supported) {
+      const [, x, y] = frames.at(-1).positions.find(([id]) => id === "work/read-000");
+      assert.ok(x > 80 && x < 720 && y > 90 && y < 510, `Active node left the padded view: ${x}, ${y}`);
+    }
+  });
+}
+
+test("galaxies restore the original idle rotation while selection and reduced motion still suppress it", (t) => {
+  const angles = [];
+  const update = ActivityCamera.prototype.update;
+  t.mock.method(ActivityCamera.prototype, "update", function(nodes, camera, ...rest) {
+    angles.push(camera.yaw);
+    return update.call(this, nodes, camera, ...rest);
+  });
+  const { map, step, preference } = fixture(t, { reduce: false });
+  map.setGraph(nodes, edges, "layers", changes(0));
+  for (let time = 0; time <= 30000; time += 20) step(time);
+  const before = angles.at(-1);
+  for (let time = 30020; time <= 31000; time += 20) step(time);
+  assert.ok(Math.abs(angles.at(-1) - before - 0.16) < 1e-8);
+  map.setSelected("a");
+  step(31020);
+  const selected = angles.at(-1);
+  step(31040);
+  assert.equal(angles.at(-1), selected);
+  map.setSelected(null);
+  preference.fire("change", { matches: true });
+  step(31060);
+  const reduced = angles.at(-1);
+  step(32060);
+  assert.equal(angles.at(-1), reduced);
+});
+
 test("WebGL labels retain birth/deletion effects, reduced motion and lifecycle expiry", (t) => {
   const { map, canvases, frames, step, clock, preference } = fixture(t, { reduce: false });
   map.setGraph(nodes.slice(0, 2), [], "layers", changes(0));
   step();
   map.setGraph(nodes.slice(1), [], "layers", changes(1, [nodes[2]], [nodes[0]]));
-  step(1000);
+  step(1750);
   let label = labels(canvases[2]).find((op) => op.args[0] === "a");
   assert.equal(label?.alpha, 0.5);
   assert.equal(frames.at(-1).frame.lifecycleFrame.births.get("c").nodeOpacity, 0.5);
   preference.fire("change", { matches: true });
-  step(1200);
+  step(1950);
   assert.equal(frames.at(-1).frame.reduce, true);
   label = labels(canvases[2]).find((op) => op.args[0] === "a");
   assert.equal(label?.alpha, 1);
-  clock(2000);
-  step(2000);
+  clock(3500);
+  step(3500);
   assert.equal(labels(canvases[2]).some((op) => op.args[0] === "a"), false);
+  assert.equal(frames.at(-1).frame.lifecycleFrame.births.size, 1);
+  step(10000);
   assert.equal(frames.at(-1).frame.lifecycleFrame.births.size, 0);
 });
 

@@ -1,6 +1,8 @@
 import { activityNodeStyle, activityEdgeOpacity, activityPulse } from "./activity-rendering.js";
 import { ActivityPlayback, PLAYBACK_STATUS_INTERVAL_MS } from "./activity-playback.js";
 import { GraphLifecycle, lifecyclePoints, lifecycleNodeOpacity, lifecycleEdgeOpacity, lifecycleEdgeGlows } from "./graph-lifecycle.js";
+import { galaxyDetailOpacity } from "./universe.js";
+import { matchesNodeQuery } from "./node-search.js";
 
 const CORE = {
   experience: [212 / 255, 228 / 255, 1],
@@ -228,7 +230,6 @@ class GraphGL {
     }
     const lookup = new Map(f.nodes.map((n) => [n.id, n]));
     const q = f.query.trim().toLowerCase();
-    const match = (n) => !q || n.title.toLowerCase().includes(q) || n.id.toLowerCase().includes(q);
     const related = /* @__PURE__ */ new Set();
     if (f.selectedId) {
       related.add(f.selectedId);
@@ -237,6 +238,7 @@ class GraphGL {
         else if (e.target === f.selectedId) related.add(e.source);
       }
     }
+    const match = (n) => related.has(n.id) || matchesNodeQuery(n, q);
     const lineCount = this.packEdges(f, lookup, q, match, related);
     if (lineCount) this.drawLines(this.scratch, lineCount, gl.TRIANGLES);
     this.drawLifecycleEdges(f.lifecycleFrame, lookup);
@@ -358,6 +360,7 @@ class GraphGL {
     let i = 0;
     const out = this.ensure(f.edges.length * 6 * 6);
     const locked = related.size > 0;
+    const detail = galaxyDetailOpacity(f.nodes, f.k, q, f.selectedId);
     for (const edge of f.edges) {
       const a = lookup.get(edge.source);
       const b = lookup.get(edge.target);
@@ -367,7 +370,7 @@ class GraphGL {
       if (depth < 0.48 && !hi) continue;
       const faded = Boolean(q && (!match(a) || !match(b))) || locked && !hi;
       const alpha = (hi ? 0.95 : faded ? 0.03 : edge.kind === "source" ? 0.1 * depth : edge.kind === "mesh" ? 0.38 * depth : edge.kind === "relates" ? 0.22 * depth : 0.16 * depth) * activityEdgeOpacity(f.activityFrame) *
-        lifecycleEdgeOpacity(f.lifecycleFrame, edge.source, edge.target, edge.id);
+        lifecycleEdgeOpacity(f.lifecycleFrame, edge.source, edge.target, edge.id) * detail;
       const rgb = hi ? [210 / 255, 235 / 255, 1] : edge.kind === "mesh" ? [120 / 255, 230 / 255, 210 / 255] : [150 / 255, 200 / 255, 1];
       const width = (hi ? 2.4 : edge.kind === "mesh" ? 1.6 : 1) / Math.max(f.k ?? 1, 0.6);
       const length = Math.hypot(b.sx - a.sx, b.sy - a.sy);

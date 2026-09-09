@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import * as browser from "../.apm/extensions/cartograph/public/universe.js";
 import * as server from "../.apm/extensions/cartograph/atlas/universe.mjs";
+import { loadFullGraph } from "../.apm/extensions/cartograph/atlas/scan.mjs";
 
 function countMapOperations(run) {
   const NativeMap = globalThis.Map;
@@ -200,15 +202,76 @@ test("many populated Atlas orbits retain separation, including near polar homes"
   }
 });
 
-test("one Atlas retains its existing orbital layout", () => {
+test("one Atlas uses a bounded galaxy without changing node identity or group labels", () => {
   const nodes = Array.from({ length: 3 }, (_, i) => ({
     id: `work/${i}`, kind: "work", degree: 1, sourceCount: 0, atlasKey: "one",
   }));
-  assertLayout(nodes, browser.layoutUniverse(nodes, [], "atlases"), [
-    ["one", 0.8196, 0.0632991681414401, 1.4225965571198114, 0.630824],
-    ["one", 0.8196, 6.248274254071295, 1.454721901738202, 0.630824],
-    ["one", 0.8196, 6.254674924394455, 1.383246557412424, 0.630824],
-  ]);
+  const laid = browser.layoutUniverse(nodes, [], "atlases");
+  assert.deepEqual(laid.map((node) => node.id), nodes.map((node) => node.id));
+  assert.ok(laid.every((node) => node.galaxyLabel === "one" && node.mass === 0.8196));
+  assert.ok(laid.every((node) => node.galaxyRadius > 0 && node.galaxyRadius <= 0.56));
+  assert.equal(new Set(laid.map((node) => `${node.lon}:${node.lat}:${node.targetShell}`)).size, nodes.length);
+});
+
+function galaxyLocal(node) {
+  const core = node.galaxyCore;
+  const normal = [Math.sin(core.lat) * Math.cos(core.lon), Math.cos(core.lat), Math.sin(core.lat) * Math.sin(core.lon)];
+  const position = [
+    node.targetShell * Math.sin(node.lat) * Math.cos(node.lon),
+    node.targetShell * Math.cos(node.lat),
+    node.targetShell * Math.sin(node.lat) * Math.sin(node.lon),
+  ].map((value, axis) => value - normal[axis] * core.shell);
+  const dot = (axis) => position.reduce((sum, value, i) => sum + value * axis[i], 0);
+  return {
+    u: dot([-Math.sin(core.lon), 0, Math.cos(core.lon)]),
+    v: dot([Math.cos(core.lat) * Math.cos(core.lon), -Math.sin(core.lat), Math.cos(core.lat) * Math.sin(core.lon)]),
+    height: dot(normal), radius: Math.hypot(...position),
+  };
+}
+
+test("the default stress galaxy has a dense high-mass bulge, three spiral arms and real depth", () => {
+  const graph = loadFullGraph(fileURLToPath(new URL("../.atlas/local/stress-test-atlas", import.meta.url)));
+  assert.equal(graph.nodes.length, 505);
+  assert.equal(graph.edges.length, 1508);
+  const laid = browser.layoutUniverse(graph.nodes, graph.edges);
+  assert.ok(laid.every((node) => node.galaxyCore));
+  const ranked = [...laid].sort((a, b) => b.mass - a.mass || a.id.localeCompare(b.id));
+  const coreCount = Math.ceil(ranked.length * 0.24);
+  const extent = ranked[0].galaxyRadius;
+  const core = ranked.slice(0, coreCount).map(galaxyLocal);
+  const arms = ranked.slice(coreCount).map(galaxyLocal);
+  assert.ok(core.every((point) => point.radius < extent * 0.28), "The most connected pages form a dense central bulge");
+  assert.ok(arms.filter((point) => point.radius > extent * 0.5).length > arms.length * 0.7);
+  const heights = laid.map((node) => galaxyLocal(node).height);
+  assert.ok(Math.max(...heights) - Math.min(...heights) > extent * 0.45, "The galaxy must not collapse onto a plane");
+  const locals = laid.map(galaxyLocal);
+  const bulkSpan = (key) => {
+    const values = locals.map((point) => point[key]).sort((a, b) => a - b);
+    return values[Math.floor(values.length * 0.9)] - values[Math.floor(values.length * 0.1)];
+  };
+  assert.ok(bulkSpan("height") / Math.max(bulkSpan("u"), bulkSpan("v")) > 0.5,
+    "The middle 80% of stars must have visible side-on thickness, not just a few halo outliers");
+  let real = 0, imaginary = 0;
+  for (const { u, v } of arms) {
+    const unwound = Math.atan2(v, u) - (Math.hypot(u, v) / extent - 0.18) / 0.78 * Math.PI * 1.65;
+    real += Math.cos(3 * unwound);
+    imaginary += Math.sin(3 * unwound);
+  }
+  assert.ok(Math.hypot(real, imaginary) / arms.length > 0.75, "Three coherent spiral arms remain visible among halo stars");
+  assert.deepEqual(browser.layoutUniverse([...graph.nodes].reverse(), graph.edges).reverse(), laid);
+  assert.ok(laid.every((node) => galaxyLocal(node).radius <= node.galaxyRadius), "Every star remains inside its group's bound");
+});
+
+test("galaxy overview keeps every relationship visible and restores detail for zoom, search and selection", () => {
+  const nodes = browser.layoutUniverse(atlasNodes([100]), [], "atlases");
+  assert.equal(browser.galaxyDetailOpacity(nodes), 0.28);
+  assert.equal(browser.galaxyDetailOpacity(nodes, 2), 0.64);
+  assert.equal(browser.galaxyDetailOpacity(nodes, 3), 1);
+  assert.equal(browser.galaxyDetailOpacity(nodes, 20), 1);
+  assert.equal(browser.galaxyDetailOpacity(nodes, 1, "find"), 1);
+  assert.equal(browser.galaxyDetailOpacity(nodes, 1, "", nodes[0].id), 1);
+  assert.equal(browser.galaxyDetailOpacity(nodes.slice(0, 10)), 1);
+  assert.equal(browser.galaxyDetailOpacity(atlasNodes([100])), 1);
 });
 
 test("proximity preserves component seeds, predefined groups, assignment order, and positions", () => {

@@ -8,6 +8,7 @@ import { handleContentClick } from "../.apm/extensions/cartograph/public/content
 import { mountNodeBrowser } from "../.apm/extensions/cartograph/public/node-browser.js";
 import { fallbackLayerLabel, nodeCategory, nodeLayer, layerCounts } from "../.apm/extensions/cartograph/public/node-layers.js";
 import { mountSchemaLayers } from "../.apm/extensions/cartograph/public/schema-layers.js";
+import { nodeSearchText } from "../.apm/extensions/cartograph/public/node-search.js";
 import { escapeHtml, renderMarkdown } from "../.apm/extensions/cartograph/public/markdown.js";
 import { FrontendEvent, frontendDocument } from "./helpers/frontend-dom.mjs";
 
@@ -15,6 +16,71 @@ const html = readFileSync(new URL("../.apm/extensions/cartograph/public/index.ht
 const app = readFileSync(new URL("../.apm/extensions/cartograph/public/app.js", import.meta.url), "utf8");
 const all = Object.fromEntries(["experiences", "decisions", "work", "indexes", "other", "relations", "sources"].map((key) => [key, true]));
 const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+test("build badge shows version and short SHA, exposes full provenance, and rejects stale state", () => {
+  const { document, apply } = appFixture();
+  const badge = document.getElementById("build-info");
+  const commit = "12345678" + "a".repeat(32);
+  apply({ stateRevision: 2, build: { version: "0.2.0", commit, dirty: true } });
+  assert.equal(badge.textContent, "v0.2.0 / 12345678 + local");
+  assert.ok(badge.title.includes(commit));
+  assert.ok(badge.title.includes("Uncommitted runtime changes"));
+  assert.equal(badge.classList.contains("hidden"), false);
+  apply({ stateRevision: 1, build: { version: "0.1.0", commit: null, dirty: false } });
+  assert.equal(badge.textContent, "v0.2.0 / 12345678 + local");
+  apply({ stateRevision: 3, phase: "welcome", build: { version: "0.2.0", commit: null, dirty: false } });
+  assert.equal(badge.textContent, "v0.2.0 / SHA unavailable");
+  assert.equal(badge.classList.contains("hidden"), false);
+});
+
+test("FPS appears beside build information without rerendering the badge or graph", () => {
+  const { document, apply, renderers, graphs } = appFixture();
+  const commit = "a".repeat(40);
+  apply({ build: { version: "0.2.0", commit, dirty: false } });
+  const badge = document.getElementById("build-info").textContent;
+  const count = graphs.length;
+  renderers[0].onFrameRate(60);
+  assert.equal(document.getElementById("frame-rate").textContent, " | 60 FPS");
+  assert.equal(document.getElementById("build-info").textContent, badge);
+  assert.equal(graphs.length, count);
+  renderers[0].onFrameRate(null);
+  assert.equal(document.getElementById("frame-rate").textContent, " | -- FPS");
+  apply({ phase: "welcome" });
+  renderers[0].onFrameRate(30);
+  assert.equal(document.getElementById("frame-rate").textContent, " | -- FPS");
+});
+
+test("graph pointer and touch clicks each send one activation and apply the returned preview state", async () => {
+  const { apply, calls, renderers, state, document } = appFixture();
+  apply({ selectedId: null, previewOpen: false });
+  const first = renderers[0].onSelect("node", { pointerType: "mouse" });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].action, "activate");
+  calls[0].resolve({ ok: true, json: async () => ({ selectedId: "node", previewOpen: false }) });
+  await first;
+  assert.equal(state().selectedId, "node");
+  assert.equal(document.getElementById("preview").classList.contains("hidden"), true);
+  const second = renderers[0].onSelect("node", { pointerType: "touch" });
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1].action, "activate");
+  calls[1].resolve({ ok: true, json: async () => ({ selectedId: "node", previewOpen: true }) });
+  await second;
+  assert.equal(document.getElementById("preview").classList.contains("hidden"), false);
+  assert.equal(calls.some((call) => call.action === "preview"), false);
+});
+
+test("failed first-stage selection reports its error outside the closed preview", async () => {
+  const { apply, calls, renderers, document } = appFixture();
+  apply({ selectedId: null, previewOpen: false });
+  const request = renderers[0].onSelect("node");
+  calls[0].resolve({ ok: false, json: async () => ({ error: "Unavailable" }) });
+  await request;
+  assert.match(document.getElementById("map-error").textContent, /Unavailable/);
+  assert.equal(document.getElementById("map-error").classList.contains("hidden"), false);
+  apply({ linkError: "No page for this node." });
+  assert.equal(document.getElementById("map-error").textContent, "No page for this node.");
+});
+
 function deferred() {
   let resolve, reject;
   const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
@@ -39,6 +105,7 @@ function appFixture({ reducedMotion = false, phase = "map" } = {}) {
   const opened = [];
   const queries = [];
   const graphs = [];
+  const renderers = [];
   const streams = [];
   const timers = [];
   const activities = [];
@@ -70,7 +137,7 @@ function appFixture({ reducedMotion = false, phase = "map" } = {}) {
   const bootstrap = deferred();
   const context = vm.createContext({
     document, allNodeLayersOn, createLayerControls, createStateControls, handleContentClick, mountNodeBrowser, escapeHtml, renderMarkdown,
-    fallbackLayerLabel, nodeCategory, nodeLayer, layerCounts, mountSchemaLayers,
+    fallbackLayerLabel, nodeCategory, nodeLayer, layerCounts, mountSchemaLayers, nodeSearchText,
     window: { matchMedia: () => motion, open: (...args) => opened.push(args) },
     performance: { now: () => clock },
     requestAnimationFrame(callback) { frames.set(++frameId, callback); return frameId; },
@@ -78,7 +145,10 @@ function appFixture({ reducedMotion = false, phase = "map" } = {}) {
     setTimeout(callback) { timers.push(callback); return timers.length; }, clearTimeout() {},
     mountActivityControls: () => ({ setActivity(activity) { activityStatuses.push(activity); }, autoFocusEnabled: () => true, setPlayback() {} }),
     mountGraphWatchControls: () => ({ setWatch() {} }),
-    mountGraphCanvas: () => ({ setGraph(nodes) { graphs.push(nodes); }, setSelected() {}, setQuery(query) { queries.push(query); }, setActivity(activity) { activities.push(activity); }, clusters: () => [] }),
+    mountGraphCanvas: (_wrap, options) => {
+      renderers.push(options);
+      return { setGraph(nodes) { graphs.push(nodes); }, setSelected() {}, setQuery(query) { queries.push(query); }, setActivity(activity) { activities.push(activity); }, clusters: () => [] };
+    },
     EventSource: class {
       constructor() { streams.push(this); this.listeners = new Map(); }
       addEventListener(type, listener) { this.listeners.set(type, listener); }
@@ -103,7 +173,7 @@ function appFixture({ reducedMotion = false, phase = "map" } = {}) {
   function apply(next) { return vm.runInContext(`applyState(${JSON.stringify(next)})`, context); }
   apply(initial);
   return {
-    document, calls, opened, queries, graphs, timers, bootstrap, apply, activities, activityStatuses,
+    document, calls, opened, queries, graphs, renderers, timers, bootstrap, apply, activities, activityStatuses,
     frames, drawings, motionListeners,
     frame() {
       clock += 16;
@@ -160,8 +230,8 @@ test("navigation labeling is consistent in controls, previews and searchable bro
   assert.equal(document.querySelector('[data-layer="undeclared"]').textContent, "Undeclared types · 2");
   assert.match(document.getElementById("preview-meta").textContent, /Navigation indexes/);
   assert.doesNotMatch(document.getElementById("preview-meta").textContent, /legacy|undeclared/i);
-  document.getElementById("browse-nodes").click();
-  const filter = document.getElementById("node-filter");
+  document.getElementById("search").dispatchEvent(new FrontendEvent("keydown", { key: "ArrowDown" }));
+  const filter = document.getElementById("search");
   filter.value = "Navigation indexes";
   filter.dispatchEvent(new FrontendEvent("input"));
   const rows = document.getElementById("node-list").children;
@@ -346,9 +416,9 @@ test("older bootstrap, action replies and SSE cannot resurrect deleted graph or 
   const { document, calls, bootstrap, receive, apply, state, graphs, timers } = appFixture();
   apply({ stateRevision: 3, previewOpen: false });
   const old = state();
-  document.getElementById("browse-nodes").click();
+  document.getElementById("search").dispatchEvent(new FrontendEvent("keydown", { key: "ArrowDown" }));
   document.getElementById("node-list").firstElementChild.firstElementChild.click();
-  assert.equal(calls[0].action, "select");
+  assert.equal(calls[0].action, "activate");
   const latest = {
     ...old, stateRevision: 6, graph: { nodes: [], edges: [], store: {} },
     selectedId: null, previewOpen: false, page: null, chat: [],
@@ -504,7 +574,7 @@ test("query failure rolls back visibly and clearing the search remains a valid e
   const { document, calls, queries, apply, state } = appFixture();
   const input = document.getElementById("search");
   const type = (query) => { input.value = query; input.dispatchEvent(new FrontendEvent("input")); };
-  apply({ query: "confirmed", queryRevision: 1 });
+  apply({ query: "confirmed", queryRevision: 1, previewOpen: false });
   type("failed");
   calls[0].resolve({ ok: false, status: 503, json: async () => ({ error: "Unavailable" }) });
   await settle();
@@ -512,6 +582,7 @@ test("query failure rolls back visibly and clearing the search remains a valid e
   assert.equal(queries.at(-1), "confirmed");
   assert.match(document.getElementById("search-error").textContent, /Unavailable.*Last confirmed view restored/);
   assert.equal(document.getElementById("search-error").classList.contains("hidden"), false);
+  assert.equal(document.getElementById("node-browser").classList.contains("hidden"), false);
   apply({ query: "remote", queryRevision: 2 });
   type("");
   assert.equal(calls[1].query, "");
@@ -522,6 +593,48 @@ test("query failure rolls back visibly and clearing the search remains a valid e
   assert.equal(queries.at(-1), "");
   assert.equal(document.getElementById("search-error").classList.contains("hidden"), true);
   assert.equal(input.getAttribute("aria-busy"), "false");
+});
+
+test("one Search input drives accessible results and map queries, with no duplicate suggestions", async () => {
+  const { document, calls, queries, apply, state, graphs } = appFixture();
+  const nodes = [
+    { id: "a", title: "Alpha", kind: "work", type: "instrument", path: "docs/a.md", atlasLabel: "Northern", storeRoot: "/north" },
+    { id: "b", title: "Beta", kind: "decision", path: "docs/b.md", atlasLabel: "Southern", storeRoot: "/south" },
+  ];
+  apply({ selectedId: null, previewOpen: false, graph: { nodes, edges: [], store: {} } });
+  assert.equal(document.querySelectorAll("input").filter((input) => input.type === "search").length, 1);
+  assert.equal(document.getElementById("node-filter"), null);
+  assert.equal(document.getElementById("matches"), null);
+  const input = document.getElementById("search");
+  assert.equal(document.getElementById("browse-nodes"), null);
+  assert.ok(document.querySelector(".toolbar").contains(input), "The search field is always visible in the toolbar");
+  input.focus();
+  assert.equal(document.activeElement, input);
+  input.value = "northern";
+  input.dispatchEvent(new FrontendEvent("input"));
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].action, "query");
+  assert.equal(queries.at(-1), "northern");
+  assert.equal(document.getElementById("node-list").children.length, 1);
+  assert.equal(document.getElementById("node-list").firstElementChild.firstElementChild.getAttribute("data-browse-node"), "a");
+  assert.ok(graphs.at(-1).find((node) => node.id === "a").searchText.includes("northern"));
+  input.dispatchEvent(new FrontendEvent("keydown", { key: "Escape" }));
+  assert.equal(document.activeElement, input);
+  assert.equal(input.value, "northern", "Closing results leaves the query in the visible toolbar field");
+  assert.equal(document.getElementById("node-browser").classList.contains("hidden"), true);
+  calls[0].resolve({ ok: true, json: async () => ({ query: "northern", queryRevision: 1 }) });
+  await settle();
+  input.click();
+  input.value = "";
+  input.dispatchEvent(new FrontendEvent("input"));
+  assert.equal(document.getElementById("node-list").children.length, 2);
+  calls[1].resolve({ ok: true, json: async () => ({ query: "", queryRevision: 2 }) });
+  await settle();
+  assert.equal(state().query, "");
+  assert.equal(document.getElementById("node-browser").classList.contains("hidden"), true);
+  input.dispatchEvent(new FrontendEvent("keydown", { key: "ArrowDown" }));
+  assert.equal(document.getElementById("node-browser").classList.contains("hidden"), false);
+  assert.equal(document.activeElement, document.getElementById("node-list").firstElementChild.firstElementChild);
 });
 
 test("newer remote query snapshots beat delayed acknowledgements after pending typing ends", async () => {
@@ -781,26 +894,32 @@ test("actual layer wiring updates buttons immediately, keeps grouping/SSE data, 
   assert.equal(state().layersRevision, 2, "app state revision never moves backwards");
 });
 
-test("browser selection reveals hidden layers and opens a preview with a keyboard return path", async () => {
+test("browser activation reveals and selects first, then opens a preview with a keyboard return path", async () => {
   const { document, calls, apply, state } = appFixture();
   apply({ selectedId: null, previewOpen: false, layers: { ...all, experiences: false }, layersRevision: 1 });
-  document.getElementById("browse-nodes").click();
+  document.getElementById("search").dispatchEvent(new FrontendEvent("keydown", { key: "ArrowDown" }));
   const button = document.getElementById("node-list").firstElementChild.firstElementChild;
   assert.match(button.textContent, /Hidden layer/);
   button.click();
   assert.equal(calls[0].action, "layers");
   assert.equal(calls[0].layers.experiences, true);
-  assert.equal(calls[1].action, "select");
+  assert.equal(calls[1].action, "activate");
   assert.equal(calls[1].nodeId, "node");
   calls[0].resolve({ ok: true, json: async () => ({ layers: calls[0].layers, layersRevision: 2 }) });
-  calls[1].resolve({ ok: true, json: async () => ({ selectedId: "node", previewOpen: true }) });
+  calls[1].resolve({ ok: true, json: async () => ({ selectedId: "node", previewOpen: false }) });
+  await settle();
+  assert.equal(state().previewOpen, false);
+  assert.equal(button.getAttribute("aria-pressed"), "true");
+  button.click();
+  assert.equal(calls[2].action, "activate");
+  calls[2].resolve({ ok: true, json: async () => ({ selectedId: "node", previewOpen: true }) });
   await settle();
   assert.equal(document.activeElement, document.getElementById("preview-close"));
   assert.equal(button.getAttribute("aria-pressed"), "true");
   document.getElementById("preview-close").click();
-  assert.equal(calls[2].action, "preview");
-  assert.equal(calls[2].open, false);
-  calls[2].resolve({ ok: true, json: async () => ({ selectedId: "node", previewOpen: false }) });
+  assert.equal(calls[3].action, "preview");
+  assert.equal(calls[3].open, false);
+  calls[3].resolve({ ok: true, json: async () => ({ selectedId: "node", previewOpen: false }) });
   await settle();
   assert.equal(document.activeElement, button);
   assert.equal(state().selectedId, "node");
@@ -808,5 +927,5 @@ test("browser selection reveals hidden layers and opens a preview with a keyboar
   apply({ layers: { ...all, experiences: false }, layersRevision: 1 });
   assert.equal(document.activeElement, button);
   assert.equal(state().layers.experiences, true);
-  assert.equal(calls.filter((call) => call.action === "select").length, 1);
+  assert.equal(calls.filter((call) => call.action === "activate").length, 2);
 });

@@ -1,4 +1,5 @@
-export const GRAPH_LIFECYCLE_DURATION_MS = 2000;
+export const GRAPH_LIFECYCLE_DURATION_MS = 3500;
+export const GRAPH_BIRTH_GLOW_DURATION_MS = 10000;
 
 const smooth = (x) => x * x * (3 - 2 * x);
 const fileIdentity = (node) => node.storeRoot && node.path
@@ -11,12 +12,15 @@ export function lifecycleStyle(entry, now, reducedMotion = false) {
   if (!Number.isFinite(entry.startedAt) || now < entry.startedAt || now >= entry.expiresAt) return null;
   const progress = (now - entry.startedAt) / (entry.expiresAt - entry.startedAt);
   const eased = smooth(progress);
+  const birth = Number.isFinite(entry.opacityExpiresAt);
+  const nodeEase = birth ? smooth(Math.min(1, (now - entry.startedAt) / (entry.opacityExpiresAt - entry.startedAt))) : eased;
   const deleted = entry.kind === "deleted";
   const opacity = (entry.initialOpacity ?? 1) * (1 - eased);
   return {
     rgb: deleted ? [1, 0.24, 0.3] : [0.25, 1, 0.42],
-    nodeOpacity: reducedMotion ? 1 : deleted ? opacity : eased,
-    alpha: reducedMotion ? 0.85 : deleted ? opacity : 4 * eased * (1 - eased),
+    nodeOpacity: reducedMotion ? 1 : deleted ? opacity : nodeEase,
+    alpha: reducedMotion ? 0.85 : deleted ? opacity
+      : birth ? Math.min(1, 4 * nodeEase) * (1 - eased) : 4 * eased * (1 - eased),
     scale: 1,
     spread: 0,
     particles: false,
@@ -82,14 +86,18 @@ export class GraphLifecycle {
     if (changes.origin !== "filesystem") return;
     const startedAt = changes.occurredAt;
     const expiresAt = startedAt + GRAPH_LIFECYCLE_DURATION_MS;
+    const birthExpiresAt = startedAt + GRAPH_BIRTH_GLOW_DURATION_MS;
     const now = this.now();
-    if (!Number.isFinite(startedAt) || startedAt > now || expiresAt <= now) return;
+    if (!Number.isFinite(startedAt) || startedAt > now || birthExpiresAt <= now) return;
     const previous = new Map(previousNodes.map((node) => [fileIdentity(node), node]));
     for (const node of changes.created || []) {
       const key = fileIdentity(node);
       if (!visible.has(key) || previous.has(key) || !isVisible(node)) continue;
-      this.births.set(key, { kind: "created", startedAt, expiresAt, node: visible.get(key) });
+      this.births.set(key, {
+        kind: "created", startedAt, expiresAt: birthExpiresAt, opacityExpiresAt: expiresAt, node: visible.get(key),
+      });
     }
+    if (expiresAt <= now) return;
     for (const node of changes.deleted || []) {
       const key = fileIdentity(node);
       const old = previous.get(key);

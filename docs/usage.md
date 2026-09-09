@@ -15,6 +15,19 @@ the deployed runtime itself, not this repository's development shim. The SDK is
 provided by Copilot, not an npm dependency. A separately installed user
 Cartograph can coexist; choose the project provider to run this source.
 
+The small bottom-left build badge shows the canvas version and the first eight
+characters of its source commit SHA. Hover for the full SHA. `+ local` means
+the runtime includes uncommitted source changes, so it is not the exact commit.
+Release archives retain their source SHA in the deployed runtime. Unstamped
+copies without source-checkout metadata show `SHA unavailable`; the consumer
+project's commit is never used as the canvas version.
+The FPS counter beside it reports rendered frames per second over a one-second
+sample. It works with WebGL and Canvas 2D and resets after a suspended tab.
+`-- FPS` means no current sample is available, including outside the map.
+It measures rendering cadence rather than GPU execution time.
+The footer reserves its own space below the map controls, with bottom padding
+and safe-area clearance so the text is not clipped.
+
 An Atlas root contains `SCHEMA.json` or `index.md`. The bundled demonstration
 store is `.apm/extensions/cartograph/fixtures/mini-atlas` in this source repository.
 It is available as an explicit choice, never the automatic default. Use the map's Atlas controls to add another
@@ -75,20 +88,35 @@ Release acceptance must use the exact unmodified archive in the intended host.
 Standalone `npm start` continues to use its invocation directory and does not
 require SDK context or metadata.
 
-## Browse and select nodes
+## Search and select nodes
 
-Choose **Browse nodes** in the map toolbar to explore every node using native
-keyboard controls, without relying on canvas pointer targets. Filter by title,
-Atlas, path or kind, or use **Previous page** and **Next page** to move through
-25-node pages. Each entry includes its Atlas and path to distinguish duplicate
-titles. The count reports the current page or an explicit no-results state.
+Type in the always-visible **Search stars** field in the map toolbar.
+One field searches by title, ID, Atlas,
+full path, type or kind and uses that same query to highlight matching visible
+nodes on the map. The result list includes hidden layers and supports native
+keyboard controls without relying on canvas pointer targets. Results appear
+as you type; press Down to enter the results or browse all nodes when the
+field is empty. Use **Previous
+page** and **Next page** to move through 25-node pages. Each entry includes its
+Atlas and path to distinguish duplicate titles. The count reports the current
+page or an explicit no-results state.
 
-Tab to a node and press Enter or Space to select it and open its preview.
+On the graph, click or tap a node once to select it and highlight its visible
+first-degree neighbors and direct relationships. Click or tap that same node
+again to open its Markdown preview. Selecting a different node starts with
+neighborhood highlighting again.
+
+In the results, Tab to a node and press Enter or Space once to select it,
+then activate the same entry again to open its preview.
 Selecting a node on a hidden layer reveals that layer. Close the preview to
 return focus to the selected entry; **Open selected preview** and **Clear
 selection** also work when the selected node is off-page. Escape closes the
-browser and returns focus to **Browse nodes**. Live graph updates preserve the
+results and returns focus to the toolbar field. The active query stays visible
+while results are closed; clear the field to restore
+unfiltered map highlighting. Live graph updates preserve the
 focused entry and filter text; deleting that entry moves focus to the filter.
+Wiki links, preview relationship links and the native `select_node` action
+remain explicit page navigation and open the preview directly.
 
 Layer buttons update immediately and serialise rapid changes. A saving message
 remains until acknowledgement; failures restore the last confirmed view and show
@@ -96,7 +124,7 @@ an error. Versioned snapshots prevent delayed responses undoing newer changes.
 **All** restores every node category, including those without a dedicated layer
 button, and is only shown as active when all those categories are enabled.
 
-**Search graph** also updates immediately and coalesces rapid typing. Older
+Search updates immediately and coalesces rapid typing. Older
 snapshots cannot replace pending text or move its caret. A failed request shows
 an error beside the input and restores the last confirmed query; clear the input
 to remove the filter.
@@ -107,7 +135,35 @@ status notice; graph selection and playback are retained.
 
 ## Atlas grouping
 
-Choose **Atlases** grouping to give each mounted store its own orbital group.
+**Layers** and **Atlases** draw each group as a volumetric galaxy rather than
+packing stars onto a flat plane. The highest-mass pages, based on existing kind
+and relationship metadata, form a dense central bulge. Three spiral arms, a
+volumetric arms and a sparse halo give the surrounding pages visible depth.
+Most arm nodes now occupy substantial vertical space, rather than relying on
+a few distant halo points to make an otherwise thin disk look three-dimensional.
+Core lighting is shared by WebGL and Canvas 2D.
+
+The home view starts obliquely and rotates at the original idle speed
+(0.16 radians per second). Selection and reduced motion still stop idle rotation.
+Drag to orbit freely; activation following still turns toward active nodes.
+The expanding decorative pulse stays at each galaxy's projected core. With a
+node selected, it follows that node instead, including during pan, zoom and
+orbit. This decoration is not a read-activity indicator; reduced motion freezes
+its expansion.
+Grouping changes use shortest-angle, speed-limited camera turns and pause
+activation following for five seconds, so an old activation target cannot
+fight the new layout's framing.
+Placement is deterministic, not a force/gravity simulation: it adds no edges
+and changes no page metadata or schema membership. A group labelled
+**Undeclared types** remains undeclared; a galaxy shape does not supply missing
+schema declarations.
+
+Large galaxy overviews keep relationships visible at lower opacity and show
+high-mass labels instead of hundreds of overlapping names. Ordinary label
+detail returns by 3x zoom. Search, selection, hover and active read labels remain
+available, and **Search** always reaches every page.
+
+Choose **Atlases** grouping to give each mounted store its own galaxy.
 With multiple Atlases, each group's size reflects its node count but stays
 within a bounded region, leaving space between groups. Large stores such as the
 505-node stress Atlas no longer spread around the globe into smaller Atlases.
@@ -115,7 +171,8 @@ Relationships between stores remain visible across the gaps.
 
 **Layers** groups declared types by store and schema, while undeclared/legacy
 pages retain their rendering categories. **Proximity** still uses existing
-folder/relationship neighborhoods, not schema ownership. The separation is in
+folder/relationship neighborhoods and its previous layout, not schema ownership.
+The separation is in
 3D: groups can still line up in projection while
 you orbit the camera. Use an Atlas's island-navigation button to inspect it.
 
@@ -181,20 +238,23 @@ directories is needed. Changes made by any application are detected; this
 watcher does not identify the process that changed a file.
 
 - **Create a page:** its node, label, and attached relationships fade in over
-  2000 ms, accompanied by a softly rising and fading green glow.
+  3500 ms. The node's green glow fades over **10 seconds total from creation**,
+  independently of its arrival time. Arrival does not cut the glow short or
+  start a second ten-second timer.
 - **Delete a page:** it leaves the graph immediately; a red, non-interactive
-  ghost fades out smoothly over 2000 ms without an expanding particle burst.
+  ghost fades out smoothly over 3500 ms without an expanding particle burst.
   A deleted selected page closes its preview.
 - **Edit a page:** its metadata, relationships and open preview refresh in place.
 - **Add a relationship:** the new edge fades in with a green glow that rises
-  and fades over 2000 ms, then returns to its normal appearance. This also
+  and fades over 3500 ms, then returns to its normal appearance. This also
   applies to links between existing nodes; unchanged relationships do not glow.
 - **Delete a relationship:** it leaves the live graph immediately and leaves a
-  red glow fading out over 2000 ms. This also happens to attached relationships
+  red glow fading out over 3500 ms. This also happens to attached relationships
   when a node is deleted. The fading edge is non-interactive and carries no
   read-path pulses.
 
-Lifecycle effects last two seconds, respect reduced motion, and do not create
+New-node glows last ten seconds; node opacity, relationship and deletion effects
+last 3.5 seconds. They respect reduced motion and do not create
 steps in the read-activation path. They remain enabled when read highlighting
 is paused. Filtering, regrouping, or removing an Atlas from the viewer does not
 pretend that its files were deleted.
@@ -241,8 +301,12 @@ instead of stopping at 3x. The changing set uses up to about 80% of the view's
 width and 70% of its height, leaving padding for glows, labels and controls.
 Wider sets zoom out as needed to keep their nodes and connecting paths together.
 Speed-limited, damped motion and delayed zoom-in reduce sudden shifts as the
-active set changes. Read highlights keep their configured lifetime; lifecycle
-effects stay at 2000 ms.
+active set changes. Read highlights keep their configured lifetime;
+new-node glows last ten seconds and other lifecycle effects stay at 3500 ms.
+A single activated node uses faster close-in zoom and
+coordinated translation so it comes into view promptly even from a wide view.
+Multi-node following, zoom-out, surface rotation and idle restoration retain
+their normal timing.
 
 Drag to rotate at any time: automatic pan/zoom continues framing the changing
 nodes while you control the angle, including for five seconds after release.
@@ -251,6 +315,8 @@ reset and island navigation still pause all following for five seconds.
 Selected nodes keep focus. Once the effects end, the camera holds for one
 second, then smoothly returns to its pre-activation framing. A manually chosen
 angle replaces the original angle for that restoration.
+During the return, pan follows zoom progress so the Atlas stays in view instead
+of drifting away while zoom unwinds. The zoom-out duration is unchanged.
 Uncheck the option to stop following without restoring the old zoom.
 Reduced-motion preferences suppress automatic camera movement.
 This checkbox belongs to the current browser page and resets to on after a
@@ -270,7 +336,8 @@ operations. Under pressure, playback smoothly accelerates using these targets:
 If the oldest item has waited two seconds, the target is at most 100 ms; after
 five seconds, it is 50 ms. Speed returns gradually to 400 ms as the queue drains.
 Each highlight keeps its full configured lifetime from when it appears;
-creation/deletion glows remain 2000 ms and graph changes are not queued.
+new-node glows keep their ten-second deadline, other lifecycle effects remain
+3500 ms, and graph changes are not queued.
 
 The Knowledge Activation summary shows queue depth, oldest waiting age and current delay.
 Expand it for merged/cancelled counts and repeated node or relationship counts.

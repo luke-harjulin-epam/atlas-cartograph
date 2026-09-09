@@ -49,6 +49,35 @@
 - Keep universe layout single-sourced in `public/universe.js`; the Node entry
   re-exports it. Do not load third-party fonts or other UI assets at runtime.
   Index sorted sibling positions once per group instead of rescanning per node.
+- Use deterministic, bounded volumetric galaxies for Layers and Atlases:
+  high-mass central bulges, three thick spiral arms and a sparse halo. Keep
+  Proximity's existing layout and never infer new relationships from placement.
+  Fill the spiral arms' bounded volume with meaningful vertical depth; measure
+  the bulk side profile, not just extreme halo points. Start at an oblique angle
+  and retain the original 0.16-radian/second idle rotation, yielding to selection,
+  manual orbit and reduced motion. Share core decoration, overview detail and camera behavior
+  across WebGL and Canvas 2D. Overview edges remain visible; zoom, search,
+  selection and active/hovered nodes retain access to labels.
+- Keep the decorative pulse anchored to each projected galaxy core, or exactly
+  to the selected node. Use the shared render clock and freeze it for reduced
+  motion; never treat this pulse as evidence of file access.
+- Interactive node activation highlights the selected node and visible
+  first-degree neighbors/relationships first; repeating it opens Markdown.
+  Resolve both stages atomically on the server. Explicit page navigation and
+  native `select_node` retain their direct-preview contract.
+- Keep one always-visible toolbar search field for both accessible results and
+  map highlighting. Share title/ID/Atlas/path/type/kind matching with both
+  renderers and activation framing; pre-index render nodes rather than building
+  descriptions per frame. Keep hidden-layer results, bounded keyboard pages,
+  pending text/caret protection and visible query text when results close.
+  Down opens results/all-node browsing; Escape returns focus to the field.
+  Do not replace the field with a search-button popup.
+- Show the runtime version and source SHA in the small build badge. Only source
+  checkouts may inspect Git; deployments use stamped runtime metadata, never
+  the consumer repository's SHA. Mark uncommitted runtime changes explicitly.
+  Show rendering FPS beside the build badge using the existing render loop,
+  sample at most once per second and reset after suspension; do not add a
+  second animation loop or report the capped simulation delta as frame rate.
 - Keep page reads inside their mounted store, including canonical symlink
   targets. Preserve the originating Atlas in navigation and chat references.
 - Reject duplicate mount keys before changing the mounted graph or selection.
@@ -126,21 +155,31 @@
   damping and zoom-in hysteresis; preserve manual orbit on idle restoration.
   Disable automatic movement for reduced motion; restore the previous framing
   after a one-second idle hold. Turning following off must not restore old zoom.
+  Accelerate only single-node close-in framing, keeping its translation in
+  step with zoom; retain normal multi-node, zoom-out, orbit and restoration timing.
+  Couple automatic restoration pan to zoom progress so the Atlas stays in view
+  throughout the return, and discard that trajectory when new activity arrives.
+  Regrouping pauses stale activation following for five seconds. Navigation
+  uses shortest-angle, speed-limited turns even after many manual revolutions,
+  with pitch targets inside the supported orbit range.
 - Keep ordinary filesystem changes in the replaceable `atlas/watch.mjs` source
   and `atlas/live.mjs` reconciliation service, separate from read providers.
   Watch only mounted roots; close handles and debounce timers on detach/close.
 - Publish explicit filesystem graph deltas for lifecycle effects. Mounting,
   filtering, or regrouping is not file creation/deletion; deleted ghosts must
   never participate in picking, previews, stats, or read-path traversal.
-- Lifecycle opacity uses a smooth 2000 ms wall-clock fade for the whole node,
+- Lifecycle opacity uses a smooth 3500 ms wall-clock fade for the whole node,
   including labels and new attached edges, not just its colored overlay.
   Do not resume the legacy entrance flash when a lifecycle fade finishes.
+  Fade a new node's green glow over 10000 ms total from creation, independently
+  of its 3500 ms opacity fade or arrival. Keep that deadline across graph
+  remapping; reduced motion keeps static markers for the same lifetime.
 - Animate relationships only from explicit `createdEdges` / `deletedEdges`
   filesystem deltas. Compare endpoint file identities and relationship kinds,
   not transient graph IDs. Mounts, filters and metadata edits must not replay
   edge glows. Keep deleted edges outside the live graph and read paths;
   snapshot deleted endpoints and follow surviving endpoints by file identity
-  until the 2000 ms red fade expires. Respect relationship-layer visibility.
+  until the 3500 ms red fade expires. Respect relationship-layer visibility.
 - Live scans must surface errors and retain the last valid graph rather than
   falsely interpreting permission/read failures as deletions. Preserve selection
   by file identity unless that file was deleted.
