@@ -123,6 +123,41 @@ test("debouncing coalesces atomic saves into an edit instead of delete/create", 
   assert.deepEqual(state.graphChanges.deleted, []);
 });
 
+test("explicit native refresh reconciles immediately and cancels duplicate pending effects", async (t) => {
+  const { entry, state, root, node, change } = await setup(t);
+  selectNode(state, "index");
+  state.query = "observatory";
+  state.layers.sources = false;
+  writeFileSync(join(root, "signal.md"), page("Signal", "[[index]]"));
+  change();
+  entry.liveAtlas.syncRoots();
+  entry.liveAtlas.refresh();
+  assert.ok(node("signal.md"));
+  assert.equal(state.selectedId, "index");
+  assert.equal(state.query, "observatory");
+  assert.equal(state.layers.sources, false);
+  assert.deepEqual(state.graphChanges.created.map((item) => item.path), ["signal.md"]);
+  assert.equal(state.graphChanges.createdEdges.length, 1);
+  const revision = state.graphChanges.revision;
+  await delay(90);
+  assert.equal(state.graphChanges.revision, revision);
+
+  if (process.platform !== "win32" && process.getuid?.() !== 0) {
+    const graph = state.graph;
+    chmodSync(join(root, "signal.md"), 0);
+    try {
+      assert.throws(() => entry.liveAtlas.refresh(), /EACCES|EPERM/);
+      assert.equal(state.graph, graph);
+      assert.equal(state.selectedId, "index");
+      assert.equal(state.graphWatch.status, "error");
+    } finally {
+      chmodSync(join(root, "signal.md"), 0o600);
+    }
+    entry.liveAtlas.refresh();
+    assert.equal(state.graphWatch.status, "live");
+  }
+});
+
 test("zero-byte Markdown pages are discovered, selected and retained through live edits", async (t) => {
   const { state, root, temp, node, change } = await setup(t);
   const path = join(root, "empty-page.md");

@@ -20,6 +20,18 @@
 - With no explicit root, open recognized Atlas mounts under the consumer
   workspace's `.atlas/`. Atlas content is external data, never executable code.
   Do not auto-open the sample or scan installed extension/package caches.
+- Register the native canvas without cwd-cache lifecycle hooks. Resolve each
+  new instance from `ctx.session.workingDirectory`, using
+  `session.rpc.metadata.snapshot()` only for the same caller when context omits
+  cwd. Reject invalid/missing paths and lexical/canonical installation paths;
+  never fall back to process cwd, cached cwd or a parent directory. Existing
+  instances retain their workspace. Native reload uses live reconciliation,
+  preserves selection/filters and retries watchers; refresh failures propagate.
+- Exercise the canonical and deployed native entrypoints with
+  `test/native-extension.test.mjs`. Synthetic SDK transport coverage is not
+  real-host acceptance. Keep APM 0.30.0's exact-content canvas-only grant in the
+  disposable package consumer, with an explicit empty allow-map before probing
+  the identity. No wildcard grants, legacy name-only approvals or shared installs.
 - Track synthetic development stores under `.atlas/local/`, with distinct Atlas
   identities. Keep the local mini Atlas byte-identical to the packaged sample;
   keep the stress baseline's 505 nodes and 1508 relationships intact. Development

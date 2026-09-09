@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Remove native startup's optional lifecycle-hook dependency. Resolve each
+  panel's workspace from canvas context or matching session metadata, rejecting
+  missing/invalid directories and installation paths without scanning fallback
+  locations. Preserve native reload selection and filters through live graph
+  reconciliation, with watcher retries and visible refresh failures.
+- Validate canonical and packaged native registration/actions using a synthetic
+  SDK transport. Upgrade isolated packaging to checksum-pinned APM 0.30.0 and
+  exact-content canvas-only executable approval, removing workstation ownership
+  metadata from the final archive; real-host acceptance remains
+  a separate release gate.
+
 - Label untyped navigation indexes separately from undeclared types and untyped
   pages across Layers, islands, previews and the node browser. Index filenames
   do not imply missing schema declarations or outdated content.

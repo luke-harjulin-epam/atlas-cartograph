@@ -1,54 +1,49 @@
 // Extension: cartograph
 // Cartograph Atlas knowledge-graph viewer as a Copilot App Canvas.
 
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { realpathSync, statSync } from "node:fs";
+import { isAbsolute, resolve } from "node:path";
 import { joinSession, createCanvas, CanvasError } from "@github/copilot-sdk/extension";
 import {
   freshState,
   hydrateStores,
   openAtlas,
-  openAtlases,
   openDefaultAtlases,
   selectNode,
   setQuery,
   setLayers,
   startServer,
 } from "./server.mjs";
-import { EXTENSION_ROOT } from "./atlas/catalog.mjs";
+import { isInstalledPath } from "./atlas/catalog.mjs";
 import { answerQuery } from "./atlas/chat.mjs";
 import { MIN_DURATION_MS, MAX_DURATION_MS } from "./activity/model.mjs";
 import { monitorProviders } from "./activity/providers/index.mjs";
-import { isPathWithin } from "./paths.mjs";
 
 const instances = new Map();
-let sessionCwd = "";
-
-function isInstallDir(p) {
-  if (!p) return false;
-  return isPathWithin(EXTENSION_ROOT, p);
-}
-
-function firstRealCwd(...candidates) {
-  for (const c of candidates) {
-    if (!c || !existsSync(c) || isInstallDir(c)) continue;
-    return resolve(c);
-  }
-  return "";
-}
 
 async function resolveCwd(ctx) {
-  let snapCwd = "";
-  try {
-    snapCwd = (await session.rpc.metadata.snapshot())?.workingDirectory || "";
-  } catch {
-    /* rpc not ready */
+  let cwd = ctx.session?.workingDirectory;
+  if (cwd === undefined) {
+    // The joined session's metadata cannot stand in for another caller.
+    if (ctx.sessionId !== session.sessionId) {
+      throw new CanvasError("workspace_unavailable", "Cartograph requires the caller's working directory.");
+    }
+    const metadata = await session.rpc.metadata.snapshot();
+    if (metadata?.sessionId !== ctx.sessionId) {
+      throw new CanvasError("workspace_unavailable", "Cartograph session metadata does not match the caller.");
+    }
+    cwd = metadata.workingDirectory;
   }
-  return (
-    firstRealCwd(ctx?.session?.workingDirectory, snapCwd, sessionCwd) ||
-    sessionCwd ||
-    (isInstallDir(process.cwd()) ? "" : process.cwd())
-  );
+  if (typeof cwd !== "string" || !isAbsolute(cwd)) {
+    throw new CanvasError("workspace_unavailable", "Cartograph requires an absolute session working directory. Reopen from a local workspace.");
+  }
+  if (isInstalledPath(cwd) || isInstalledPath(realpathSync(cwd))) {
+    throw new CanvasError("invalid_workspace", "Cartograph cannot use an extension installation or package cache as its workspace.");
+  }
+  if (!statSync(cwd).isDirectory()) {
+    throw new CanvasError("invalid_workspace", "Cartograph's session working directory must be a directory.");
+  }
+  return resolve(cwd);
 }
 
 function requireEntry(instanceId) {
@@ -58,14 +53,6 @@ function requireEntry(instanceId) {
 }
 
 const session = await joinSession({
-  hooks: {
-    onSessionStart: async ({ workingDirectory }) => {
-      if (workingDirectory && !isInstallDir(workingDirectory)) sessionCwd = workingDirectory;
-    },
-    onUserPromptSubmitted: async ({ workingDirectory }) => {
-      if (workingDirectory && !isInstallDir(workingDirectory)) sessionCwd = workingDirectory;
-    },
-  },
   canvases: [
     createCanvas({
       id: "cartograph",
@@ -232,7 +219,8 @@ const session = await joinSession({
           description: "Rescan the mounted Atlas stores and refresh the combined graph.",
           handler: async (ctx) => {
             const entry = requireEntry(ctx.instanceId);
-            openAtlases(entry.state, entry.state.roots, { strict: true });
+            entry.liveAtlas.syncRoots();
+            entry.liveAtlas.refresh();
             hydrateStores(entry.state);
             entry.broadcast();
             return {
@@ -250,14 +238,6 @@ const session = await joinSession({
           const cwd = await resolveCwd(ctx);
           const state = freshState(cwd, input);
           openDefaultAtlases(state, input);
-          try {
-            await session.log(
-              `Cartograph cwd ${cwd || "(none)"} · ${state.stores.filter((s) => s.available).length} stores`,
-              { ephemeral: true },
-            );
-          } catch {
-            /* ignore */
-          }
           entry = await startServer(ctx.instanceId, state, {
             onChat: async (text, st) => answerQuery(st, text),
             activity: {

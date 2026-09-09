@@ -41,6 +41,12 @@ is a development shim for `.apm/extensions/cartograph/extension.mjs`.
 The installed user extension is left unchanged.
 If both extensions are listed, select `project:cartograph` explicitly.
 
+Native startup registers only the canvas, without session lifecycle hooks.
+Each new panel uses the caller's working directory from canvas context, or
+matching session metadata when that context is absent. It never guesses from
+the extension process directory or a previous panel. Missing/invalid metadata
+fails before discovery; see [native workspace resolution](docs/usage.md#native-workspace-resolution).
+
 See [development Atlases](.atlas/README.md) for dataset contents and safe usage.
 These datasets ship with the repository, not with installations into consumers'
 `.atlas/`. The small sample remains separately bundled inside the APM runtime.
@@ -56,7 +62,7 @@ links stay within the named Atlas and work with one or multiple stores open.
 
 ## Install with APM
 
-Use an APM version with experimental canvas support (validated with 0.29.0),
+Use an APM version with experimental canvas support (validated with 0.30.0),
 repository access, and Copilot App canvas support. Canvas packages execute code;
 review and trust this package before installing it.
 
@@ -70,7 +76,7 @@ executables:
       canvas: true
 ```
 
-APM 0.29.0 checks the dependency reference for canvas approval;
+APM 0.30.0 checks the source dependency reference for canvas approval;
 `apm approve` can record a different package identity. Use the explicit
 repository-key grant above rather than granting unrelated executable types.
 
@@ -89,6 +95,11 @@ runtime to `.github/extensions/cartograph/`; it does not deploy the development
 shim or depend on a `src/` directory in the consumer. Only Node built-ins and
 the host-provided Copilot SDK are external code dependencies. Atlas mounts in
 the consumer's `.atlas/` remain data, not executable imports.
+For offline archives, APM 0.30.0 instead requires the exact
+`name#version@sha256:<digest>` approval key printed by `apm install`.
+Grant only `canvas: true` under that key in `executables.allow`; changed content
+requires a new grant. A bundle-name-only or legacy `allowExecutables` grant
+does not approve the archive.
 The viewer uses local fallback fonts; it does not fetch Google Fonts or other
 third-party UI assets.
 
@@ -99,6 +110,10 @@ version alignment, JavaScript syntax, the full Node.js 22/24 suite on Linux and
 macOS, and an isolated APM archive pack/install exercise with lockfile and
 deployed-file integrity audits. The aggregate merge check is
 named **CI**; require it in the default-branch ruleset. PR runs cannot publish.
+The package check also imports the deployed native entrypoint against a
+synthetic SDK transport and exercises registration, workspace resolution and
+actions. This is not real-host native acceptance: verify the exact archive in
+the intended Copilot App before release, without modifying its runtime.
 
 After a reviewed version change reaches `main`, pushing `vX.Y.Z` starts the
 release pipeline. The tag must match `package.json`, the runtime `package.json`,

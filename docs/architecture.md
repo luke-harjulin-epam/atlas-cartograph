@@ -34,6 +34,30 @@ hand-authored; there is no generated marketplace site or documentation generator
 | `dev.mjs` | Standalone development server using the same implementation |
 | `fixtures/mini-atlas/` | Small local demonstration store |
 
+## Native bootstrap boundary
+
+`extension.mjs` calls the public SDK's
+`joinSession({ canvases: [createCanvas(...)] })` without optional hooks.
+`CanvasProviderOpenRequest.session.workingDirectory` supplies per-call cwd;
+`session.rpc.metadata.snapshot().workingDirectory` is used only when that field
+is omitted and the joined session and returned snapshot match the caller.
+Invalid explicit context never falls through to another source. No process cwd
+or global cwd cache participates. Absolute path, directory and lexical/canonical
+installation checks happen before Atlas discovery or server creation.
+
+The existing canvas instance retains its resolved workspace for relative actions.
+Native `reload` uses the live service's immediate `refresh()` path, sharing
+selection reconciliation, lifecycle deltas and error status with filesystem
+notifications; explicit refresh also propagates scan failures to the action.
+Watcher retry stays explicit, not part of status broadcasts. Activity retains
+the current CLI parent PID and viewer-subtree exclusion independently of cwd.
+
+The package smoke imports the deployed `extension.mjs` with a synthetic SDK
+transport, then exercises its real handlers and server. The harness stays outside
+the distributed runtime. It validates registration shape and data flow, not the
+host's actual `session.resume` implementation or renderer; exact-artifact native
+acceptance remains external to the local packaging check.
+
 ## Schema metadata flow
 
 `readSchemaCatalog(root)` extracts type IDs from the base and contribution

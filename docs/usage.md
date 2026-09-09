@@ -40,6 +40,41 @@ enablement and package approval. Reloading extensions after an APM install
 loads the deployed canvas. The OS read collector is still separately started
 by the user; installing the package does not elevate privileges.
 
+### Native workspace resolution
+
+The native entrypoint joins with `canvases` only. It does not register
+`onSessionStart` or `onUserPromptSubmitted` hooks to cache cwd, so registration
+does not depend on a host hook processor being available.
+
+When opening a new panel, Cartograph uses the public canvas callback's
+`session.workingDirectory`. If that field is omitted, it requests
+`session.rpc.metadata.snapshot()` from the joined SDK session and requires both
+the callback and snapshot to identify that same session. A callback from a
+different session must supply its own working directory. Metadata is read
+afresh for each new panel, not cached across callers.
+
+The directory must be absolute, existing, and outside extension installations
+and package caches, including symlink targets. Missing metadata, invalid paths,
+and RPC or filesystem failures stop the open before discovery or server startup.
+There is no fallback to the extension process cwd, an earlier panel, the main
+checkout, or a parent directory. Reopen from a local workspace with valid host
+context to recover. This requirement also applies when supplying an absolute
+Atlas root; a root selects a store, not the workspace for later relative actions
+and picker discovery. Relative roots resolve against the validated workspace.
+Remote-only directories unavailable on the extension's host are not supported.
+
+Focusing an already open instance keeps its workspace, selection, and filters.
+Close it and open a new instance to adopt a changed session directory. The native
+`reload` action rescans mounted stores through live reconciliation, preserves
+selection by file identity and retains query/layers, retries failed watchers,
+and surfaces scan failures without replacing the last valid graph.
+
+Canvas APIs are experimental. Local native-entrypoint tests substitute the SDK
+transport; they do not establish compatibility with every Copilot App version.
+Release acceptance must use the exact unmodified archive in the intended host.
+Standalone `npm start` continues to use its invocation directory and does not
+require SDK context or metadata.
+
 ## Browse and select nodes
 
 Choose **Browse nodes** in the map toolbar to explore every node using native
