@@ -123,6 +123,41 @@ test("debouncing coalesces atomic saves into an edit instead of delete/create", 
   assert.deepEqual(state.graphChanges.deleted, []);
 });
 
+test("explicit native refresh reconciles immediately and cancels duplicate pending effects", async (t) => {
+  const { entry, state, root, node, change } = await setup(t);
+  selectNode(state, "index");
+  state.query = "observatory";
+  state.layers.sources = false;
+  writeFileSync(join(root, "signal.md"), page("Signal", "[[index]]"));
+  change();
+  entry.liveAtlas.syncRoots();
+  entry.liveAtlas.refresh();
+  assert.ok(node("signal.md"));
+  assert.equal(state.selectedId, "index");
+  assert.equal(state.query, "observatory");
+  assert.equal(state.layers.sources, false);
+  assert.deepEqual(state.graphChanges.created.map((item) => item.path), ["signal.md"]);
+  assert.equal(state.graphChanges.createdEdges.length, 1);
+  const revision = state.graphChanges.revision;
+  await delay(90);
+  assert.equal(state.graphChanges.revision, revision);
+
+  if (process.platform !== "win32" && process.getuid?.() !== 0) {
+    const graph = state.graph;
+    chmodSync(join(root, "signal.md"), 0);
+    try {
+      assert.throws(() => entry.liveAtlas.refresh(), /EACCES|EPERM/);
+      assert.equal(state.graph, graph);
+      assert.equal(state.selectedId, "index");
+      assert.equal(state.graphWatch.status, "error");
+    } finally {
+      chmodSync(join(root, "signal.md"), 0o600);
+    }
+    entry.liveAtlas.refresh();
+    assert.equal(state.graphWatch.status, "live");
+  }
+});
+
 test("zero-byte Markdown pages are discovered, selected and retained through live edits", async (t) => {
   const { state, root, temp, node, change } = await setup(t);
   const path = join(root, "empty-page.md");
@@ -182,27 +217,28 @@ test("multiple Atlases watch and reconcile independently, including colliding lo
   assert.equal(state.graphChanges.revision, revision);
 });
 
-test("invalid or unreadable scans preserve the last graph and surface an independent error", async (t) => {
+test("invalid schemas surface diagnostics while unreadable pages preserve the last graph", async (t) => {
   const { state, root, change, node } = await setup(t);
   const before = state.graph;
-  const revision = state.graphChanges.revision;
   writeFileSync(join(root, "SCHEMA.json"), "{ incomplete");
   change();
-  await until(() => state.graphWatch.status === "error", "parse failure is visible");
-  assert.equal(state.graph, before);
-  assert.equal(state.graphChanges.revision, revision);
-  assert.match(state.graphWatch.message, /keeping the last graph/);
+  await until(() => state.graph.schemaDiagnostics.length > 0, "parse failure is visible");
+  assert.deepEqual(state.graph.nodes, before.nodes);
+  assert.deepEqual(state.graph.edges, before.edges);
+  assert.deepEqual(state.graphChanges.deleted, []);
+  assert.ok(!JSON.stringify(state.graph.schemaDiagnostics).includes("incomplete"));
   assert.notEqual(state.activity.collector.status, "live");
   writeFileSync(join(root, "SCHEMA.json"), '{"atlas_id":"one"}');
   change();
-  await until(() => state.graphWatch.status === "live", "watcher recovers after a valid save");
+  await until(() => state.graph.schemaDiagnostics.length === 0, "schema metadata recovers after a valid save");
   if (process.getuid?.() !== 0 && process.platform !== "win32") {
     const file = join(root, "index.md");
+    const lastValid = state.graph;
     chmodSync(file, 0);
     t.after(() => { if (node("index.md")) { try { chmodSync(file, 0o600); } catch (error) { if (error.code !== "ENOENT") throw error; } } });
     change();
     await until(() => state.graphWatch.status === "error", "permission failure is visible");
-    assert.equal(state.graph, before);
+    assert.equal(state.graph, lastValid);
     assert.deepEqual(state.graphChanges.deleted, []);
     chmodSync(file, 0o600);
     change();

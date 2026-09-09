@@ -20,6 +20,7 @@ import { countKinds, linkGraph, withDegrees } from "./link.mjs";
 import { combineAtlases, mergeGraphs } from "./merge.mjs";
 import { pageIdentity } from "./identity.mjs";
 import { referenceKey } from "./resolve.mjs";
+import { graphSchemas, readSchemaCatalog, schemaTypes } from "./schema.mjs";
 export { pageIdentity } from "./identity.mjs";
 
 const SKIP_DIRS = new Set([
@@ -74,7 +75,7 @@ function walkMd(dir, acc = [], depth = 0, strict = false, canonicalRoot, ancesto
       continue;
     }
     if (st.isDirectory()) {
-      if (SKIP_DIRS.has(name)) continue;
+      if (SKIP_DIRS.has(name) || name === "schema.d") continue;
       walkMd(full, acc, depth + 1, strict, canonicalRoot, visited);
     } else if (st.isFile() && name.endsWith(".md")) {
       acc.push(full);
@@ -100,16 +101,6 @@ export function clearListing(root) {
 
 function readText(path) {
   return readFileSync(path, "utf8");
-}
-
-function readJson(root, path, strict = false) {
-  try {
-    const target = confinedPath(root, path);
-    return target ? JSON.parse(readText(target)) : null;
-  } catch (error) {
-    if (strict && error.code !== "ENOENT" && error.code !== "ENOTDIR") throw error;
-    return null;
-  }
 }
 
 export function sanitizeRoot(input, cwd) {
@@ -178,9 +169,10 @@ export function inspectRoot(rawRoot, cwd, { strict = false, fallbackStore, label
     return empty("Not an Atlas (need SCHEMA.json or index.md) or okf-wiki store.");
   }
   let atlasId = fallbackStore?.atlasId;
+  let schemaCatalog;
   if (format === "atlas") {
-    const schema = readJson(canonicalRoot, join(root, "SCHEMA.json"), strict);
-    if (schema && typeof schema.atlas_id === "string") atlasId = schema.atlas_id;
+    schemaCatalog = readSchemaCatalog(root);
+    if (schemaCatalog.atlasId) atlasId = schemaCatalog.atlasId;
   }
   const counts = tallyStore(root, strict);
   return {
@@ -189,12 +181,14 @@ export function inspectRoot(rawRoot, cwd, { strict = false, fallbackStore, label
     available: true,
     format,
     atlasId,
+    schemaCatalog,
     ...counts,
   };
 }
 
-function parseFiles(storeRoot, files, format, atlasId, atlasLabel, strict = false) {
+function parseFiles(storeRoot, files, format, atlasId, atlasLabel, strict = false, catalog) {
   const nodes = [];
+  const types = schemaTypes(catalog);
   const canonicalRoot = realpathSync(storeRoot);
   for (const file of files) {
     const rel = (isAbsolute(file) ? relative(storeRoot, file) : file).replace(/\\/g, "/");
@@ -242,6 +236,8 @@ function parseFiles(storeRoot, files, format, atlasId, atlasLabel, strict = fals
       kind,
       title: displayTitle(meta, rel),
       type: type || kind,
+      declaredType: type,
+      ...types.get(type),
       path: rel,
       degree: 0,
       sourceCount: sources.length,
@@ -275,12 +271,13 @@ export function loadGraph(rawRoot, opts, cwd) {
   const limit = Math.max(1, Math.min(200, opts?.limit ?? STREAM_BATCH));
   const { files, complete: listedAll } = ensureListed(store.root, opts?.strict);
   const slice = files.slice(offset, offset + limit);
-  const nodes = parseFiles(store.root, slice, store.format, store.atlasId, store.label, opts?.strict);
+  const nodes = parseFiles(store.root, slice, store.format, store.atlasId, store.label, opts?.strict, store.schemaCatalog);
   const edges = linkGraph(nodes);
   const next = offset + slice.length;
   const hasMore = next < files.length || !listedAll;
   return {
     store: { ...store, ...countKinds(nodes), pages: files.length },
+    ...graphSchemas([store]),
     nodes: withDegrees(nodes, edges),
     edges,
     nextOffset: hasMore ? next : null,
@@ -328,6 +325,8 @@ function pageFromStore(store, id) {
     path: rel,
     title: displayTitle(meta, rel),
     type: type || kind,
+    declaredType: type,
+    ...schemaTypes(store.schemaCatalog).get(type),
     kind,
     sources: sourcesOf(meta),
     relatesTo: relatesToOf(meta),

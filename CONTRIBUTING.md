@@ -5,6 +5,14 @@ Use Node.js 22 or later. There are no npm dependencies to install.
 Keep runtime code in `.apm/extensions/cartograph/` and documentation in `docs/`.
 There is no generated duplicate of this source. Tests use Node's built-in runner
 under `test/`; run `npm test` or a targeted `node --test` invocation.
+Schema changes need `test/atlas-schema.test.mjs`, frontend interaction, live
+reload and renderer coverage. Invent synthetic domain fixtures; never copy or
+lightly anonymize consumer schemas. Exercise empty types, colliding mounted
+contributions, schema-only changes, receipts, invalid metadata and confinement.
+Cover untyped `index.md`, explicit undeclared `type: index`, and declared index
+types separately; labels must agree across controls, islands and navigation.
+Do not treat `claimed_folders` as knowledge placement or add native compiler
+validation to the viewer.
 Start a development server with `npm start` for both tracked `.atlas/local/`
 development stores, or `npm start -- .atlas/local/mini-atlas` for only the sample.
 The stress store has 505 baseline nodes and 1508 relationships; opening it does
@@ -24,6 +32,19 @@ from real collector endpoints.
 To exercise the Copilot canvas, reload project extensions. Select the
 `project:cartograph` provider if a user-installed copy also exists. Do not copy
 changes into another user's or another session's installed extension.
+For native startup/action changes, run
+`node --test test/native-extension.test.mjs test/atlas-live.test.mjs`.
+The harness imports the unmodified canonical entrypoint and a copied deployment
+in a CommonJS consumer, replacing only the SDK transport through a Node module
+loader. It checks hookless registration, caller/metadata precedence, missing and
+invalid workspaces, installed-directory launches, absolute/relative roots,
+isolated caller contexts, action dispatch and process-scoped activity metadata.
+It never starts a privileged collector. Keep this synthetic harness separate
+from the runtime bundle. A passing harness or standalone HTTP server does not
+prove compatibility with the real host's experimental canvas protocol.
+Before release, exercise the exact packaged runtime in a session-scoped host
+installation, including default discovery, `get_state`, `set_layers`,
+`select_node` and `reload`, without source edits or preview-only shims.
 
 `apm.yml` declares only the self-contained canvas directory. Keep its version,
 the runtime `package.json` and root `package.json` aligned. Application imports,
@@ -35,16 +56,19 @@ After dependency changes, run `apm lock --target copilot`. Use
 `npm run pack:apm -- --dry-run` to inspect the bundle or `npm run pack:apm` to
 create it under ignored `build/`. APM's plugin format preserves canvas assets;
 the legacy `--format apm` path is not suitable for this canvas-only package
-with APM 0.29.0. Packing may generate `.github/plugin/plugin.json` metadata.
+with APM 0.30.0. Packing may generate `.github/plugin/plugin.json` metadata.
 For installation testing, use a disposable consumer and an isolated APM home
-(set both `HOME` and `APM_HOME`; `APM_HOME` alone does not isolate config in 0.29.0),
+(set both `HOME` and `APM_HOME` to isolate configuration),
 enable the experimental `canvas` flag there, and approve only this package.
 Never change user-wide executable trust or install globally as part of tests.
-With APM 0.29.0, source dependency approval must use its exact dependency key
+With APM 0.30.0, source dependency approval must use its exact dependency key
 under `executables.allow`: the repository reference for remote installs, or the
 literal dependency path for local installs. The offline plugin-bundle installer
-instead reads `allowExecutables` keyed by bundle name; keep that legacy
-compatibility setting confined to disposable bundle consumers. Do not grant
+instead requires an exact `name#version@sha256:<digest>` key in
+`executables.allow`. The packer first probes a disposable consumer with an
+explicit empty allow-map, asserts that no files were deployed, then grants only
+canvas access to the validated identity printed by APM. Omitting the executable
+block enables legacy permissive behavior and is not an approval test. Do not grant
 other executable types to silence unrelated APM warnings.
 Keep lockfiles and canonical `.apm/` source; do not commit `apm_modules/`, built
 archives or local browser artifacts. A license has not been declared for this
@@ -176,28 +200,32 @@ filters that would leave the required check absent.
 `validate.yml` checks all three package versions, parses every JavaScript file
 with Node, and runs the full suite on Node.js 22 and 24 on Linux and macOS.
 There are no npm dependencies, TypeScript compiler, or separate application build.
-`package.yml` downloads checksum-pinned APM 0.29.0, verifies frozen resolution,
+`package.yml` downloads checksum-pinned APM 0.30.0, verifies frozen resolution,
 audits the producer lockfile, and builds the plugin archive. It installs that
 exact archive in a fresh CommonJS consumer, audits its deployed-file integrity,
-compares every deployed runtime file, and exercises default Atlas discovery,
+compares every deployed runtime file, exercises the native entrypoint contract
+using synthetic SDK transport, and exercises default Atlas discovery,
 every public HTML/JavaScript/CSS asset, and the authenticated bootstrap API.
 Neither job starts a privileged collector.
 
 For a local reproduction, run `npm run check:version`,
-`npm run check:syntax`, `npm test`, and `npm run pack:release` with APM 0.29.0
+`npm run check:syntax`, `npm test`, and `npm run pack:release` with APM 0.30.0
 on `PATH` (or set `APM_BIN` to its absolute path). The last command requires
 an empty `build/release/`; move or remove only your previous generated output
 before repeating it. Producer, consumer, `HOME`, and `APM_HOME` are temporary
 and removed automatically. Packaging never deploys over the development shim.
 
-APM 0.29.0 needs two packaging compatibility choices: avoid `pack --json`,
-which can generate metadata without the bundle, and explicitly set
-`pack --target copilot` so an isolated producer does not record an invalid
-`minimal` target, even when `apm config set target copilot` has been used.
-The latter flag is deprecated upstream but necessary for this pinned version.
-The offline consumer's legacy canvas approval is confined to
-the disposable test project. Do not broaden user-wide trust or bypass integrity
-checks. When upgrading APM, update the binary checksum and script version
+The packer uses `pack --format plugin --archive --archive-format tar.gz`.
+Before installation, it normalizes the verified tar members with BSD or GNU tar:
+zero owner/group IDs, empty owner/group names, epoch file times and ordinary
+file modes. This removes workstation metadata without changing runtime bytes
+or generated APM manifests. The normalized archive is the one installed,
+audited and checksummed.
+APM 0.30.0 still needs explicit `pack --target copilot`: without it, the isolated
+producer records `minimal` and bundle installation fails, despite the flag's
+upstream deprecation. The offline consumer's exact-content approval is confined
+to the disposable test project. Do not broaden user-wide trust or bypass
+integrity checks. When upgrading APM, update the binary checksum and script version
 together and re-exercise the complete install path.
 
 These isolated audits enforce lockfile and deployed-file consistency, not
@@ -206,6 +234,10 @@ discovery. Organisations needing additional policy gates must supply their
 approved policy explicitly rather than infer compliance from these audits.
 
 ## Release procedure
+
+The next prepared release is v0.2.0. A local archive with that version is only a
+candidate until the reviewed source reaches `main` and the tag workflow publishes
+it. Do not reuse the earlier 0.1.1 native-acceptance archive as a release asset.
 
 1. Update `package.json`, `.apm/extensions/cartograph/package.json`, and the
    double-quoted top-level version in `apm.yml` together. Move the corresponding

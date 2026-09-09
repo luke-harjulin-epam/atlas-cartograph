@@ -12,6 +12,7 @@ import { DEFAULT_DURATION_MS, validateDuration } from "./activity/model.mjs";
 import { createActivityService } from "./activity/service.mjs";
 import { createLiveAtlas, graphFileKey, mountGraphChanges } from "./atlas/live.mjs";
 import { readJsonBody, requireCanvas } from "./http.mjs";
+import { nodeLayer, nodeLayerKeys, normalizeLayers } from "./public/node-layers.js";
 export { defaultRoot };
 
 const PUBLIC_DIR = join(dirname(fileURLToPath(import.meta.url)), "public");
@@ -114,6 +115,26 @@ export function setQuery(state, query) {
   state.queryRevision = (state.queryRevision ?? 0) + 1;
 }
 
+export function setLayers(state, layers) {
+  if (!layers || typeof layers !== "object" || Array.isArray(layers) ||
+      Object.values(layers).some((value) => typeof value !== "boolean")) {
+    const error = new Error("Layers must be an object of boolean values.");
+    error.statusCode = 400;
+    throw error;
+  }
+  state.layers = normalizeLayers({ ...state.layers, ...layers }, nodeLayerKeys(state.graph));
+  state.layersRevision = (state.layersRevision ?? 0) + 1;
+}
+
+function reconcileLayers(state, previousGraph) {
+  const next = normalizeLayers(state.layers, nodeLayerKeys(state.graph));
+  const previousTypes = new Map((previousGraph?.nodes ?? []).map((node) => [graphFileKey(node), node.typeKey]));
+  for (const node of state.graph?.nodes ?? []) {
+    if (!node.typeKey && previousTypes.get(graphFileKey(node))) next[nodeLayer(node)] = true;
+  }
+  if (JSON.stringify(next) !== JSON.stringify(state.layers)) setLayers(state, next);
+}
+
 export function hydrateStores(state, options) {
   try {
     state.stores = listPresets(state.cwd, options).filter((s) => s.format === "atlas" || s.available);
@@ -144,7 +165,9 @@ function normalizeRoots(state) {
 }
 
 function applyGraph(state, graph, { jump = true } = {}) {
+  const previousGraph = state.graph;
   state.graph = graph;
+  reconcileLayers(state, previousGraph);
   if (!graph?.store?.available) {
     state.error = graph?.store?.reason ?? "Store is not available.";
     state.phase = "welcome";
@@ -170,6 +193,7 @@ export function openAtlases(state, roots, { jump = true, strict = false } = {}) 
   state.root = roots[0] || "";
   if (!roots.length) {
     state.graph = null;
+    reconcileLayers(state);
     state.phase = "welcome";
     return state;
   }
@@ -198,6 +222,7 @@ export function dropAtlas(state, root) {
   state.page = null;
   if (!state.roots.length) {
     state.graph = null;
+    reconcileLayers(state);
     state.phase = "welcome";
     return state;
   }
@@ -221,7 +246,9 @@ export function refreshAtlases(state) {
   const changed = JSON.stringify(graph) !== JSON.stringify(state.graph) ||
     JSON.stringify(page) !== JSON.stringify(state.page);
   if (!changed) return false;
+  const previousGraph = state.graph;
   state.graph = graph;
+  reconcileLayers(state, previousGraph);
   state.stores = state.stores.map((store) => graph.stores.find((next) => next.root === store.root) ?? store);
   state.page = page;
   state.selectedId = selected?.id ?? null;
@@ -328,6 +355,7 @@ export function selectNode(state, nodeId) {
   }
   state.linkError = null;
   state.selectedId = id;
+  if (node && state.layers[nodeLayer(node)] === false) setLayers(state, { [nodeLayer(node)]: true });
   state.previewOpen = true;
   state.page = enrichPage(state, loaded, id);
   return state;
@@ -433,8 +461,7 @@ export async function startServer(instanceId, state, options = {}) {
         } else if (body.action === "query") {
           setQuery(entry.state, body.query);
         } else if (body.action === "layers") {
-          entry.state.layers = { ...entry.state.layers, ...body.layers };
-          entry.state.layersRevision = (entry.state.layersRevision ?? 0) + 1;
+          setLayers(entry.state, body.layers);
         } else if (body.action === "grouping") {
           entry.state.grouping =
             body.grouping === "proximity" ? "proximity" : body.grouping === "atlases" ? "atlases" : "layers";

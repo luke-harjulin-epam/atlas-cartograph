@@ -6,6 +6,8 @@ import { allNodeLayersOn, applyLayerClick, createLayerControls } from "../.apm/e
 import { createStateControls } from "../.apm/extensions/cartograph/public/state-controls.js";
 import { handleContentClick } from "../.apm/extensions/cartograph/public/content-navigation.js";
 import { mountNodeBrowser } from "../.apm/extensions/cartograph/public/node-browser.js";
+import { fallbackLayerLabel, nodeCategory, nodeLayer, layerCounts } from "../.apm/extensions/cartograph/public/node-layers.js";
+import { mountSchemaLayers } from "../.apm/extensions/cartograph/public/schema-layers.js";
 import { escapeHtml, renderMarkdown } from "../.apm/extensions/cartograph/public/markdown.js";
 import { FrontendEvent, frontendDocument } from "./helpers/frontend-dom.mjs";
 
@@ -68,6 +70,7 @@ function appFixture({ reducedMotion = false, phase = "map" } = {}) {
   const bootstrap = deferred();
   const context = vm.createContext({
     document, allNodeLayersOn, createLayerControls, createStateControls, handleContentClick, mountNodeBrowser, escapeHtml, renderMarkdown,
+    fallbackLayerLabel, nodeCategory, nodeLayer, layerCounts, mountSchemaLayers,
     window: { matchMedia: () => motion, open: (...args) => opened.push(args) },
     performance: { now: () => clock },
     requestAnimationFrame(callback) { frames.set(++frameId, callback); return frameId; },
@@ -123,6 +126,120 @@ function activity(revision, overrides = {}) {
   return { revision, enabled: true, durationMs: 5000, nodes: [], edges: [],
     collector: { status: "live", message: "Receiving accesses." }, ...overrides };
 }
+
+function schemaGraph() {
+  return {
+    store: {}, edges: [],
+    schemas: [
+      { key: "core-schema", label: "Core", atlasKey: "observatory", origin: "core", source: "SCHEMA.json",
+        types: [{ id: "document", key: "document-type" }] },
+      { key: "observation-schema", label: "observations", atlasKey: "observatory", origin: "contribution",
+        source: "schema.d/observations.json",
+        types: [{ id: "instrument", key: "instrument-type" }, { id: "calibration", key: "calibration-type" }] },
+    ],
+    nodes: [
+      { id: "guide", title: "Guide", kind: "page", type: "document", declaredType: "document", typeKey: "document-type",
+        schemaLabel: "Core", path: "guide.md", storeRoot: "/atlas" },
+      { id: "telescope", title: "Telescope Alpha", kind: "page", type: "instrument", declaredType: "instrument", typeKey: "instrument-type",
+        schemaLabel: "observations", path: "telescope.md", storeRoot: "/atlas" },
+      { id: "note", title: "Field note", kind: "page", type: "field-note", declaredType: "field-note", path: "note.md", storeRoot: "/atlas" },
+    ],
+  };
+}
+
+test("navigation labeling is consistent in controls, previews and searchable browser entries", () => {
+  const { apply, document } = appFixture();
+  const graph = schemaGraph();
+  const navigation = { id: "index", path: "index.md", title: "Navigation home", type: "index",
+    declaredType: "", kind: "index", storeRoot: "/atlas" };
+  graph.nodes.push(navigation, { id: "typed-index", path: "typed-index.md", title: "Explicit index",
+    type: "index", declaredType: "index", kind: "index", storeRoot: "/atlas" });
+  apply({ graph, layers: all, layersRevision: 1, selectedId: "index", previewOpen: true,
+    page: { ...navigation, body: "# Navigation home" } });
+  assert.equal(document.querySelector('[data-layer="indexes"]').textContent, "Navigation indexes · 1");
+  assert.equal(document.querySelector('[data-layer="undeclared"]').textContent, "Undeclared types · 2");
+  assert.match(document.getElementById("preview-meta").textContent, /Navigation indexes/);
+  assert.doesNotMatch(document.getElementById("preview-meta").textContent, /legacy|undeclared/i);
+  document.getElementById("browse-nodes").click();
+  const filter = document.getElementById("node-filter");
+  filter.value = "Navigation indexes";
+  filter.dispatchEvent(new FrontendEvent("input"));
+  const rows = document.getElementById("node-list").children;
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].firstElementChild.getAttribute("data-browse-node"), "index");
+});
+
+test("dynamic schema/type buttons render empty declarations and filter the graph", async () => {
+  const { apply, document, calls, graphs, state } = appFixture();
+  apply({ graph: schemaGraph(), layersRevision: 1, layers: all, selectedId: null, previewOpen: false });
+  const group = document.querySelector('[data-layer="observation-schema"]');
+  assert.equal(group.textContent, "observations · 1");
+  assert.equal(document.querySelector('[data-layer="calibration-type"]').textContent, "calibration · 0");
+  group.click();
+  assert.deepEqual(Array.from(graphs.at(-1), (node) => node.id), ["telescope"]);
+  assert.equal(calls[0].layers["document-type"], false);
+  assert.equal(calls[0].layers.other, false);
+  assert.equal(calls[0].layers["calibration-type"], true);
+  calls[0].resolve({ ok: true, json: async () => ({ layers: calls[0].layers, layersRevision: 2 }) });
+  await settle();
+  document.querySelector('[data-layer="document-type"]').click();
+  assert.deepEqual(Array.from(graphs.at(-1), (node) => node.id), ["guide", "telescope"]);
+  calls[1].resolve({ ok: true, json: async () => ({ layers: calls[1].layers, layersRevision: 3 }) });
+  await settle();
+  document.querySelector('[data-layer="all"]').click();
+  assert.equal(graphs.at(-1).length, 3);
+  calls[2].resolve({ ok: true, json: async () => ({ layers: calls[2].layers, layersRevision: 4 }) });
+  await settle();
+  assert.equal(allNodeLayersOn(state().layers), true);
+});
+
+test("schema updates retain focused controls, prune removed keys and display diagnostics as text", () => {
+  const { apply, document, state } = appFixture();
+  const graph = schemaGraph();
+  apply({ graph, layersRevision: 1, layers: all });
+  const focused = document.querySelector('[data-layer="instrument-type"]');
+  focused.focus();
+  const updated = structuredClone(graph);
+  updated.schemas[1].types.push({ id: "<script>synthetic</script>", key: "escaped-type" });
+  updated.schemaDiagnostics = [{ atlasKey: "observatory", source: "schema.d/broken.json",
+    message: "Schema metadata could not be read or parsed." }];
+  apply({ graph: updated, layersRevision: 2, layers: state().layers });
+  assert.equal(document.activeElement.getAttribute("data-layer"), "instrument-type");
+  assert.equal(document.querySelector('[data-layer="escaped-type"]').textContent, "<script>synthetic</script> · 0");
+  assert.equal(document.getElementById("schema-layers").querySelector("script"), null);
+  assert.match(document.getElementById("schema-diagnostics").textContent, /could not be read/);
+  const removed = structuredClone(graph);
+  removed.schemas = removed.schemas.slice(0, 1);
+  removed.nodes = removed.nodes.filter((node) => node.typeKey !== "instrument-type");
+  apply({ graph: removed, layersRevision: 3, layers: all });
+  assert.equal(Object.hasOwn(state().layers, "instrument-type"), false);
+  assert.equal(document.activeElement.getAttribute("data-layer"), "all");
+});
+
+test("schema removal during an in-flight layer update reveals fallback pages and resends reconciled intent", async () => {
+  const { controls, calls, changes } = controlsFixture();
+  const graph = schemaGraph();
+  controls.configure(graph);
+  controls.snapshot({ ...all, "document-type": true, "instrument-type": true, "calibration-type": true }, 1);
+  controls.click("instrument-type");
+  const removed = structuredClone(graph);
+  removed.schemas = removed.schemas.slice(0, 1);
+  delete removed.nodes[1].typeKey;
+  delete removed.nodes[1].schemaLabel;
+  controls.configure(removed);
+  const current = controls.snapshot({ ...all, "document-type": false }, 3);
+  assert.equal(current.undeclared, true, "newly undeclared pages stay visible while the old request is pending");
+  assert.equal(Object.hasOwn(current, "instrument-type"), false);
+  calls[0].resolve({ layers: calls[0].layers, layersRevision: 2 });
+  await settle();
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1].layers.undeclared, true);
+  assert.equal(Object.hasOwn(calls[1].layers, "instrument-type"), false);
+  calls[1].resolve({ layers: calls[1].layers, layersRevision: 4 });
+  await settle();
+  assert.equal(changes.at(-1).pending, false);
+  assert.equal(changes.at(-1).layers.undeclared, true);
+});
 
 test("newer collector SSE survives delayed full HTTP snapshots without dropping graph updates or errors", async () => {
   const { bootstrap, receiveActivity, apply, state, activities, activityStatuses } = appFixture();

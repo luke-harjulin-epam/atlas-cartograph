@@ -68,7 +68,7 @@ export function createLiveAtlas(entry, refresh, publish, {
     pending = deadline = null;
   }
 
-  function flush() {
+  function flush({ throwOnError = false } = {}) {
     cancel();
     if (closed) return;
     const before = entry.state.graph;
@@ -79,6 +79,7 @@ export function createLiveAtlas(entry, refresh, publish, {
       // An incomplete scan is not evidence that the missing nodes were deleted.
       refreshError = `Atlas refresh failed; keeping the last graph: ${error.message}`;
       updateStatus();
+      if (throwOnError) throw error;
       return;
     }
     refreshError = "";
@@ -110,6 +111,9 @@ export function createLiveAtlas(entry, refresh, publish, {
   });
 
   return {
+    refresh() {
+      flush({ throwOnError: true });
+    },
     syncRoots({ retry = true } = {}) {
       if (closed) return;
       const roots = [...new Set((entry.state.roots ?? []).map((root) => resolve(entry.state.cwd || ".", root)))];

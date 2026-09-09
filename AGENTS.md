@@ -20,6 +20,18 @@
 - With no explicit root, open recognized Atlas mounts under the consumer
   workspace's `.atlas/`. Atlas content is external data, never executable code.
   Do not auto-open the sample or scan installed extension/package caches.
+- Register the native canvas without cwd-cache lifecycle hooks. Resolve each
+  new instance from `ctx.session.workingDirectory`, using
+  `session.rpc.metadata.snapshot()` only for the same caller when context omits
+  cwd. Reject invalid/missing paths and lexical/canonical installation paths;
+  never fall back to process cwd, cached cwd or a parent directory. Existing
+  instances retain their workspace. Native reload uses live reconciliation,
+  preserves selection/filters and retries watchers; refresh failures propagate.
+- Exercise the canonical and deployed native entrypoints with
+  `test/native-extension.test.mjs`. Synthetic SDK transport coverage is not
+  real-host acceptance. Keep APM 0.30.0's exact-content canvas-only grant in the
+  disposable package consumer, with an explicit empty allow-map before probing
+  the identity. No wildcard grants, legacy name-only approvals or shared installs.
 - Track synthetic development stores under `.atlas/local/`, with distinct Atlas
   identities. Keep the local mini Atlas byte-identical to the packaged sample;
   keep the stress baseline's 505 nodes and 1508 relationships intact. Development
@@ -47,6 +59,15 @@
 - Resolve source-relative page links consistently in graph edges and preview
   navigation before basename aliases, without crossing mount boundaries.
 - Keep zero-byte Markdown files as selectable graph nodes with filename titles.
+- Read only visualization metadata from base and contribution schemas in
+  `atlas/schema.mjs`. Ignore ownership receipts; never infer node membership
+  from claimed folders or interpret template paths/constraints. Keep actual type,
+  rendering kind and store-qualified schema/type identity separate.
+- Include empty declared types in Layers. Surface sanitized schema diagnostics,
+  distinguish untyped navigation indexes from explicit undeclared types using
+  the shared node category helper,
+  preserve undeclared pages, prune obsolete filter keys on schema changes and
+  retain stable keyed navigation across identically named contributions.
 - Guard path-scanning and state-changing HTTP routes with the shared canvas
   request validation; do not rely on CORS or JSON parsing as authorization.
   Bootstrap and SSE snapshots need the same boundary. Native EventSource may

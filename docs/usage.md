@@ -40,6 +40,41 @@ enablement and package approval. Reloading extensions after an APM install
 loads the deployed canvas. The OS read collector is still separately started
 by the user; installing the package does not elevate privileges.
 
+### Native workspace resolution
+
+The native entrypoint joins with `canvases` only. It does not register
+`onSessionStart` or `onUserPromptSubmitted` hooks to cache cwd, so registration
+does not depend on a host hook processor being available.
+
+When opening a new panel, Cartograph uses the public canvas callback's
+`session.workingDirectory`. If that field is omitted, it requests
+`session.rpc.metadata.snapshot()` from the joined SDK session and requires both
+the callback and snapshot to identify that same session. A callback from a
+different session must supply its own working directory. Metadata is read
+afresh for each new panel, not cached across callers.
+
+The directory must be absolute, existing, and outside extension installations
+and package caches, including symlink targets. Missing metadata, invalid paths,
+and RPC or filesystem failures stop the open before discovery or server startup.
+There is no fallback to the extension process cwd, an earlier panel, the main
+checkout, or a parent directory. Reopen from a local workspace with valid host
+context to recover. This requirement also applies when supplying an absolute
+Atlas root; a root selects a store, not the workspace for later relative actions
+and picker discovery. Relative roots resolve against the validated workspace.
+Remote-only directories unavailable on the extension's host are not supported.
+
+Focusing an already open instance keeps its workspace, selection, and filters.
+Close it and open a new instance to adopt a changed session directory. The native
+`reload` action rescans mounted stores through live reconciliation, preserves
+selection by file identity and retains query/layers, retries failed watchers,
+and surfaces scan failures without replacing the last valid graph.
+
+Canvas APIs are experimental. Local native-entrypoint tests substitute the SDK
+transport; they do not establish compatibility with every Copilot App version.
+Release acceptance must use the exact unmodified archive in the intended host.
+Standalone `npm start` continues to use its invocation directory and does not
+require SDK context or metadata.
+
 ## Browse and select nodes
 
 Choose **Browse nodes** in the map toolbar to explore every node using native
@@ -78,9 +113,65 @@ within a bounded region, leaving space between groups. Large stores such as the
 505-node stress Atlas no longer spread around the globe into smaller Atlases.
 Relationships between stores remain visible across the gaps.
 
-Single-Atlas positioning and the **Layers** and **Proximity** layouts are
-unchanged. The separation is in 3D: groups can still line up in projection while
+**Layers** groups declared types by store and schema, while undeclared/legacy
+pages retain their rendering categories. **Proximity** still uses existing
+folder/relationship neighborhoods, not schema ownership. The separation is in
+3D: groups can still line up in projection while
 you orbit the camera. Use an Atlas's island-navigation button to inspect it.
+
+## Schema and type layers
+
+In Options, **Layers** lists **Core** from `SCHEMA.json` and each installed
+contribution from `schema.d/*.json`. The base and contributions declare types
+in `templates.by_type`; contributions identify themselves with
+`contribution_id`. Ownership files ending in `.receipt.json` are ignored.
+Every declared type is listed, even with no current pages. Each schema shows
+its originating Atlas and relative source file; duplicate names in different
+stores are independent controls.
+
+Choose a schema or individual type while **All** is active to isolate it, then
+toggle other types or schemas to combine them. A dashed schema button means
+only some of its types are enabled. Counts show total nodes in each layer,
+independent of search and visibility. **All** restores every type and legacy
+category without changing **Relates** or **Provenance**. **Pages without schema
+declarations** separates **Navigation indexes** (untyped `index.md` files),
+**Undeclared types** (explicit types without a matching declaration), and
+**Untyped pages** (ordinary untyped pages). Neutral Experiences, Decisions and
+Work categories retain filename-derived navigation for older store layouts.
+An explicit undeclared `type: index` belongs to Undeclared types, not Navigation
+indexes; a declared index type belongs to its schema. These labels do not imply
+that content is outdated or invalid. The node browser and previews
+show the actual page type rather than its fallback rendering style.
+
+Membership uses an exact match between page frontmatter `type` and a declared
+type ID. Rendering style remains backward compatible. A synthetic observatory
+could declare `instrument` in Core and `calibration` in a contribution, while
+freely nesting either type and ordinary pages in the same folders. Folder
+ownership (`claimed_folders`) does not assign pages to a contribution or create
+another Atlas. Cross-type links use the same graph relationship rules.
+
+Saving, installing or removing schema files refreshes the catalog through the
+existing filesystem watcher, without touching pages or restarting Cartograph.
+Unchanged type keys retain their filter settings for the current canvas;
+new declarations start visible. Removed keys are discarded, and pages whose
+declaration disappears are revealed in **Undeclared types**.
+Selecting a hidden node from navigation reveals its layer. Browser reloads
+retain the server's current canvas filters; a new canvas starts with All.
+
+Metadata reads remain inside the mounted store, including symlink targets.
+Malformed, unreadable, oversized or conflicting metadata produces a visible
+diagnostic in Options. Files are limited to 1 MiB. Conflicting type IDs are
+omitted from all claimants, and duplicate contribution identities are omitted;
+there is no last-file-wins override. Valid independent declarations remain
+available and affected pages remain renderable as undeclared. Diagnostics do
+not include JSON payloads or parser excerpts. A failed page read still retains
+the last valid graph and reports a separate filesystem refresh error.
+
+This is visualization metadata discovery, not Atlas compiler validation.
+Cartograph does not validate required fields, sections, dates or `relates_to`
+target constraints, load template files, execute/fetch schema content, or
+interpret additional namespaced metadata. Legacy Atlas and okf-wiki remain
+usable without schema type declarations.
 
 ## Live graph updates
 

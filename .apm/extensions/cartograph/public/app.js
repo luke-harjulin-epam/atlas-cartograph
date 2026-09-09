@@ -6,6 +6,8 @@ import { allNodeLayersOn, createLayerControls } from "./layer-controls.js";
 import { createStateControls } from "./state-controls.js";
 import { handleContentClick } from "./content-navigation.js";
 import { mountNodeBrowser } from "./node-browser.js";
+import { fallbackLayerLabel, nodeCategory, nodeLayer, layerCounts } from "./node-layers.js";
+import { mountSchemaLayers } from "./schema-layers.js";
 
 const CRAWL_BODY = `Compiled memory, mapped as sky.
 
@@ -38,6 +40,7 @@ let map = null;
 const activityControls = mountActivityControls($("activity-controls"), applyActivity,
   (enabled) => map?.setAutoFocus(enabled));
 const graphWatchControls = mountGraphWatchControls($("activity-controls"));
+const schemaLayers = mountSchemaLayers($("schema-layers"), $("schema-diagnostics"));
 const queryControls = createStateControls({
   field: "query", initial: "", normalize: (value) => value,
   isValid: (value) => typeof value === "string",
@@ -73,7 +76,7 @@ const nodeBrowser = mountNodeBrowser($("node-browser"), $("browse-nodes"), {
   },
   select: async (id) => {
     const node = state.graph?.nodes.find((n) => n.id === id);
-    if (node) layerControls.reveal(layerFor(node.kind));
+    if (node) layerControls.reveal(nodeLayer(node));
     applyState(await post("select", { nodeId: id }));
     if (state.previewOpen) {
       previewFromBrowser = true;
@@ -130,19 +133,11 @@ function post(action, payload = {}) {
   });
 }
 
-function layerFor(kind) {
-  if (kind === "experience" || kind === "raw") return "experiences";
-  if (kind === "decision") return "decisions";
-  if (kind === "work" || kind === "module") return "work";
-  if (kind === "index") return "indexes";
-  return "other";
-}
-
 function visibleGraph() {
   const g = state.graph;
   if (!g) return { nodes: [], edges: [] };
   const layers = state.layers || {};
-  const nodes = g.nodes.filter((n) => layers[layerFor(n.kind)] !== false);
+  const nodes = g.nodes.filter((n) => layers[nodeLayer(n)] !== false);
   const ids = new Set(nodes.map((n) => n.id));
   const edges = g.edges.filter((e) => {
     if (!ids.has(e.source) || !ids.has(e.target)) return false;
@@ -154,7 +149,7 @@ function visibleGraph() {
 function lifecycleVisibility() {
   const roots = new Set(openRoots());
   const layers = { ...state.layers };
-  return (node) => roots.has(node.storeRoot) && layers[layerFor(node.kind)] !== false;
+  return (node) => roots.has(node.storeRoot) && layers[nodeLayer(node)] !== false;
 }
 
 function relationshipVisible(edge, layers) {
@@ -257,7 +252,7 @@ function renderPreview() {
   const node = state.graph?.nodes?.find((n) => n.id === state.selectedId);
   const page = state.page;
   $("preview-title").textContent = page?.title || node?.title || state.selectedId;
-  $("preview-meta").textContent = `${page?.kind || node?.kind || ""} · ${page?.path || node?.path || ""}`;
+  $("preview-meta").textContent = `${page?.type || node?.type || node?.kind || ""} · ${nodeCategory(node || page || {}).label} · ${page?.path || node?.path || ""}`;
   const err = $("preview-link-error");
   if (err) {
     err.textContent = state.linkError || "";
@@ -293,7 +288,7 @@ function renderMapChrome() {
   const list = $("matches");
   list.classList.toggle("hidden", matches.length === 0);
   list.innerHTML = matches
-    .map((n) => `<li><button data-id="${escapeHtml(n.id)}">${escapeHtml(n.title)} <span class="subtle">${escapeHtml(n.kind)}</span></button></li>`)
+    .map((n) => `<li><button data-id="${escapeHtml(n.id)}">${escapeHtml(n.title)} <span class="subtle">${escapeHtml(n.type || n.kind)}</span></button></li>`)
     .join("");
   list.querySelectorAll("button").forEach((btn) => {
     btn.addEventListener("click", () => post("select", { nodeId: btn.getAttribute("data-id") }).then(() => post("preview", { open: true })));
@@ -303,13 +298,20 @@ function renderMapChrome() {
     btn.classList.toggle("active", on);
     btn.setAttribute("aria-pressed", String(on));
   });
+  const counts = layerCounts(state.graph);
+  document.querySelectorAll("[data-legacy-layer]").forEach((btn) => {
+    const key = btn.getAttribute("data-layer");
+    btn.textContent = `${fallbackLayerLabel(key)} · ${counts.get(key) ?? 0}`;
+    btn.classList.toggle("hidden", key === "undeclared" && !counts.has(key));
+  });
   document.querySelectorAll("[data-layer]").forEach((btn) => {
     const key = btn.getAttribute("data-layer");
     const on = key === "all" ? allNodeLayersOn(state.layers) : state.layers?.[key] !== false;
     btn.classList.toggle("active", on);
     btn.setAttribute("aria-pressed", String(on));
   });
-  nodeBrowser.setState(state, layerFor);
+  schemaLayers.render(state.graph, state.layers);
+  nodeBrowser.setState(state);
   renderIslands();
 }
 
@@ -322,7 +324,7 @@ function renderIslands() {
   const items = [...(map.clusters?.() ?? [])].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
   const focus = map.focusCluster?.();
   if (focus) {
-    const idx = items.findIndex((c) => c.label === focus);
+    const idx = items.findIndex((c) => (c.key || c.label) === focus);
     if (idx >= 0 && (idx < islandStart || idx >= islandStart + ISLAND_PAGE)) {
       islandStart = Math.max(0, Math.min(idx, Math.max(0, items.length - ISLAND_PAGE)));
     }
@@ -342,12 +344,12 @@ function renderIslands() {
     slice
       .map(
         (c) =>
-          `<button type="button" data-island="${escapeHtml(c.label)}" class="${focus === c.label ? "active" : ""}">${escapeHtml(c.label)} · ${c.count}</button>`,
+          `<button type="button" data-island="${escapeHtml(c.key || c.label)}" class="${focus === (c.key || c.label) ? "active" : ""}">${escapeHtml(c.label)} · ${c.count}</button>`,
       )
       .join("") +
     `<button type="button" data-island-shift="1" ${canNext ? "" : "disabled"}>›</button>` +
     range;
-  map.setFeatured?.(slice.map((c) => c.label));
+  map.setFeatured?.(slice.map((c) => c.key || c.label));
   nav.querySelectorAll("[data-island-shift]").forEach((btn) => {
     btn.addEventListener("click", () => {
       islandStart += Number(btn.getAttribute("data-island-shift")) * ISLAND_PAGE;
@@ -383,6 +385,7 @@ function applyState(next) {
     return false;
   }
   const grouping = next.grouping || state.grouping || "layers";
+  layerControls.configure(Object.hasOwn(next, "graph") ? next.graph : state.graph);
   const layers = layerControls.snapshot(next.layers, next.layersRevision);
   const query = queryControls.snapshot(next.query, next.queryRevision);
   const activity = Object.hasOwn(next, "activity") && acceptActivity(next.activity) ? next.activity : state.activity;

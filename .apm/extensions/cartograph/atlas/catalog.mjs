@@ -38,7 +38,7 @@ const SKIP_WALK = new Set([
   "staging",
 ]);
 
-function isInstalledPath(path) {
+export function isInstalledPath(path) {
   const abs = resolve(path);
   const parts = abs.split(sep);
   return isPathWithin(EXTENSION_ROOT, abs) ||

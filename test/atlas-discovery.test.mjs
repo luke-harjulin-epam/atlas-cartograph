@@ -153,7 +153,7 @@ test("picker puts .atlas first, deduplicates canonical mounts, and excludes inst
   assert.deepEqual(state.stores.map((item) => item.root), [root, legacy]);
 });
 
-test("invalid .atlas paths and scan failures surface errors without replacing a valid graph", (t) => {
+test("invalid discovery paths retain the graph while malformed schemas retain discoverable pages", (t) => {
   const cwd = workspace(t);
   const explicit = store(join(cwd, "chosen"), "chosen");
   const state = freshState(cwd, { skipIntro: true });
@@ -177,9 +177,11 @@ test("invalid .atlas paths and scan failures surface errors without replacing a 
   const invalid = store(join(cwd, ".atlas", "invalid"), "invalid");
   writeFileSync(join(invalid, "SCHEMA.json"), "{");
   openDefaultAtlases(state);
-  assert.equal(state.graph, graph);
-  assert.equal(state.page, page);
-  assert.match(state.error, /Cannot open Atlas stores:/);
+  assert.deepEqual(state.roots, [invalid]);
+  assert.equal(state.graph.nodes.length, 1);
+  assert.equal(state.graph.schemaDiagnostics[0].code, "unreadable");
+  assert.equal(state.error, null);
+  assert.equal(state.page, null);
 });
 
 test("self-referential and multi-entry symlink loops do not abort strict discovery", (t) => {
