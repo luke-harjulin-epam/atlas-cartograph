@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  ActivityCamera, activationCameraTarget, activationFocusNodes, activationSurfaceAngle, angleDelta, dampCameraValue,
+  ActivityCamera, activationCameraTarget, activationFocusNodes, activationSurfaceAngle, angleDelta, dampCameraValue, moveCameraLook,
 } from "../.apm/extensions/cartograph/public/activity-camera.js";
 
 const cam = () => ({ x: 25, y: -10, k: 1.2 });
@@ -271,4 +271,105 @@ test("zoom-in waits for sustained shrinkage but zoom-out immediately accepts a w
   assert.equal(follower.update([a], camera, 800, 600, 600).k, wide.k);
   assert.equal(follower.update([a], camera, 800, 600, 800).k, 20);
   assert.equal(follower.update([a, b], camera, 800, 600, 1000).k, wide.k);
+});
+
+test("a lone distant activation reaches close zoom and centered framing within two seconds", () => {
+  for (const fps of [30, 60, 120]) {
+    const follower = new ActivityCamera();
+    const camera = { x: 0, y: 0, k: 0.22, yaw: 0, pitch: 0 };
+    let previous = { ...camera };
+    for (let frame = 0; frame < fps * 2; frame++) {
+      const now = frame * 1000 / fps;
+      const node = point("distant", 400 + camera.x + 500 * camera.k, 300 + camera.y - 350 * camera.k);
+      const target = follower.update([node], camera, 800, 600, now);
+      follower.move(camera, target, 1 / fps, { now });
+      assert.ok(camera.k >= previous.k && camera.k <= 20, "Zoom must not overshoot");
+      assert.ok(Math.log(camera.k / previous.k) * fps <= 4.5, "Close-in zoom remains speed limited");
+      assert.equal(camera.yaw, previous.yaw, "Zoom acceleration must not introduce orbit motion");
+      previous = { ...camera };
+    }
+    assert.ok(camera.k > 19, `At ${fps} fps, reach at least 95% of close zoom in two seconds`);
+    assert.ok(Math.hypot(camera.x + 500 * camera.k, camera.y - 350 * camera.k) < 80,
+      "The accelerated zoom must bring the node into view, not leave translation behind");
+  }
+});
+
+test("multi-node zoom-in, singleton zoom-out and idle restoration retain normal timing", () => {
+  for (const mode of ["multiple", "out", "restore"]) {
+    const follower = new ActivityCamera();
+    const camera = { ...cam(), yaw: 0, pitch: 0 };
+    const target = follower.update(mode === "multiple" ? [a, { ...a, id: "b" }] : [a],
+      camera, 800, 600, 0);
+    if (mode === "out") camera.k = 25;
+    if (mode === "restore") {
+      camera.k = 0.22;
+      follower.update([], camera, 800, 600, 1000);
+    }
+    const goal = mode === "restore" ? follower.saved : target;
+    const expected = dampCameraValue(Math.log(camera.k), Math.log(goal.k), 0, 0.65, 1 / 60, 1.5);
+    follower.move(camera, goal, 1 / 60, { now: 1000 });
+    assert.equal(camera.k, Math.exp(expected.value), mode);
+  }
+});
+
+test("zoom-out restoration keeps the active Atlas in view throughout the return flight", () => {
+  for (const fps of [30, 60, 120]) {
+    const follower = new ActivityCamera();
+    const camera = { x: 0, y: 0, k: 1 };
+    const world = { x: 200, y: -150 };
+    const node = point("one", 400 + world.x, 300 + world.y);
+    const close = follower.update([node], camera, 800, 600, 0);
+    Object.assign(camera, close);
+    const from = { ...camera };
+    for (let frame = 0; frame <= fps * 6; frame++) {
+      const now = 1000 + frame * 1000 / fps;
+      const target = follower.update([], camera, 800, 600, now);
+      if (target) follower.move(camera, target, 1 / fps, { now });
+      const x = 400 + camera.x + world.x * camera.k;
+      const y = 300 + camera.y + world.y * camera.k;
+      assert.ok(x >= 400 - 1e-6 && x <= 600 + 1e-6, `Lost horizontal focus: ${x}`);
+      assert.ok(y >= 150 - 1e-6 && y <= 300 + 1e-6, `Lost vertical focus: ${y}`);
+      const progress = (camera.k - from.k) / (1 - from.k);
+      assert.ok(Math.abs(camera.x - from.x * (1 - progress)) < 1e-6);
+    }
+    assert.deepEqual(camera, { x: 0, y: 0, k: 1 });
+    assert.equal(follower.restoration, null);
+  }
+});
+
+test("new activity and manual navigation discard a stale restoration trajectory", () => {
+  const follower = new ActivityCamera();
+  const camera = cam();
+  Object.assign(camera, follower.update([a], camera, 800, 600, 0));
+  follower.update([], camera, 800, 600, 1000);
+  assert.ok(follower.restoration);
+  follower.update([b], camera, 800, 600, 1200);
+  assert.equal(follower.restoration, null);
+  follower.update([], camera, 800, 600, 2200);
+  follower.manual(2300);
+  assert.equal(follower.restoration, null);
+  assert.equal(follower.saved, null);
+});
+
+test("navigation takes the shortest speed-limited arc even after many manual revolutions", () => {
+  for (const fps of [30, 60, 120]) {
+    const camera = { yaw: Math.PI * 9 - 0.01, pitch: -0.4 };
+    const target = { yaw: -Math.PI + 0.01, pitch: 0.5 };
+    const velocity = { yaw: 0, pitch: 0 };
+    const initialYaw = camera.yaw;
+    for (let i = 0; i < fps * 4; i++) {
+      const previous = { ...camera };
+      moveCameraLook(camera, target, velocity, 1 / fps);
+      assert.ok(Math.abs(camera.yaw - previous.yaw) * fps <= 1.5);
+      assert.ok(Math.abs(camera.pitch - previous.pitch) * fps <= 1.5);
+      assert.ok(Math.abs(camera.yaw - initialYaw) <= 0.021, "Never unwind accumulated full revolutions");
+    }
+    assert.ok(Math.abs(angleDelta(target.yaw, camera.yaw)) < 0.002);
+    assert.ok(Math.abs(target.pitch - camera.pitch) < 0.002);
+    moveCameraLook(camera, { yaw: 0, pitch: 0 }, velocity, 0, true);
+    assert.ok(Math.abs(angleDelta(camera.yaw, 0)) < 1e-10);
+    assert.deepEqual(velocity, { yaw: 0, pitch: 0 });
+    moveCameraLook(camera, { yaw: camera.yaw, pitch: Math.PI }, velocity, 0, true);
+    assert.equal(camera.pitch, 1.2, "Polar navigation cannot request an unreachable pitch");
+  }
 });

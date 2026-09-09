@@ -4,7 +4,7 @@ import { request } from "node:http";
 import { join, resolve } from "node:path";
 import { setImmediate as nextTurn } from "node:timers/promises";
 import test from "node:test";
-import { addAtlas, dropAtlas, freshState, openAtlas, refreshAtlases, selectNode, setQuery, startServer } from "../.apm/extensions/cartograph/server.mjs";
+import { activateNode, addAtlas, dropAtlas, freshState, openAtlas, refreshAtlases, selectNode, setQuery, startServer } from "../.apm/extensions/cartograph/server.mjs";
 
 function fixture(t) {
   const cwd = realpathSync(mkdtempSync(resolve("test/.cartograph-ui-")));
@@ -35,6 +35,61 @@ function fixture(t) {
     },
   };
 }
+
+test("bootstrap and UI snapshots retain the runtime build identity", async (t) => {
+  const { state, start } = fixture(t);
+  const entry = await start();
+  const headers = { "X-Cartograph-Client": "canvas", "Content-Type": "application/json" };
+  const bootstrap = await fetch(new URL("/api/bootstrap", entry.url), { headers });
+  assert.deepEqual((await bootstrap.json()).state.build, state.build);
+  assert.equal(state.build.version, JSON.parse(readFileSync(
+    new URL("../.apm/extensions/cartograph/package.json", import.meta.url), "utf8")).version);
+  const action = await fetch(new URL("/api/ui", entry.url), {
+    method: "POST", headers, body: JSON.stringify({ action: "query", query: "shared" }),
+  });
+  assert.deepEqual((await action.json()).build, state.build);
+});
+
+test("node activation focuses first and opens Markdown only on repeated activation of the resolved node", (t) => {
+  const { state } = fixture(t);
+  activateNode(state, "two::work/shared");
+  assert.equal(state.selectedId, "two::work/shared");
+  assert.equal(state.previewOpen, false);
+  assert.equal(state.page.body, "Body from two.");
+  activateNode(state, "atlas://two/work/shared");
+  assert.equal(state.previewOpen, true);
+  activateNode(state, "one::work/shared");
+  assert.equal(state.selectedId, "one::work/shared");
+  assert.equal(state.previewOpen, false);
+  activateNode(state, "atlas://missing/work/shared");
+  assert.match(state.linkError, /No page/);
+  assert.equal(state.selectedId, "one::work/shared");
+  assert.equal(state.previewOpen, false);
+  activateNode(state, "");
+  assert.equal(state.selectedId, null);
+  assert.equal(state.page, null);
+  selectNode(state, "two::work/shared");
+  assert.equal(state.previewOpen, true, "Explicit page navigation keeps its one-step contract");
+});
+
+test("HTTP activation applies both click stages atomically without a separate preview request", async (t) => {
+  const { start } = fixture(t);
+  const entry = await start();
+  const activate = async () => {
+    const response = await fetch(new URL("/api/ui", entry.url), {
+      method: "POST",
+      headers: { "X-Cartograph-Client": "canvas", "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "activate", nodeId: "two::work/shared" }),
+    });
+    assert.equal(response.status, 200);
+    return response.json();
+  };
+  const [first, second] = (await Promise.all([activate(), activate()])).sort((a, b) => a.stateRevision - b.stateRevision);
+  assert.equal(first.selectedId, "two::work/shared");
+  assert.equal(first.previewOpen, false);
+  assert.equal(second.previewOpen, true);
+  assert.equal(second.page.body, "Body from two.");
+});
 
 test("unqualified links prefer the currently selected Atlas; explicit IDs override it", (t) => {
   const { state } = fixture(t);

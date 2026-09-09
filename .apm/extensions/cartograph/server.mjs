@@ -13,6 +13,7 @@ import { createActivityService } from "./activity/service.mjs";
 import { createLiveAtlas, graphFileKey, mountGraphChanges } from "./atlas/live.mjs";
 import { readJsonBody, requireCanvas } from "./http.mjs";
 import { nodeLayer, nodeLayerKeys, normalizeLayers } from "./public/node-layers.js";
+import { readBuildInfo } from "./build-info.mjs";
 export { defaultRoot };
 
 const PUBLIC_DIR = join(dirname(fileURLToPath(import.meta.url)), "public");
@@ -30,6 +31,7 @@ export function freshState(cwd, input = {}) {
   const root = typeof input.root === "string" ? sanitizeRoot(input.root, cwd) : "";
   return {
     cwd,
+    build: readBuildInfo(),
     stateRevision: 0,
     phase: input.skipIntro ? (root ? "map" : "welcome") : root ? "jump" : "crawl",
     root,
@@ -73,6 +75,7 @@ function snapshot(state) {
   state.stateRevision = (state.stateRevision ?? 0) + 1;
   return {
     stateRevision: state.stateRevision,
+    build: state.build,
     phase: state.phase,
     root: state.root,
     roots: state.roots || (state.root ? [state.root] : []),
@@ -361,6 +364,13 @@ export function selectNode(state, nodeId) {
   return state;
 }
 
+export function activateNode(state, nodeId) {
+  const previous = state.selectedId;
+  selectNode(state, nodeId);
+  if (!state.linkError && state.selectedId) state.previewOpen = state.selectedId === previous;
+  return state;
+}
+
 function serveStatic(req, res) {
   let urlPath = decodeURIComponent((req.url ?? "/").split("?")[0] || "/");
   if (urlPath === "/") urlPath = "/index.html";
@@ -458,6 +468,8 @@ export async function startServer(instanceId, state, options = {}) {
           entry.state.phase = body.phase;
         } else if (body.action === "select") {
           selectNode(entry.state, body.nodeId);
+        } else if (body.action === "activate") {
+          activateNode(entry.state, body.nodeId);
         } else if (body.action === "query") {
           setQuery(entry.state, body.query);
         } else if (body.action === "layers") {

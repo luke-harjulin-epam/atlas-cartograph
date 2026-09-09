@@ -47,7 +47,7 @@
 
       <section id="phase-map" class="phase hidden map">
         <div id="graph-wrap">
-          <p class="hint">Tap an island or a chip to fly there · drag to orbit</p>
+          <p class="hint">Click once: focus · again: read</p>
           <div class="zoom-bar">
             <button type="button" data-zoom-out aria-label="Zoom out">−</button>
             <span data-zoom>100%</span>
@@ -57,11 +57,9 @@
         </div>
         <div class="toolbar">
           <button id="toggle-panel" class="icon-btn" type="button" aria-label="Show options">☰</button>
-          <div class="search field">
-            <input id="search" placeholder="Search stars" aria-label="Search graph" aria-describedby="search-error" />
-            <p id="search-error" class="danger hidden" role="alert"></p>
+          <div class="search-field">
+            <input id="search" type="search" autocomplete="off" placeholder="Search stars" aria-label="Search nodes" aria-controls="node-browser" aria-describedby="node-browser-help search-error" />
           </div>
-          <button id="browse-nodes" class="btn btn-ghost browse-toggle" type="button" aria-expanded="false" aria-controls="node-browser">Browse nodes</button>
           <button id="chat-toggle" class="icon-btn" type="button" aria-label="Chat with the graph" aria-pressed="false" title="Chat with the graph">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v7A2.5 2.5 0 0 1 16.5 16H11l-4.2 3.2c-.7.54-1.8.04-1.8-.83V6.5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
@@ -70,12 +68,11 @@
         </div>
         <section id="node-browser" class="node-browser hidden" aria-labelledby="node-browser-title">
           <div class="node-browser-head">
-            <h2 id="node-browser-title">Browse nodes</h2>
-            <button id="node-browser-close" class="btn btn-ghost" type="button">Close browser</button>
+            <h2 id="node-browser-title">Search results</h2>
+            <button id="node-browser-close" class="btn btn-ghost" type="button">Close results</button>
           </div>
-          <p id="node-browser-help" class="muted">All nodes in open Atlases, including hidden layers. Select a node to show it on the map and open its preview. Close the preview to return here. Tab moves between controls; Escape closes this browser.</p>
-          <label for="node-filter">Filter by title, Atlas, path or kind</label>
-          <input id="node-filter" type="search" autocomplete="off" aria-describedby="node-browser-help" />
+          <p id="node-browser-help" class="search-help">Search by title, ID, Atlas, path, type or kind, including hidden layers. Press Down to browse results or all nodes when empty. Select once to focus its relationships; select again to open Markdown. Escape closes results and returns to the search field. Clear the field to restore the full map.</p>
+          <p id="search-error" class="danger hidden" role="alert"></p>
           <p id="node-count" class="muted" role="status" aria-live="polite" aria-atomic="true"></p>
           <ul id="node-list" class="node-list" aria-label="Graph nodes"></ul>
           <nav class="node-pagination" aria-label="Node pages">
@@ -139,7 +136,6 @@
             </form>
           </div>
         </div>
-        <ul id="matches" class="matches hidden" style="position:absolute;top:4rem;left:50%;transform:translateX(-50%);width:min(28rem,90%);z-index:45"></ul>
         <aside id="panel" class="panel hidden">
           <p class="kicker">Options</p>
           <p class="muted" style="margin:0.5rem 0 0">Atlases</p>
@@ -205,6 +201,10 @@
           </div>
         </article>
       </section>
+      <small class="build-info">
+        <span id="build-info" class="hidden" aria-label="Cartograph build"></span>
+        <span id="frame-rate" aria-label="Rendering frame rate" title="Rendered frames per second, sampled over one second; not GPU timing."> | -- FPS</span>
+      </small>
     </div>
     <script type="module" src="./app.js"></script>
   </body>

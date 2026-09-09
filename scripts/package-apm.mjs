@@ -7,11 +7,14 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { gunzipSync } from "node:zlib";
 import { checkVersion, repository } from "./check-version.mjs";
+import { readBuildInfo } from "../.apm/extensions/cartograph/build-info.mjs";
 
 const apm = process.env.APM_BIN || "apm";
 const apmVersion = "0.30.0";
 const { version, prerelease } = checkVersion(repository, process.env.TAG || "");
 const source = join(repository, ".apm/extensions/cartograph");
+const buildInfo = readBuildInfo(source);
+assert.ok(buildInfo.commit, "Release packaging requires a source commit");
 const staging = realpathSync(mkdtempSync(join(tmpdir(), "cartograph-release-")));
 const producer = join(staging, "producer");
 const consumer = join(staging, "consumer");
@@ -39,6 +42,12 @@ try {
   assert.match(installedVersion, /\bversion 0\.30\.0(?:\s|$)/, `Packaging requires APM ${apmVersion}`);
   for (const file of ["apm.yml", "apm.lock.yaml"]) cpSync(join(repository, file), join(producer, file));
   cpSync(source, join(producer, ".apm/extensions/cartograph"), { recursive: true });
+  const stagedRuntime = join(producer, ".apm/extensions/cartograph");
+  const stagedMetadata = join(stagedRuntime, "package.json");
+  writeFileSync(stagedMetadata, `${JSON.stringify({
+    ...JSON.parse(readFileSync(stagedMetadata, "utf8")),
+    cartographBuild: { commit: buildInfo.commit, dirty: buildInfo.dirty },
+  }, null, 2)}\n`);
   run(["experimental", "enable", "canvas"], producer);
   run(["install", "--frozen", "--dry-run", "--target", "copilot"], producer);
   run(["audit", "--ci"], producer);
@@ -121,8 +130,12 @@ try {
   const deployed = join(consumer, ".github/extensions/cartograph");
   assert.deepEqual(filesIn(deployed), sourceFiles, "Installed bundle must contain every runtime file");
   for (const file of sourceFiles) {
-    assert.deepEqual(readFileSync(join(deployed, file)), readFileSync(join(source, file)), file);
+    assert.deepEqual(readFileSync(join(deployed, file)), readFileSync(join(stagedRuntime, file)), file);
+    if (file !== "package.json") {
+      assert.deepEqual(readFileSync(join(deployed, file)), readFileSync(join(source, file)), file);
+    }
   }
+  assert.deepEqual(readBuildInfo(deployed), buildInfo, "Deployed canvas must retain its source build identity");
   execFileSync(process.execPath, [
     "--import", join(repository, "test/helpers/native-canvas-register.mjs"),
     join(repository, "test/helpers/native-canvas-smoke.mjs"), deployed,
@@ -144,7 +157,9 @@ try {
     headers: { "X-Cartograph-Client": "canvas" },
   });
   assert.equal(bootstrap.status, 200);
-  assert.equal((await bootstrap.json()).state.graph.nodes.length, state.graph.nodes.length);
+  const bootstrapped = (await bootstrap.json()).state;
+  assert.equal(bootstrapped.graph.nodes.length, state.graph.nodes.length);
+  assert.deepEqual(bootstrapped.build, buildInfo);
 
   const output = join(repository, "build/release");
   mkdirSync(output, { recursive: true });
@@ -153,7 +168,7 @@ try {
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   cpSync(archive, join(output, archiveName));
   writeFileSync(join(output, `${archiveName}.sha256`), `${sha256}  ${archiveName}\n`);
-  const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repository, encoding: "utf8" }).trim();
+  const commit = buildInfo.commit;
   writeFileSync(join(output, "release.json"), `${JSON.stringify({
     name: "atlas-cartograph", version, prerelease, commit, tag: process.env.TAG || null, apmVersion,
     format: "plugin", archive: archiveName, sha256, runtimeFiles: sourceFiles.length,

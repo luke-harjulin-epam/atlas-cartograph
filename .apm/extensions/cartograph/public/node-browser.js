@@ -1,19 +1,11 @@
-import { nodeCategory, nodeLayer } from "./node-layers.js";
+import { nodeLayer } from "./node-layers.js";
+import { describeNode, matchesNodeQuery } from "./node-search.js";
 
 export const NODE_PAGE_SIZE = 25;
 
-function describeNode(node, state) {
-  const store = state.stores?.find((item) => item.root === node.storeRoot) || state.graph?.store;
-  const atlas = node.atlasLabel || store?.label || node.atlasKey || store?.atlasId || "Atlas";
-  const key = node.atlasKey || store?.atlasId;
-  const root = node.storeRoot || store?.root || state.root;
-  return `${node.title || node.id} · ${node.type || node.kind || "page"} · ${nodeCategory(node).label} · Atlas: ${atlas}${key && key !== atlas ? ` [${key}]` : ""}${root ? ` (${root})` : ""} · ${node.path || node.localId || node.id}`;
-}
-
-export function mountNodeBrowser(panel, toggle, actions) {
+export function mountNodeBrowser(panel, filter, actions) {
   const doc = panel.ownerDocument;
   const get = (id) => panel.querySelector(`#${id}`);
-  const filter = get("node-filter");
   const list = get("node-list");
   const count = get("node-count");
   const selected = get("node-selected");
@@ -25,6 +17,7 @@ export function mountNodeBrowser(panel, toggle, actions) {
   let state = {};
   let page = 0;
   let open = false;
+  let returningFocus = false;
   const rows = new Map();
 
   function text(element, value) {
@@ -34,8 +27,7 @@ export function mountNodeBrowser(panel, toggle, actions) {
   function render() {
     const nodes = state.graph?.nodes || [];
     const query = filter.value.trim().toLowerCase();
-    const matches = nodes.filter((node) =>
-      !query || `${describeNode(node, state)} ${node.id}`.toLowerCase().includes(query));
+    const matches = nodes.filter((node) => matchesNodeQuery(node, query, state));
     const active = doc.activeElement;
     const focusedId = active?.getAttribute("data-browse-node");
     const focusedIndex = matches.findIndex((node) => node.id === focusedId);
@@ -89,17 +81,22 @@ export function mountNodeBrowser(panel, toggle, actions) {
     }
   }
 
-  function setOpen(value) {
+  function focusSearch() {
+    returningFocus = true;
+    filter.focus();
+    returningFocus = false;
+  }
+
+  function setOpen(value, focus = true) {
+    const changed = open !== value;
     open = value;
     panel.classList.toggle("hidden", !open);
-    toggle.setAttribute("aria-expanded", String(open));
+    filter.setAttribute("data-results-open", String(open));
     if (open) {
       render();
-      filter.focus();
-      if (actions.open) void run(actions.open);
-    } else {
-      toggle.focus();
     }
+    if (focus) focusSearch();
+    if (open && changed && actions.open) void run(actions.open);
   }
 
   async function run(action) {
@@ -112,7 +109,23 @@ export function mountNodeBrowser(panel, toggle, actions) {
     }
   }
 
-  toggle.addEventListener("click", () => setOpen(!open));
+  filter.addEventListener("focus", () => {
+    if (!returningFocus && filter.value.trim()) setOpen(true, false);
+  });
+  filter.addEventListener("click", () => {
+    if (filter.value.trim()) setOpen(true, false);
+  });
+  filter.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setOpen(true, false);
+      list.firstElementChild?.firstElementChild.focus();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      setOpen(false);
+    }
+  });
   get("node-browser-close").addEventListener("click", () => setOpen(false));
   panel.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
@@ -121,7 +134,15 @@ export function mountNodeBrowser(panel, toggle, actions) {
       setOpen(false);
     }
   });
-  filter.addEventListener("input", () => { page = 0; render(); });
+  filter.addEventListener("input", () => {
+    page = 0;
+    if (actions.query) actions.query(filter.value);
+    if (filter.value.trim()) {
+      if (!open || !actions.query) setOpen(true, false);
+    } else {
+      setOpen(false, false);
+    }
+  });
   previous.addEventListener("click", () => { page--; render(); });
   next.addEventListener("click", () => { page++; render(); });
   list.addEventListener("click", (event) => {
@@ -132,13 +153,14 @@ export function mountNodeBrowser(panel, toggle, actions) {
   clear.addEventListener("click", () => { void run(actions.clear); });
 
   return {
+    show() { if (!open) setOpen(true); },
     setState(nextState) {
       state = nextState;
       if (open) render();
     },
     focusSelection() {
       if (open) (rows.get(state.selectedId)?.firstElementChild || filter).focus();
-      else toggle.focus();
+      else focusSearch();
     },
   };
 }

@@ -64,7 +64,7 @@ test("live scans add, edit and delete nodes while preserving query, grouping and
   assert.deepEqual(state.graphChanges.created.map((item) => item.path), ["new.md"]);
   assert.deepEqual(state.graphChanges.deleted, []);
   assert.equal(state.graphChanges.origin, "filesystem");
-  assert.equal(state.graphChanges.durationMs, 2000);
+  assert.equal(state.graphChanges.durationMs, 3500);
   assert.ok(state.graph.edges.some((edge) => edge.source === "new" && edge.target === "index"));
   assert.deepEqual(state.graphChanges.createdEdges, state.graph.edges);
   assert.deepEqual(state.graphChanges.deletedEdges, []);

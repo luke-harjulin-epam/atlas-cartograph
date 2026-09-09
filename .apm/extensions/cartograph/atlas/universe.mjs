@@ -1,1 +1,1 @@
-export { assignProximity, layoutUniverse, massOf } from "../public/universe.js";
+export { assignProximity, galaxyDetailOpacity, layoutUniverse, massOf } from "../public/universe.js";

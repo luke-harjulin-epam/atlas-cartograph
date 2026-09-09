@@ -8,6 +8,7 @@ import { handleContentClick } from "./content-navigation.js";
 import { mountNodeBrowser } from "./node-browser.js";
 import { fallbackLayerLabel, nodeCategory, nodeLayer, layerCounts } from "./node-layers.js";
 import { mountSchemaLayers } from "./schema-layers.js";
+import { nodeSearchText } from "./node-search.js";
 
 const CRAWL_BODY = `Compiled memory, mapped as sky.
 
@@ -52,6 +53,7 @@ const queryControls = createStateControls({
   $("search-error").classList.toggle("hidden", !error);
   map?.setQuery(query);
   renderMapChrome();
+  if (error) nodeBrowser.show();
 });
 const layerControls = createLayerControls(
   (layers) => post("layers", { layers }),
@@ -69,15 +71,12 @@ const layerControls = createLayerControls(
   },
 );
 let previewFromBrowser = false;
-const nodeBrowser = mountNodeBrowser($("node-browser"), $("browse-nodes"), {
-  open: async () => {
-    if (state.previewOpen) applyState(await post("preview", { open: false }));
-    previewFromBrowser = false;
-  },
+const nodeBrowser = mountNodeBrowser($("node-browser"), $("search"), {
+  query: (value) => queryControls.update(() => value),
   select: async (id) => {
     const node = state.graph?.nodes.find((n) => n.id === id);
     if (node) layerControls.reveal(nodeLayer(node));
-    applyState(await post("select", { nodeId: id }));
+    applyState(await post("activate", { nodeId: id }));
     if (state.previewOpen) {
       previewFromBrowser = true;
       $("preview-close").focus();
@@ -115,6 +114,7 @@ function applyActivity(activity) {
 }
 
 function showPhase(name) {
+  if (name !== "map") $("frame-rate").textContent = " | -- FPS";
   for (const [key, el] of Object.entries(phases)) {
     el.classList.toggle("hidden", key !== name);
     starfields[key]?.setActive(key === name);
@@ -137,7 +137,8 @@ function visibleGraph() {
   const g = state.graph;
   if (!g) return { nodes: [], edges: [] };
   const layers = state.layers || {};
-  const nodes = g.nodes.filter((n) => layers[nodeLayer(n)] !== false);
+  const nodes = g.nodes.filter((n) => layers[nodeLayer(n)] !== false)
+    .map((node) => ({ ...node, searchText: nodeSearchText(node, state) }));
   const ids = new Set(nodes.map((n) => n.id));
   const edges = g.edges.filter((e) => {
     if (!ids.has(e.source) || !ids.has(e.target)) return false;
@@ -221,10 +222,13 @@ function ensureMap() {
   map = mountGraphCanvas($("graph-wrap"), {
     autoFocus: activityControls.autoFocusEnabled(),
     onPlayback: (playback) => activityControls.setPlayback(playback),
-    onSelect: (id, meta) => {
-      post("select", { nodeId: id || "" });
-      if (id && meta?.pointerType !== "touch") post("preview", { open: true });
+    onFrameRate: (fps) => {
+      $("frame-rate").textContent = ` | ${state.phase === "map" && fps !== null ? fps : "--"} FPS`;
     },
+    onSelect: (id) => post("activate", { nodeId: id || "" }).then(applyState).catch((error) => {
+      $("map-error").textContent = `Could not select node: ${error.message ?? error}`;
+      $("map-error").classList.remove("hidden");
+    }),
     onCluster: () => renderIslands(),
   });
   return map;
@@ -281,18 +285,6 @@ function renderMapChrome() {
   $("stat-root").textContent = state.graph?.store?.label || state.graph?.store?.atlasId || state.root || "No atlas";
   renderOpenAtlases();
   if ($("search").value !== (state.query || "")) $("search").value = state.query || "";
-  const q = (state.query || "").trim().toLowerCase();
-  const matches = q
-    ? vis.nodes.filter((n) => n.title.toLowerCase().includes(q) || n.id.toLowerCase().includes(q)).slice(0, 8)
-    : [];
-  const list = $("matches");
-  list.classList.toggle("hidden", matches.length === 0);
-  list.innerHTML = matches
-    .map((n) => `<li><button data-id="${escapeHtml(n.id)}">${escapeHtml(n.title)} <span class="subtle">${escapeHtml(n.type || n.kind)}</span></button></li>`)
-    .join("");
-  list.querySelectorAll("button").forEach((btn) => {
-    btn.addEventListener("click", () => post("select", { nodeId: btn.getAttribute("data-id") }).then(() => post("preview", { open: true })));
-  });
   document.querySelectorAll("[data-grouping]").forEach((btn) => {
     const on = (state.grouping || "layers") === btn.getAttribute("data-grouping");
     btn.classList.toggle("active", on);
@@ -366,11 +358,12 @@ function renderIslands() {
 }
 
 function renderStateError() {
-  if (state.error) {
-    $("welcome-error").textContent = state.error;
-    $("welcome-error").classList.toggle("hidden", !state.error || state.phase !== "welcome");
-    $("map-error").textContent = state.error;
-    $("map-error").classList.toggle("hidden", !state.error || state.phase !== "map");
+  const error = state.error || (state.phase === "map" && !state.previewOpen ? state.linkError : null);
+  if (error) {
+    $("welcome-error").textContent = error;
+    $("welcome-error").classList.toggle("hidden", state.phase !== "welcome");
+    $("map-error").textContent = error;
+    $("map-error").classList.toggle("hidden", state.phase !== "map");
   } else {
     $("welcome-error").classList.add("hidden");
     $("map-error").classList.add("hidden");
@@ -391,6 +384,12 @@ function applyState(next) {
   const activity = Object.hasOwn(next, "activity") && acceptActivity(next.activity) ? next.activity : state.activity;
   state = { ...state, ...next, grouping, layers, layersRevision: layerControls.layersRevision,
     query, queryRevision: queryControls.revision, activity };
+  if (state.build) {
+    const { version, commit, dirty } = state.build;
+    $("build-info").textContent = `v${version} / ${commit ? commit.slice(0, 8) : "SHA unavailable"}${dirty ? " + local" : ""}`;
+    $("build-info").title = `Cartograph ${version}\n${commit || "Source commit unavailable"}${dirty ? "\nUncommitted runtime changes" : ""}`;
+    $("build-info").classList.remove("hidden");
+  }
   activityControls.setActivity(state.activity);
   graphWatchControls.setWatch(state.graphWatch);
   if (!state.graph) map?.setGraph([], [], grouping, state.graphChanges, () => false);
@@ -543,7 +542,6 @@ $("open-path").addEventListener("submit", (e) => {
   const root = $("path-input").value.trim();
   if (root) openRoot(root);
 });
-$("search").addEventListener("input", (e) => queryControls.update(() => e.target.value));
 $("chat-toggle").addEventListener("click", () => {
   chatOpen = !chatOpen;
   renderChat();

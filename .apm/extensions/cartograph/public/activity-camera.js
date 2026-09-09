@@ -1,3 +1,5 @@
+import { matchesNodeQuery } from "./node-search.js";
+
 const FRAME_INTERVAL_MS = 200;
 const MANUAL_PAUSE_MS = 5000;
 const IDLE_HOLD_MS = 1000;
@@ -38,13 +40,24 @@ export function dampCameraValue(value, target, velocity, smoothTime, dt, maxSpee
   return { value: next, velocity: (velocity - omega * impulse) * decay };
 }
 
+export function moveCameraLook(cam, target, velocity, dt, reducedMotion = false) {
+  for (const key of ["yaw", "pitch"]) {
+    const goal = key === "yaw" ? cam.yaw + angleDelta(target.yaw, cam.yaw)
+      : Math.max(-1.2, Math.min(1.2, target.pitch));
+    const result = reducedMotion ? { value: goal, velocity: 0 }
+      : dampCameraValue(cam[key], goal, velocity[key], 0.8, dt, 1.5);
+    cam[key] = result.value;
+    velocity[key] = result.velocity;
+  }
+}
+
 export function activationFocusNodes(nodes, activity, lifecycle, query = "") {
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const byFile = new Map(nodes.map((node) => [identity(node), node]));
   const selected = new Map();
   const q = query.trim().toLowerCase();
   const add = (node) => {
-    if (!node || (q && !node.id.toLowerCase().includes(q) && !node.title.toLowerCase().includes(q))) return;
+    if (!node || !matchesNodeQuery(node, q)) return;
     selected.set(identity(node), node);
   };
   for (const id of activity?.nodes.keys() ?? []) add(byId.get(id));
@@ -94,6 +107,8 @@ export class ActivityCamera {
     this.look = null;
     this.zoom = null;
     this.zoomInSince = null;
+    this.singleFocus = false;
+    this.restoration = null;
     this.velocity = { x: 0, y: 0, k: 0, yaw: 0, pitch: 0 };
   }
 
@@ -127,8 +142,10 @@ export class ActivityCamera {
       return null;
     }
     const manualOrbit = orbiting || now < this.orbitPausedUntil;
+    this.singleFocus = nodes.length === 1;
     if (manualOrbit) this.retainOrbit(cam);
     if (nodes.length) {
+      this.restoration = null;
       this.lastActiveAt = now;
       if (now - this.lastFitAt >= FRAME_INTERVAL_MS) {
         this.lastFitAt = now;
@@ -162,6 +179,7 @@ export class ActivityCamera {
         }
       }
     } else if (this.saved && now - this.lastActiveAt >= IDLE_HOLD_MS) {
+      this.restoration ??= { x: cam.x, y: cam.y, k: cam.k };
       this.target = this.saved;
       if (Math.abs(cam.x - this.saved.x) < 1 && Math.abs(cam.y - this.saved.y) < 1 &&
           Math.abs(cam.k - this.saved.k) < 0.01 &&
@@ -183,12 +201,24 @@ export class ActivityCamera {
       cam[key] = logarithmic ? Math.exp(result.value) : result.value;
       this.velocity[key] = result.velocity;
     };
-    step("x", target.x, 0.55, 1200);
-    step("y", target.y, 0.55, 1200);
-    step("k", target.k, 0.65, 1.5, true);
+    const closeIn = this.singleFocus && target !== this.saved && target.k > cam.k;
+    // Keep translation in step with the faster zoom instead of leaving a distant star offscreen.
+    const panSpeed = (key) => closeIn
+      ? Math.max(1200, Math.abs(target[key] - (this.saved?.[key] ?? cam[key])) * 2) : 1200;
+    step("k", target.k, closeIn ? 0.3 : 0.65, closeIn ? 4.5 : 1.5, true);
+    if (target === this.saved && this.restoration && Math.abs(target.k - this.restoration.k) > 0.001) {
+      // Couple the return pan to zoom progress so the Atlas cannot drift out of view mid-flight.
+      const progress = Math.max(0, Math.min(1, (cam.k - this.restoration.k) / (target.k - this.restoration.k)));
+      for (const key of ["x", "y"]) {
+        cam[key] = this.restoration[key] + (target[key] - this.restoration[key]) * progress;
+        this.velocity[key] = 0;
+      }
+    } else {
+      step("x", target.x, 0.55, panSpeed("x"));
+      step("y", target.y, 0.55, panSpeed("y"));
+    }
     if (!orbiting && now >= this.orbitPausedUntil && Number.isFinite(target.yaw)) {
-      step("yaw", cam.yaw + angleDelta(target.yaw, cam.yaw), 0.8, 1.5);
-      step("pitch", target.pitch, 0.8, 1.5);
+      moveCameraLook(cam, target, this.velocity, dt);
     }
   }
 }

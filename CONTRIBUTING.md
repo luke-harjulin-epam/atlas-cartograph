@@ -49,6 +49,12 @@ installation, including default discovery, `get_state`, `set_layers`,
 `apm.yml` declares only the self-contained canvas directory. Keep its version,
 the runtime `package.json` and root `package.json` aligned. Application imports,
 browser assets, collectors and fixtures must resolve within the bundle.
+The build badge reads this runtime's version and source-checkout SHA, marking
+uncommitted runtime changes. Release packaging stamps `cartographBuild` in the
+isolated producer's runtime `package.json`, never the canonical source or
+generated plugin manifest. Deployed bundles must not read the consumer's Git
+identity; unstamped copies explicitly show an unavailable SHA. Cover both
+paths with `test/build-info.test.mjs` and the package smoke checks.
 The repository discovery shim is not distribution source; do not run a
 first-party APM deployment over that locally authored shim.
 
@@ -118,6 +124,19 @@ Cover simultaneous visible aliases of a physical file, per-node observation
 consumption, unchanged graphs and ID remapping without alias collapse or replay.
 Keep layout output stable across input order and bound sibling lookup work with
 an operation-count regression rather than a machine-dependent timing threshold.
+Galaxy layout changes need `test/universe.test.mjs` and both renderer paths:
+cover central mass concentration, coherent spiral arms, nonzero thickness,
+bounded non-overlapping Atlas volumes, oblique home framing and the original
+idle rotation rate. Measure the central 80% side-profile thickness rather than
+letting a few outliers satisfy depth coverage. Preserve Proximity positions,
+all graph relationships, labels on interaction/detail zoom, and keyboard access
+through Search. Do not add
+force simulation or a second animation clock merely to create galaxy depth.
+Search has one input and one result list. Keep its metadata matching shared
+with WebGL, Canvas 2D and activation framing, with pre-indexed render text.
+Keep the search field visible in the toolbar; results are not a separate
+search-button popup. Cover hidden layers, Arrow Down browsing, Escape focus return, remote revisions,
+failed requests, caret/focus preservation and selected-neighborhood visibility.
 Use a triangular graph to prove that A -> B -> C never pulses A -> C. Cover
 revisits, unrelated consecutive nodes, and removal of intermediate nodes;
 recorded segments must not be reconstructed from the current active-node order.
@@ -131,6 +150,22 @@ The camera follows displayed effects, independently of collector settings.
 Also cover simultaneous manual orbit and automatic pan/zoom, pointer capture,
 front-facing surface normals, dispersed/opposing targets, angular wraparound,
 bounded critically damped motion, zoom-in hysteresis and manual-angle restoration.
+Single-node close-in framing should reach at least 95% of its zoom target within
+two seconds from the widest view, without leaving a distant node offscreen.
+Keep multi-node, zoom-out and restoration timing unchanged. Node/relationship
+opacity, relationship and deletion fades share a 3500 ms duration; new-node
+glows have a separate 10000 ms deadline from creation.
+Cover the whole zoom-out trajectory, not just its final camera state: pan and
+zoom must return together without losing the Atlas. Cover ten-second new-node
+glows independently of arrival, including late deltas, remapping and reduced motion.
+Regrouping must cancel stale following and navigate by the shortest bounded
+turn after arbitrary manual revolutions. Pulse circles must share the projected
+galaxy core or selected-node position in both renderers.
+Cover first-stage neighborhood highlighting, repeated activation opening the
+preview, rapid clicks, touch and keyboard activation, and explicit one-step
+page navigation. Do not send racing selection and preview requests.
+FPS counts completed render frames against uncapped monotonic timestamps, with
+one-second UI samples and resets on suspension/disposal. Reuse the graph loop.
 Backend watcher changes require a server/extension restart, unlike browser-only
 changes. A reopened canvas has a new read-collector command; ordinary graph
 watching starts automatically without that collector.
@@ -163,7 +198,8 @@ Test it with temporary folders, including nested creation, atomic saves, root
 replacement, multi-root ID collisions, debounce/close cancellation and failures.
 Lifecycle rendering tests must cover first mount vs filesystem creation, deleted
 ghost expiry, non-interactivity, reduced motion, and independent read activity.
-Check node and edge opacity at 0, 1000 and 2000 ms; overlay-only fades are not
+Check node and edge opacity at 0, 1750 and 3500 ms, and new-node glow expiry
+at 10000 ms; overlay-only fades are not
 enough. Freeze simulation time to confirm that completed wall-clock fades do
 not restart the legacy node entrance animation.
 Exercise unique-file bursts and sustained repeated traffic with deterministic
@@ -173,8 +209,8 @@ aggregation, and throttled load/status UI. Unknown capture loss must not be
 reported as zero; cancelled graph observations are not collector drops.
 Cover relationship additions between existing nodes as well as new nodes:
 the edge fades in with a brief green glow, does not enter read playback, and
-returns to normal after 2000 ms. Mounts, filters and unchanged links must not glow.
-Deleted relationships must fade red for 2000 ms without staying in the live
+returns to normal after 3500 ms. Mounts, filters and unchanged links must not glow.
+Deleted relationships must fade red for 3500 ms without staying in the live
 graph or read path. Cover surviving/missing endpoints, camera projection,
 recreation, relationship-layer filters and deletion during an unfinished birth.
 
@@ -235,7 +271,7 @@ approved policy explicitly rather than infer compliance from these audits.
 
 ## Release procedure
 
-The next prepared release is v0.2.0. A local archive with that version is only a
+The next prepared release is v0.3.0. A local archive with that version is only a
 candidate until the reviewed source reaches `main` and the tag workflow publishes
 it. Do not reuse the earlier 0.1.1 native-acceptance archive as a release asset.
 

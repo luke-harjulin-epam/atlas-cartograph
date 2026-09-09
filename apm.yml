@@ -1,5 +1,5 @@
 name: atlas-cartograph
-version: "0.2.0"
+version: "0.3.0"
 description: Live Atlas knowledge-graph canvas for GitHub Copilot App
 targets:
   - copilot

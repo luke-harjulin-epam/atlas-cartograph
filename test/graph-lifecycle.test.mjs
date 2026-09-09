@@ -50,10 +50,15 @@ test("real deltas capture old positions separately from the interactive graph", 
 test("birth and dissolve lifetimes use wall time, not rendering frames or read duration", () => {
   const { model, clock } = fixture();
   model.setGraph([b, c], delta(1, [c], [a]), [a, b]);
-  clock(start + 1999);
+  clock(start + 3499);
   assert.equal(model.frame().births.size, 1);
   assert.equal(model.frame().ghosts.length, 1);
-  clock(start + 2000);
+  clock(start + 3500);
+  assert.equal(model.frame().births.size, 1);
+  assert.equal(model.frame().ghosts.length, 0);
+  clock(start + 9999);
+  assert.equal(model.frame().births.size, 1);
+  clock(start + 10000);
   assert.deepEqual(model.frame(), { births: new Map(), ghosts: [], edges: new Map(), edgeGhosts: [] });
   assert.equal(model.births.size, 0);
   assert.equal(model.ghosts.size, 0);
@@ -69,7 +74,7 @@ test("heartbeats, duplicate or older revisions, and repeated edits never replay 
   model.setGraph([b, c], delta(3), [b, c]);
   model.setGraph([b, c], delta(1, [c], [a], "filesystem", start + 1000), [a, b]);
   assert.equal(model.revision, 3);
-  clock(start + 2000);
+  clock(start + 10000);
   assert.deepEqual(model.frame(), { births: new Map(), ghosts: [], edges: new Map(), edgeGhosts: [] });
   model.setGraph([b, c], first, [a, b]);
   assert.equal(model.frame().births.size, 0);
@@ -107,7 +112,7 @@ test("deleting the last visible file retains its ghost until expiry, not heartbe
   model.setGraph([], changes, [a]);
   model.setGraph([], changes, []);
   assert.equal(model.frame().ghosts.length, 1);
-  clock(start + 2000);
+  clock(start + 3500);
   assert.equal(model.frame().ghosts.length, 0);
 });
 
@@ -156,11 +161,11 @@ test("unrelated edit-only revisions preserve effects across graph ID renumbering
   assert.deepEqual([...model.frame().births.keys()], [renamed[1].id]);
   assert.equal(model.frame().ghosts.length, 1);
   assert.equal(model.frame().ghosts[0].node.path, a.path);
-  clock(start + 1999);
+  clock(start + 3499);
   model.setGraph(renamed, delta(3), renamed);
   assert.equal(model.frame().births.size, 1);
   assert.equal(model.frame().ghosts.length, 1);
-  clock(start + 2000);
+  clock(start + 10000);
   assert.deepEqual(model.frame(), { births: new Map(), ghosts: [], edges: new Map(), edgeGhosts: [] });
 });
 
@@ -174,7 +179,7 @@ test("delta IDs may differ from old or visible IDs without inventing new file id
 });
 
 test("stale, future and invalid event times are consumed without replay", () => {
-  for (const time of [start - 2000, start + 1, NaN, Infinity]) {
+  for (const time of [start - 10000, start + 1, NaN, Infinity]) {
     const { model, clock } = fixture();
     const changes = delta(1, [c], [a], "filesystem", time);
     model.setGraph([b, c], changes, [a, b]);
@@ -190,14 +195,15 @@ test("reduced motion is a static green/red marker until the exact wall-clock exp
   model.setGraph([b, c], delta(1, [c], [a]), [a, b]);
   const lookup = new Map([b, c].map((node) => [node.id, node]));
   const first = model.frame(start, true);
-  const later = model.frame(start + 1999, true);
+  const later = model.frame(start + 3499, true);
   assert.deepEqual(first, later);
   assert.equal(first.ghosts[0].style.particles, false);
   assert.equal(first.ghosts[0].style.scale, 1);
   assert.deepEqual(lifecyclePoints(first, lookup), lifecyclePoints(later, lookup));
   assert.equal(lifecyclePoints(first, lookup).length, 4);
-  assert.equal(lifecyclePoints(model.frame(start + 1999), lookup).length, 4);
-  assert.equal(lifecyclePoints(model.frame(start + 2000, true), lookup).length, 0);
+  assert.equal(lifecyclePoints(model.frame(start + 3499), lookup).length, 4);
+  assert.equal(lifecyclePoints(model.frame(start + 3500, true), lookup).length, 2);
+  assert.equal(lifecyclePoints(model.frame(start + 10000, true), lookup).length, 0);
 });
 
 test("birth/deletion remains independent of read playback, including off and queued activations", (t) => {
@@ -245,7 +251,7 @@ test("WebGL packs the shared lifecycle points, with ghosts outside node and edge
   assert.deepEqual(drawn, Array.from(new Float32Array(expected)));
   assert.equal(lookup.has("a"), false);
   drawn = null;
-  renderer.drawLifecycle(model.frame(start + 2000), lookup);
+  renderer.drawLifecycle(model.frame(start + 10000), lookup);
   assert.equal(drawn, null);
 });
 
@@ -271,10 +277,10 @@ test("watcher status is independent of collector state and renders only public t
   assert.match(GRAPH_WATCH_HELP, /independent of the read collector/);
 });
 
-test("created nodes fade from zero to full opacity and deleted nodes fade out over 2000 ms", () => {
+test("created nodes fade from zero to full opacity and deleted nodes fade out over 3500 ms", () => {
   const { model } = fixture();
   model.setGraph([b, c], delta(1, [c], [a]), [a, b]);
-  const samples = [0, 500, 1000, 1500, 1999].map((elapsed) => model.frame(start + elapsed));
+  const samples = [0, 875, 1750, 2625, 3499].map((elapsed) => model.frame(start + elapsed));
   const expected = [0, 0.15625, 0.5, 0.84375];
   for (const [i, frame] of samples.entries()) {
     const birth = frame.births.get("c");
@@ -289,20 +295,58 @@ test("created nodes fade from zero to full opacity and deleted nodes fade out ov
     assert.equal(ghost.particles, false);
   }
   assert.equal(samples[0].births.get("c").alpha, 0);
-  assert.ok(samples.at(-1).births.get("c").alpha < 0.00001);
-  assert.equal(lifecycleNodeOpacity(model.frame(start + 2000), "c"), 1);
-  assert.equal(model.frame(start + 2000).ghosts.length, 0);
+  assert.ok(samples.at(-1).births.get("c").alpha > 0.7, "Green glow continues after the opacity fade");
+  assert.equal(lifecycleNodeOpacity(model.frame(start + 3500), "c"), 1);
+  assert.equal(model.frame(start + 3500).ghosts.length, 0);
+});
+
+test("creation glow fades over ten seconds independently of arrival and retains its deadline across remapping", () => {
+  const { model } = fixture();
+  model.setGraph([a, b, c], delta(1, [c]), [a, b]);
+  const alphas = [1750, 3500, 5000, 7500, 9999].map((elapsed) => model.frame(start + elapsed).births.get("c").alpha);
+  assert.ok(alphas.every((alpha, index) => alpha > 0 && (!index || alpha < alphas[index - 1])));
+  assert.equal(alphas[2], 0.5);
+  assert.ok(alphas.at(-1) < 0.000001);
+  assert.equal(model.frame(start + 9999).births.get("c").nodeOpacity, 1);
+  const remapped = { ...c, id: "new-c" };
+  model.setGraph([a, b, remapped], delta(2), [a, b, c]);
+  assert.equal(model.frame(start + 9999).births.get("new-c").alpha, alphas.at(-1));
+  assert.equal(model.frame(start + 10000).births.size, 0);
+});
+
+test("reduced motion keeps a static birth marker until the ten-second timeout", () => {
+  const { model } = fixture();
+  model.setGraph([a, b, c], delta(1, [c]), [a, b]);
+  const first = model.frame(start, true).births.get("c");
+  const last = model.frame(start + 9999, true).births.get("c");
+  assert.deepEqual(first, last);
+  assert.equal(last.alpha, 0.85);
+  assert.equal(model.frame(start + 10000, true).births.size, 0);
+});
+
+test("late creation deltas retain remaining glow without replaying expired deletions or relationships", () => {
+  const { model, clock } = fixture();
+  clock(start + 4000);
+  model.setGraph([b, c], { ...delta(1, [c], [a]), createdEdges: [{ id: "bc" }] },
+    [a, b], undefined, [{ id: "bc", source: "b", target: "c", kind: "relates" }]);
+  const frame = model.frame();
+  assert.equal(frame.births.get("c").nodeOpacity, 1);
+  assert.ok(frame.births.get("c").alpha > 0);
+  assert.equal(frame.ghosts.length, 0);
+  assert.equal(frame.edges.size, 0);
+  clock(start + 10000);
+  assert.equal(model.frame().births.size, 0);
 });
 
 test("deleting a partially faded-in node never flashes it back to full opacity", () => {
   const { model, clock } = fixture();
   model.setGraph([a, b, c], delta(1, [c]), [a, b]);
-  clock(start + 1000);
+  clock(start + 1750);
   assert.equal(model.frame().births.get("c").nodeOpacity, 0.5);
-  model.setGraph([a, b], delta(2, [], [c], "filesystem", start + 1000), [a, b, c]);
+  model.setGraph([a, b], delta(2, [], [c], "filesystem", start + 1750), [a, b, c]);
   assert.equal(model.frame().ghosts[0].style.alpha, 0.5);
-  assert.equal(model.frame(start + 2000).ghosts[0].style.alpha, 0.25);
-  assert.equal(model.frame(start + 3000).ghosts.length, 0);
+  assert.equal(model.frame(start + 3500).ghosts[0].style.alpha, 0.25);
+  assert.equal(model.frame(start + 5250).ghosts.length, 0);
 });
 
 test("WebGL fades normal node and edge packing, not only the colored overlay", () => {
@@ -316,7 +360,7 @@ test("WebGL fades normal node and edge packing, not only the colored overlay", (
     selectedId: null, query: "", t: 0, reduce: false,
   };
   const lookup = new Map(renderNodes.map((node) => [node.id, node]));
-  for (const [elapsed, opacity] of [[0, 0], [1000, 0.5], [2000, 1]]) {
+  for (const [elapsed, opacity] of [[0, 0], [1750, 0.5], [3500, 1]]) {
     const frame = { ...base, lifecycleFrame: model.frame(start + elapsed) };
     renderer.packNodes(frame, "", () => true, new Set());
     assert.ok(Math.abs(renderer.scratch[2 * 7 + 6] - 0.95 * 0.55 * opacity) < 1e-6);
@@ -330,11 +374,11 @@ const edgeDelta = (revision = 1, occurredAt = start) => ({
   ...delta(revision, [], [], "filesystem", occurredAt), createdEdges: [ab],
 });
 
-test("new relationships fade in, glow briefly and return to normal at exactly 2000 ms", () => {
+test("new relationships fade in, glow and return to normal at exactly 3500 ms", () => {
   const { model } = fixture();
   model.setGraph([a, b], edgeDelta(), [a, b], undefined, [ab]);
   const lookup = new Map([a, b].map((node) => [node.id, node]));
-  for (const [elapsed, opacity, glow] of [[0, 0, 0], [500, 0.15625, 0.52734375], [1000, 0.5, 1], [1500, 0.84375, 0.52734375]]) {
+  for (const [elapsed, opacity, glow] of [[0, 0, 0], [875, 0.15625, 0.52734375], [1750, 0.5, 1], [2625, 0.84375, 0.52734375]]) {
     const frame = model.frame(start + elapsed);
     assert.equal(lifecycleEdgeOpacity(frame, "a", "b", "ab"), opacity);
     assert.equal(frame.edges.get("ab").style.alpha, glow);
@@ -344,7 +388,7 @@ test("new relationships fade in, glow briefly and return to normal at exactly 20
     assert.equal(glows[2].alpha, glow * 0.9);
     assert.deepEqual(glows[2].source, { x: a.sx, y: a.sy });
   }
-  const expired = model.frame(start + 2000);
+  const expired = model.frame(start + 3500);
   assert.equal(expired.edges.size, 0);
   assert.equal(lifecycleEdgeOpacity(expired, "a", "b", "ab"), 1);
   assert.deepEqual(lifecycleEdgeGlows(expired, lookup), []);
@@ -356,18 +400,18 @@ test("relationship effects never replay on bootstrap, mount, filtering, metadata
   assert.equal(boot.frame().edges.size, 0);
   const { model, clock } = fixture();
   model.setGraph([a, b], edgeDelta(), [a, b], undefined, [ab]);
-  clock(start + 1000);
+  clock(start + 1750);
   model.setGraph([a, b], edgeDelta(), [a, b], undefined, [ab]);
   model.setGraph([a, b], delta(2), [a, b], undefined, [ab]);
   assert.equal(model.frame().edges.get("ab").style.alpha, 1);
-  clock(start + 2000);
+  clock(start + 3500);
   assert.equal(model.frame().edges.size, 0);
-  model.setGraph([a, b], edgeDelta(3, start + 2000), [a, b], undefined, [ab]);
+  model.setGraph([a, b], edgeDelta(3, start + 3500), [a, b], undefined, [ab]);
   assert.equal(model.frame().edges.size, 1);
-  model.setGraph([a, b], edgeDelta(3, start + 2000), [a, b], undefined, []);
-  model.setGraph([a, b], edgeDelta(3, start + 2000), [a, b], undefined, [ab]);
+  model.setGraph([a, b], edgeDelta(3, start + 3500), [a, b], undefined, []);
+  model.setGraph([a, b], edgeDelta(3, start + 3500), [a, b], undefined, [ab]);
   assert.equal(model.frame().edges.size, 0);
-  model.setGraph([a, b], edgeDelta(4, start + 2000), [a, b], undefined, [ab]);
+  model.setGraph([a, b], edgeDelta(4, start + 3500), [a, b], undefined, [ab]);
   model.setGraph([a, b], delta(5, [], [], "mount"), [a, b], undefined, [ab]);
   assert.equal(model.frame().edges.size, 0);
 });
@@ -375,7 +419,7 @@ test("relationship effects never replay on bootstrap, mount, filtering, metadata
 test("relationship effects retain identity across graph renumbering and stop when endpoints disappear", () => {
   const { model, clock } = fixture();
   model.setGraph([a, b], edgeDelta(), [a, b], undefined, [ab]);
-  clock(start + 500);
+  clock(start + 875);
   const qualified = [{ ...a, id: "one::a" }, { ...b, id: "one::b" }];
   const edge = { ...ab, id: "qualified", source: "one::a", target: "one::b" };
   model.setGraph(qualified, delta(2), [a, b], undefined, [edge]);
@@ -390,10 +434,10 @@ test("reduced-motion relationship glows are static and new endpoints still gate 
   model.setGraph([a, b], { ...edgeDelta(), created: [b] }, [a], undefined, [ab]);
   const lookup = new Map([a, b].map((node) => [node.id, node]));
   assert.equal(lifecycleEdgeGlows(model.frame(), lookup)[2].alpha, 0);
-  assert.equal(lifecycleEdgeGlows(model.frame(start + 1000), lookup)[2].alpha, 0.45);
+  assert.equal(lifecycleEdgeGlows(model.frame(start + 1750), lookup)[2].alpha, 0.45);
   const reduced = model.frame(start + 500, true);
   assert.equal(lifecycleEdgeOpacity(reduced, "a", "b", "ab"), 1);
-  assert.deepEqual(lifecycleEdgeGlows(reduced, lookup), lifecycleEdgeGlows(model.frame(start + 1999, true), lookup));
+  assert.deepEqual(lifecycleEdgeGlows(reduced, lookup), lifecycleEdgeGlows(model.frame(start + 3499, true), lookup));
 });
 
 test("WebGL packs relationship glow widths as triangles and fades ordinary edges independently", () => {
@@ -405,7 +449,7 @@ test("WebGL packs relationship glow widths as triangles and fades ordinary edges
   let draw;
   renderer.drawLines = (data, count, mode) => { draw = { data: [...data.slice(0, count * 6)], count, mode }; };
   const lookup = new Map([a, b].map((node) => [node.id, node]));
-  const frame = model.frame(start + 1000);
+  const frame = model.frame(start + 1750);
   renderer.drawLifecycleEdges(frame, lookup);
   assert.equal(draw.count, 18);
   assert.equal(draw.mode, 4);
@@ -414,7 +458,7 @@ test("WebGL packs relationship glow widths as triangles and fades ordinary edges
   renderer.packEdges({ edges: [ab], lifecycleFrame: frame }, lookup, "", () => true, new Set());
   assert.ok(Math.abs(renderer.scratch[5] - 0.11) < 1e-6);
   draw = null;
-  renderer.drawLifecycleEdges(model.frame(start + 2000), lookup);
+  renderer.drawLifecycleEdges(model.frame(start + 3500), lookup);
   assert.equal(draw, null);
 });
 
@@ -422,11 +466,11 @@ const removedEdgeDelta = (revision = 1, occurredAt = start) => ({
   ...delta(revision, [], [], "filesystem", occurredAt), deletedEdges: [ab],
 });
 
-test("deleted relationships glow red and fade out on the same 2000 ms envelope as deleted nodes", () => {
+test("deleted relationships glow red and fade out on the same 3500 ms envelope as deleted nodes", () => {
   const { model } = fixture();
   model.setGraph([a, b], removedEdgeDelta(), [a, b], undefined, [], [ab]);
   const lookup = new Map([a, b].map((node) => [node.id, node]));
-  for (const [elapsed, opacity] of [[0, 1], [500, 0.84375], [1000, 0.5], [1500, 0.15625]]) {
+  for (const [elapsed, opacity] of [[0, 1], [875, 0.84375], [1750, 0.5], [2625, 0.15625]]) {
     const frame = model.frame(start + elapsed);
     assert.equal(frame.edges.size, 0);
     assert.equal(frame.edgeGhosts.length, 1);
@@ -436,8 +480,8 @@ test("deleted relationships glow red and fade out on the same 2000 ms envelope a
     assert.equal(glows.length, 3);
     assert.equal(glows[2].alpha, 0.9 * opacity);
   }
-  assert.ok(model.frame(start + 1999).edgeGhosts[0].style.alpha < 0.000001);
-  assert.deepEqual(model.frame(start + 2000).edgeGhosts, []);
+  assert.ok(model.frame(start + 3499).edgeGhosts[0].style.alpha < 0.000001);
+  assert.deepEqual(model.frame(start + 3500).edgeGhosts, []);
   assert.equal(model.edgeGhosts.size, 0);
 });
 
@@ -461,7 +505,7 @@ test("edge deletion requires a previously visible edge and explicit filesystem e
     [delta(1), [ab]],
     [removedEdgeDelta(), []],
     [{ ...removedEdgeDelta(), origin: "mount" }, [ab]],
-    [removedEdgeDelta(1, start - 2000), [ab]],
+    [removedEdgeDelta(1, start - 3500), [ab]],
     [removedEdgeDelta(1, start + 1), [ab]],
   ]) {
     const { model } = fixture();
@@ -476,11 +520,11 @@ test("edge deletion requires a previously visible edge and explicit filesystem e
 test("deletion ghosts do not replay or extend on duplicate revisions or metadata edits", () => {
   const { model, clock } = fixture();
   model.setGraph([a, b], removedEdgeDelta(), [a, b], undefined, [], [ab]);
-  clock(start + 1000);
+  clock(start + 1750);
   model.setGraph([a, b], removedEdgeDelta(), [a, b]);
   model.setGraph([a, b], delta(2), [a, b]);
   assert.equal(model.frame().edgeGhosts[0].style.alpha, 0.5);
-  clock(start + 2000);
+  clock(start + 3500);
   assert.equal(model.frame().edgeGhosts.length, 0);
 });
 
@@ -505,30 +549,30 @@ test("deleting a new relationship mid-fade does not flash it or its new endpoint
     const { model, clock } = fixture();
     model.setGraph([a, b], { ...edgeDelta(), created: createNode ? [b] : [] },
       createNode ? [a] : [a, b], undefined, [ab]);
-    clock(start + 1000);
-    model.setGraph([a, b], removedEdgeDelta(2, start + 1000), [a, b], undefined, [], [ab]);
+    clock(start + 1750);
+    model.setGraph([a, b], removedEdgeDelta(2, start + 1750), [a, b], undefined, [], [ab]);
     assert.equal(model.frame().edgeGhosts[0].style.alpha, 0.5);
-    assert.equal(model.frame(start + 2000).edgeGhosts[0].style.alpha, 0.25);
+    assert.equal(model.frame(start + 3500).edgeGhosts[0].style.alpha, 0.25);
   }
 });
 
 test("reduced-motion deletion ghosts stay static and WebGL packs red without restoring live edges", () => {
   const { model } = fixture();
   model.setGraph([], { ...removedEdgeDelta(), deleted: [a, b] }, [a, b], undefined, [], [ab]);
-  const first = model.frame(start, true), last = model.frame(start + 1999, true);
+  const first = model.frame(start, true), last = model.frame(start + 3499, true);
   assert.deepEqual(lifecycleEdgeGlows(first, new Map()), lifecycleEdgeGlows(last, new Map()));
   const renderer = Object.create(GraphGL.prototype);
   renderer.scratch = new Float32Array(1000);
   renderer.gl = { TRIANGLES: 4 };
   let draw;
   renderer.drawLines = (data, count, mode) => { draw = { data: [...data.slice(0, count * 6)], count, mode }; };
-  renderer.drawLifecycleEdges(model.frame(start + 1000), new Map());
+  renderer.drawLifecycleEdges(model.frame(start + 1750), new Map());
   assert.equal(draw.count, 18);
   assert.equal(draw.mode, 4);
   assert.deepEqual(draw.data.slice(2, 5), [...new Float32Array([1, 0.24, 0.3])]);
   assert.ok(Math.abs(draw.data[77] - 0.45) < 1e-6);
   assert.equal(renderer.packEdges({ edges: [] }, new Map(), "", () => true, new Set()), 0);
   draw = null;
-  renderer.drawLifecycleEdges(model.frame(start + 2000), new Map());
+  renderer.drawLifecycleEdges(model.frame(start + 3500), new Map());
   assert.equal(draw, null);
 });

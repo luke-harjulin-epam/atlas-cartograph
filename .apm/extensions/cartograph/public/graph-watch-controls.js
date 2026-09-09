@@ -1,4 +1,6 @@
-export const GRAPH_WATCH_HELP = "Open Atlas directories sync creations, edits, and deletions from any app without extra permissions. This watcher is independent of the read collector and its adaptive visual path. New nodes and relationships glow green and fade to their default colour over 2000 ms; deleted nodes and relationships glow red and fade out over 2000 ms.";
+import { GRAPH_LIFECYCLE_DURATION_MS, GRAPH_BIRTH_GLOW_DURATION_MS } from "./graph-lifecycle.js";
+
+export const GRAPH_WATCH_HELP = `Open Atlas directories sync creations, edits, and deletions from any app without extra permissions. This watcher is independent of the read collector and its adaptive visual path. New nodes fade in over ${GRAPH_LIFECYCLE_DURATION_MS} ms; their green glow fades over ${GRAPH_BIRTH_GLOW_DURATION_MS / 1000} seconds total from creation. New relationships glow green for ${GRAPH_LIFECYCLE_DURATION_MS} ms; deleted nodes and relationships glow red and fade out over ${GRAPH_LIFECYCLE_DURATION_MS} ms.`;
 
 export function graphWatchStatus(watch, connected = true) {
   if (!connected) return { status: "disconnected", label: "Changes disconnected", message: "Canvas connection lost. Reconnecting…" };

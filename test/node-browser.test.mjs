@@ -10,7 +10,7 @@ function fixture(count = 70) {
   const doc = frontendDocument(html);
   const get = (id) => doc.getElementById(id);
   const actions = [];
-  const browser = mountNodeBrowser(get("node-browser"), get("browse-nodes"), {
+  const browser = mountNodeBrowser(get("node-browser"), get("search"), {
     select: (id) => actions.push(["select", id]),
     preview: () => actions.push(["preview"]),
     clear: () => actions.push(["clear"]),
@@ -30,7 +30,7 @@ function fixture(count = 70) {
     browser.setState(state, () => "experiences");
   }
   update();
-  get("browse-nodes").click();
+  browser.show();
   return { doc, get, actions, update, nodes: state.graph.nodes, browser };
 }
 
@@ -62,10 +62,10 @@ test("all 3001 graph nodes are reachable through bounded native button pages", (
 
 test("filter reaches distant nodes by full path or Atlas and clearly reports zero matches", () => {
   const { doc, get, nodes, actions } = fixture(101);
-  const input = get("node-filter");
+  const input = get("search");
   assert.equal(input.tagName, "INPUT");
   assert.equal(input.type, "search");
-  assert.equal(doc.querySelector('[for="node-filter"]').textContent, "Filter by title, Atlas, path or kind");
+  assert.equal(input.getAttribute("aria-label"), "Search nodes");
   input.value = "experiences/node-100.md";
   input.dispatchEvent(new FrontendEvent("input"));
   assert.equal(get("node-list").children.length, 1);
@@ -99,7 +99,7 @@ test("SSE preserves focused node identity, edited filters, caret, scroll and upd
   assert.match(get("node-selected").textContent, /Selected: Updated title/);
   assert.equal(get("node-preview").disabled, false);
   assert.equal(get("node-clear").disabled, false);
-  const filter = get("node-filter");
+  const filter = get("search");
   filter.focus();
   filter.value = "Same";
   filter.selectionStart = 2;
@@ -121,7 +121,7 @@ test("moving a focused node across a page boundary retains it; removal moves foc
   assert.equal(get("node-list").firstElementChild.firstElementChild, button);
   assert.match(get("node-count").textContent, /Page 2 of 3/);
   update({ graph: { nodes: nodes.filter((node) => node.id !== nodes[24].id) } });
-  assert.equal(doc.activeElement, get("node-filter"));
+  assert.equal(doc.activeElement, get("search"));
   assert.ok(get("node-list").children.length <= NODE_PAGE_SIZE);
 });
 
@@ -138,41 +138,41 @@ test("selection controls follow state, cannot act on deleted nodes, and report a
   assert.equal(get("node-selected").textContent, "No node selected.");
   assert.equal(get("node-preview").disabled, true);
   assert.equal(get("node-clear").disabled, true);
-  assert.equal(doc.activeElement, get("node-filter"));
+  assert.equal(doc.activeElement, get("search"));
   assert.equal(get("node-count").textContent, "No results. 0 of 0 nodes.");
 
   const errorDoc = frontendDocument(html);
   const panel = errorDoc.getElementById("node-browser");
-  const browser = mountNodeBrowser(panel, errorDoc.getElementById("browse-nodes"), {
+  const browser = mountNodeBrowser(panel, errorDoc.getElementById("search"), {
     select: async () => { throw new Error("offline"); }, preview() {}, clear() {},
   });
   browser.setState({ graph: { nodes } }, () => "");
-  errorDoc.getElementById("browse-nodes").click();
+  browser.show();
   errorDoc.getElementById("node-list").firstElementChild.firstElementChild.click();
   await settle();
   assert.match(errorDoc.getElementById("node-error").textContent, /offline/);
   assert.equal(errorDoc.getElementById("node-error").classList.contains("hidden"), false);
 });
 
-test("native controls never trap Tab; close and Escape return focus to Browse nodes", () => {
+test("native controls never trap Tab; close and Escape return focus to Search", () => {
   const { doc, get, update } = fixture(26);
-  assert.equal(get("browse-nodes").getAttribute("aria-expanded"), "true");
-  assert.equal(get("browse-nodes").getAttribute("aria-controls"), "node-browser");
-  assert.equal(doc.activeElement, get("node-filter"));
+  assert.equal(get("search").getAttribute("data-results-open"), "true");
+  assert.equal(get("search").getAttribute("aria-controls"), "node-browser");
+  assert.equal(doc.activeElement, get("search"));
   const tab = new FrontendEvent("keydown", { key: "Tab" });
-  get("node-filter").dispatchEvent(tab);
+  get("search").dispatchEvent(tab);
   assert.equal(tab.defaultPrevented, false);
   get("node-next").click();
   assert.equal(doc.activeElement, get("node-previous"), "disabled last-page Next does not lose focus");
   const escape = new FrontendEvent("keydown", { key: "Escape" });
   get("node-previous").dispatchEvent(escape);
-  assert.equal(get("browse-nodes").getAttribute("aria-expanded"), "false");
+  assert.equal(get("search").getAttribute("data-results-open"), "false");
   assert.equal(get("node-browser").classList.contains("hidden"), true);
-  assert.equal(doc.activeElement, get("browse-nodes"));
+  assert.equal(doc.activeElement, get("search"));
   update({ selectedId: "atlas-1::node-25" });
-  assert.equal(doc.activeElement, get("browse-nodes"));
-  get("browse-nodes").click();
+  assert.equal(doc.activeElement, get("search"));
+  get("search").dispatchEvent(new FrontendEvent("keydown", { key: "ArrowDown" }));
   assert.match(get("node-selected").textContent, /node-25.md/);
   get("node-browser-close").click();
-  assert.equal(doc.activeElement, get("browse-nodes"));
+  assert.equal(doc.activeElement, get("search"));
 });
