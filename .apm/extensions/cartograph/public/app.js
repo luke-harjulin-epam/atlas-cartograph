@@ -560,13 +560,13 @@ $("chat-toggle").addEventListener("click", () => {
     closeChat();
     return;
   }
+  chatFullscreen = false;
   chatOpen = !chatOpen;
   renderChat();
   if (chatOpen) $("chat-input")?.focus({ preventScroll: true });
 });
 function closeChat() {
   chatOpen = false;
-  chatFullscreen = false;
   renderChat();
   $("chat-toggle")?.focus();
 }
@@ -631,7 +631,7 @@ $("chat-form").addEventListener("submit", (e) => {
 });
 function setOptionsOpen(open, restoreFocus = true) {
   const panel = $("panel");
-  panel.classList.toggle("hidden", !open);
+  panel.classList.toggle("options-open", open);
   panel.inert = !open;
   panel.setAttribute("aria-hidden", String(!open));
   $("toggle-panel").setAttribute("aria-expanded", String(open));
@@ -639,7 +639,7 @@ function setOptionsOpen(open, restoreFocus = true) {
   if (open) $("panel-close").focus({ preventScroll: true });
   else if (restoreFocus) $("toggle-panel").focus({ preventScroll: true });
 }
-$("toggle-panel").addEventListener("click", () => setOptionsOpen($("panel").classList.contains("hidden")));
+$("toggle-panel").addEventListener("click", () => setOptionsOpen(!$("panel").classList.contains("options-open")));
 $("panel-close").addEventListener("click", () => setOptionsOpen(false));
 $("panel").addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
@@ -711,7 +711,9 @@ function renderChat() {
   drawer.classList.toggle("chat-open", chatOpen);
   mapEl?.classList.toggle("chat-open", chatOpen);
   const fullscreen = chatOpen && chatFullscreen;
-  drawer.classList.toggle("chat-fullscreen", fullscreen);
+  // Retain the closing width until the next open so full-screen chat slides
+  // offscreen instead of snapping back to drawer width before leaving.
+  drawer.classList.toggle("chat-fullscreen", chatFullscreen);
   mapEl?.classList.toggle("chat-fullscreen", fullscreen);
   for (const child of mapEl?.children ?? []) {
     if (child === drawer || child === toggle) continue;

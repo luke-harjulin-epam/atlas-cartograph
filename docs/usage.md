@@ -99,6 +99,10 @@ Atlas without shrinking the graph. A logo and **Atlas Cartograph** header sit
 above **Options**. With chat open, the panel stays within the Atlas area.
 Its contents scroll independently; Close or
 Escape dismisses it and returns focus to the menu button.
+Options slides in and out from the left; chat slides in and out from the
+right, including when closing full-screen chat. Both use a 180ms transition
+and become non-interactive immediately on close. Reduced motion disables
+these transitions.
 One field searches by title, ID, Atlas,
 full path, type or kind and uses that same query to highlight matching visible
 nodes on the map. The result list includes hidden layers and supports native

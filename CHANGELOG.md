@@ -7,6 +7,8 @@
 - Fill the available toolbar width with search and show Options in a
   full-height left-side overlay with an Atlas Cartograph logo/header,
   independent scrolling and Escape/Close.
+  Slide Options and chat in and out over 180ms, with instant reduced-motion
+  behavior and no width snap when closing full-screen chat.
 - Add a full-screen chat toggle for reading wide tables. Restore or Escape
   returns to the drawer, preserving the conversation and draft.
   Use one persistent top-right panel icon to open or close chat in every size.

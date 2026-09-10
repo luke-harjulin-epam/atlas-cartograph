@@ -844,13 +844,13 @@ test("options overlay opens accessibly and closes without changing graph or sear
   assert.equal(panel.querySelector(".panel-brand").querySelector("svg").getAttribute("aria-hidden"), "true");
   assert.equal(document.getElementById("panel-title").textContent, "Options");
   toggle.click();
-  assert.equal(panel.classList.contains("hidden"), false);
+  assert.equal(panel.classList.contains("options-open"), true);
   assert.equal(panel.inert, false);
   assert.equal(panel.getAttribute("aria-hidden"), "false");
   assert.equal(toggle.getAttribute("aria-expanded"), "true");
   assert.equal(document.activeElement, close);
   apply({});
-  assert.equal(panel.classList.contains("hidden"), false);
+  assert.equal(panel.classList.contains("options-open"), true);
   close.dispatchEvent(new FrontendEvent("keydown", { key: "Escape" }));
   assert.equal(panel.inert, true);
   assert.equal(document.activeElement, toggle);
@@ -859,7 +859,7 @@ test("options overlay opens accessibly and closes without changing graph or sear
   close.click();
   toggle.click();
   toggle.click();
-  assert.equal(panel.classList.contains("hidden"), true);
+  assert.equal(panel.classList.contains("options-open"), false);
   assert.equal(calls.length, 0);
   toggle.click();
   document.getElementById("add-atlas").click();
@@ -872,9 +872,9 @@ test("search fills its toolbar and options overlay the full-height left side", (
   const css = readFileSync(new URL("../.apm/extensions/cartograph/public/styles.css", import.meta.url), "utf8");
   assert.doesNotMatch(css.match(/\.search-field \{[^}]*\}/)[0], /max-width/);
   assert.match(css, /\.panel \{[^}]*top: 0; bottom: 0; left: 0;[^}]*width: min\(22\.5rem, calc\(100% - var\(--chat-inset\)\)\)/);
-  assert.match(css, /\.panel:not\(\.hidden\) \{ animation: options-slide-in 180ms ease-out; \}/);
-  assert.match(css, /@keyframes options-slide-in \{\s*from \{ transform: translateX\(-100%\); \}\s*to \{ transform: translateX\(0\); \}/);
-  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{\s*\.panel:not\(\.hidden\) \{ animation: none; \}/);
+  assert.match(css, /\.panel \{[^}]*transform: translateX\(-100%\); visibility: hidden;[^}]*transition: transform 180ms ease-out, visibility 0s linear 180ms;/);
+  assert.match(css, /\.panel\.options-open \{ transform: translateX\(0\); visibility: visible; transition-delay: 0s; \}/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{\s*\.panel \{ transition: none; \}/);
 });
 
 test("chat folds into an inert drawer and preserves graph, history and drafts across toggles", () => {
@@ -964,6 +964,7 @@ test("chat fullscreen restores the drawer and preserves draft, history and graph
   full.click();
   toggle.click();
   assert.equal(drawer.inert, true);
+  assert.equal(drawer.classList.contains("chat-fullscreen"), true, "full-screen close retains its width during slide-out");
   assert.equal(preview.inert, originalInert);
   toggle.click();
   assert.equal(drawer.classList.contains("chat-fullscreen"), false);
