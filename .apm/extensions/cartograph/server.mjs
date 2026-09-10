@@ -8,6 +8,7 @@ import { allPresetSpecs, discoverAtlasPresets } from "./atlas/catalog.mjs";
 import { normalizeLink } from "./atlas/parse.mjs";
 import { createPageResolver, pageReference } from "./atlas/resolve.mjs";
 import { answerQuery } from "./atlas/chat.mjs";
+import { createChatRequests } from "./atlas/chat-requests.mjs";
 import { DEFAULT_DURATION_MS, validateDuration } from "./activity/model.mjs";
 import { createActivityService } from "./activity/service.mjs";
 import { createLiveAtlas, graphFileKey, mountGraphChanges } from "./atlas/live.mjs";
@@ -389,6 +390,7 @@ function serveStatic(req, res) {
 export async function startServer(instanceId, state, options = {}) {
   state.chatMode = options.onChat ? "session" : "local";
   const entry = { state, clients: new Set(), instanceId, onChat: options.onChat };
+  entry.chat = createChatRequests(state, { ...options.chat, onChange: () => broadcast(entry) });
   entry.activity = createActivityService(entry, sendJson, options.activity);
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
@@ -484,39 +486,16 @@ export async function startServer(instanceId, state, options = {}) {
         } else if (body.action === "chat") {
           const text = String(body.text ?? "").trim();
           if (text) {
-            const chat = Array.isArray(entry.state.chat) ? entry.state.chat : [];
-            chat.push({ role: "user", text });
             const ask = entry.onChat;
-            const pending = {
-              role: "graph",
-              text: ask ? "Asking the session…" : "Searching the Atlas…",
-              pending: true,
-              hits: [],
-            };
-            chat.push(pending);
-            entry.state.chat = chat.slice(-50);
+            const requestId = entry.chat.begin(text, Boolean(ask));
             broadcast(entry);
             sendJson(res, 200, snapshot(entry.state));
             Promise.resolve()
-              .then(() => (ask ? ask(text, entry.state) : answerQuery(entry.state, text)))
+              .then(() => (ask ? ask(text, entry.state, { requestId, instanceId }) : answerQuery(entry.state, text)))
               .then((reply) => {
-                const cur = Array.isArray(entry.state.chat) ? entry.state.chat : [];
-                if (cur.includes(pending)) {
-                  pending.text = reply.text || "No reply.";
-                  pending.hits = reply.hits || [];
-                  pending.pending = false;
-                }
-                broadcast(entry);
+                if (!reply?.accepted) entry.chat.completeLocal(requestId, reply);
               })
-              .catch((err) => {
-                const cur = Array.isArray(entry.state.chat) ? entry.state.chat : [];
-                const msg = err instanceof Error ? err.message : String(err);
-                if (cur.includes(pending)) {
-                  pending.text = `Session query failed: ${msg}`;
-                  pending.pending = false;
-                }
-                broadcast(entry);
-              });
+              .catch((err) => entry.chat.fail(requestId, err));
             return;
           }
         }
@@ -537,13 +516,14 @@ export async function startServer(instanceId, state, options = {}) {
   });
 
   entry.liveAtlas = createLiveAtlas(entry, refreshAtlases, () => broadcast(entry), options.graphWatch);
-  server.once("close", () => { entry.activity.close(); entry.liveAtlas.close(); });
+  server.once("close", () => { entry.chat.close(); entry.activity.close(); entry.liveAtlas.close(); });
   try {
     await new Promise((resolve, reject) => {
       server.once("error", reject);
       server.listen(0, "127.0.0.1", resolve);
     });
   } catch (error) {
+    entry.chat.close();
     entry.activity.close();
     entry.liveAtlas.close();
     throw error;
@@ -557,6 +537,7 @@ export async function startServer(instanceId, state, options = {}) {
     broadcast(entry);
   };
   entry.close = async () => {
+    entry.chat.close();
     entry.liveAtlas.close();
     entry.activity.close();
     for (const res of entry.clients) res.end();

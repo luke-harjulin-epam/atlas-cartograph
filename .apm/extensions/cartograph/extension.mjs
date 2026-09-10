@@ -86,6 +86,31 @@ const session = await joinSession({
       },
       actions: [
         {
+          name: "update_chat",
+          description: "Report working status or deliver an answer/error to the originating Cartograph chat request. Acknowledges delivery; never use transcript text as the reply.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              requestId: { type: "string", minLength: 1 },
+              status: { type: "string", enum: ["working", "answered", "failed"] },
+              text: { type: "string", description: "Complete Markdown answer or error; required for answered/failed (at most 128 KiB)." },
+            },
+            required: ["requestId", "status"],
+            additionalProperties: false,
+          },
+          handler: async (ctx) => {
+            const entry = requireEntry(ctx.instanceId);
+            if (ctx.sessionId !== entry.chatSessionId || ctx.sessionId !== session.sessionId) {
+              throw new CanvasError("chat_session_mismatch", "Chat replies must come from the session that opened this canvas.");
+            }
+            try {
+              return entry.chat.update(ctx.input.requestId, ctx.input);
+            } catch (error) {
+              throw new CanvasError(error.code ?? "invalid_chat_reply", error.message);
+            }
+          },
+        },
+        {
           name: "set_layers",
           description: "Set node type or relationship layers using keys from get_state. Omitted keys retain their values.",
           inputSchema: {
@@ -199,6 +224,8 @@ const session = await joinSession({
               store: g?.store ?? null,
               nodeCount: g?.nodes?.length ?? 0,
               edgeCount: g?.edges?.length ?? 0,
+              chatMode: entry.state.chatMode,
+              chat: ctx.sessionId === entry.chatSessionId ? entry.state.chat : [],
               page: entry.state.page
                 ? {
                     id: entry.state.page.id,
@@ -239,11 +266,17 @@ const session = await joinSession({
           const state = freshState(cwd, input);
           openDefaultAtlases(state, input);
           entry = await startServer(ctx.instanceId, state, {
-            onChat: async (text, st) => askHostSession(session, text, st),
+            onChat: async (text, st, routing) => {
+              if (ctx.sessionId !== session.sessionId) {
+                throw new Error("Chat is unavailable: this canvas is not owned by the joined session.");
+              }
+              return askHostSession(session, text, st, routing);
+            },
             activity: {
               scope: { mode: "session", rootPid: process.ppid, excludePids: [process.pid] },
             },
           });
+          entry.chatSessionId = ctx.sessionId;
           instances.set(ctx.instanceId, entry);
         }
         return {

@@ -3,7 +3,8 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSy
 import { join, resolve } from "node:path";
 import { setImmediate as nextTurn } from "node:timers/promises";
 import test from "node:test";
-import { askHostSession, graphChatPrompt } from "../.apm/extensions/cartograph/atlas/chat.mjs";
+import { askHostSession, graphChatPrompt, CHAT_ACTIVATION_PATH } from "../.apm/extensions/cartograph/atlas/chat.mjs";
+import { createChatRequests, CHAT_TIMEOUT_MS, MAX_CHAT_REPLY_BYTES } from "../.apm/extensions/cartograph/atlas/chat-requests.mjs";
 import { freshState, openAtlas, startServer } from "../.apm/extensions/cartograph/server.mjs";
 
 test("graph chat prompt names stores and selection without page bodies", () => {
@@ -18,7 +19,7 @@ test("graph chat prompt names stores and selection without page bodies", () => {
     },
     page: { id: "one::work/shared", body },
   });
-  assert.match(prompt, /^Cartograph chat: What does the selected page claim\?/);
+  assert.match(prompt, /Cartograph chat: What does the selected page claim\?/);
   assert.match(prompt, /Open Atlas stores:\n- one \(\/tmp\/one\)/);
   assert.match(prompt, /Selected node: one::work\/shared \(work\/shared\.md\)/);
   assert.match(prompt, /Search query: pulse/);
@@ -26,12 +27,13 @@ test("graph chat prompt names stores and selection without page bodies", () => {
   assert.equal(prompt.includes(body), false);
 });
 
-test("host session chat uses send on the joined session and never loads pages", async () => {
+test("host send returns only an acceptance, never a UUID answer", async () => {
   const calls = [];
+  const routing = { instanceId: "map", requestId: "request-1" };
   const host = {
     send: async (payload) => {
       calls.push(payload);
-      return "The selected page records the pulse decision.";
+      return "11111111-2222-4333-8444-555555555555";
     },
     createSession: async () => {
       throw new Error("createSession must not run");
@@ -40,14 +42,18 @@ test("host session chat uses send on the joined session and never loads pages", 
   const reply = await askHostSession(host, "Summarise the selected page", {
     selectedId: "one::index",
     graph: { stores: [{ atlasId: "one", root: "/atlas" }] },
-  });
+  }, routing);
   assert.deepEqual(calls, [{ prompt: graphChatPrompt("Summarise the selected page", {
     selectedId: "one::index",
     graph: { stores: [{ atlasId: "one", root: "/atlas" }] },
-  }) }]);
-  assert.deepEqual(reply, { text: "The selected page records the pulse decision.", hits: [] });
+  }, routing) }]);
+  assert.deepEqual(reply, { accepted: true });
+  assert.match(calls[0].prompt, /"instanceId":"map","requestId":"request-1"/);
+  assert.ok(calls[0].prompt.includes(JSON.stringify(CHAT_ACTIVATION_PATH)));
+  assert.match(calls[0].prompt, /actionName "update_chat"/);
+  assert.match(readFileSync(CHAT_ACTIVATION_PATH, "utf8"), /does NOT fill/);
   await assert.rejects(askHostSession({}, "x", {}), /Host session cannot accept chat/);
-  await assert.rejects(askHostSession({ send: async () => "" }, "x", {}), /empty reply/);
+  await assert.rejects(askHostSession(host, "x", {}), /routing is required/);
 });
 
 test("native chat does not fall back to local search after a session failure", async (t) => {
@@ -66,14 +72,14 @@ test("native chat does not fall back to local search after a session failure", a
   entry = await startServer("session-chat", state, {
     activity: { platform: "unsupported" },
     graphWatch: { watcherFactory: () => ({ setRoots() {}, close() {} }) },
-    onChat: async (text, st) => askHostSession({
+    onChat: async (text, st, routing) => askHostSession({
       send: async ({ prompt }) => {
         sent += 1;
-        assert.match(prompt, /^Cartograph chat: What does Pulse say\?/);
+        assert.match(prompt, /Cartograph chat: What does Pulse say\?/);
         assert.match(prompt, new RegExp(st.selectedId));
         throw new Error("session unavailable");
       },
-    }, text, st),
+    }, text, st, routing),
   });
   assert.equal(entry.state.chatMode, "session");
   const headers = { "X-Cartograph-Client": "canvas", "Content-Type": "application/json" };
@@ -83,7 +89,7 @@ test("native chat does not fall back to local search after a session failure", a
   const snapshot = await response.json();
   assert.equal(snapshot.chatMode, "session");
   assert.equal(snapshot.chat[1].pending, true);
-  assert.equal(snapshot.chat[1].text, "Asking the session…");
+  assert.equal(snapshot.chat[1].text, "Waiting for Copilot…");
   for (let i = 0; i < 20 && entry.state.chat[1]?.pending; i++) await nextTurn();
   assert.equal(sent, 1);
   assert.match(entry.state.chat[1].text, /Session query failed: session unavailable/);
@@ -120,4 +126,74 @@ test("native entrypoint binds chat to the joined session", () => {
   assert.match(source, /askHostSession\(session,/);
   assert.equal(source.includes("createSession"), false);
   assert.equal(source.includes("answerQuery"), false);
+});
+
+function requestsFixture(t) {
+  const state = { chat: [] };
+  const timers = new Map();
+  let broadcasts = 0;
+  let timerId = 0;
+  const requests = createChatRequests(state, {
+    onChange: () => broadcasts++,
+    schedule: (fn, ms) => {
+      assert.equal(ms, CHAT_TIMEOUT_MS);
+      const id = ++timerId;
+      timers.set(id, fn);
+      return id;
+    },
+    unschedule: (id) => timers.delete(id),
+  });
+  t.after(() => requests.close());
+  return { state, requests, timers, broadcasts: () => broadcasts };
+}
+
+test("requests stay pending after dispatch and accept only correlated, idempotent replies", (t) => {
+  const { requests, state, timers, broadcasts } = requestsFixture(t);
+  const first = requests.begin("first");
+  const second = requests.begin("second");
+  assert.notEqual(first, second);
+  assert.equal(timers.size, 2);
+  assert.equal(state.chat[1].status, "queued");
+  assert.equal(state.chat[1].pending, true);
+  assert.equal(requests.update(second, { status: "working" }).ok, true);
+  const changed = broadcasts();
+  requests.update(second, { status: "working" });
+  assert.equal(broadcasts(), changed, "Repeated progress does not reset animation or timers");
+  const reply = { status: "answered", text: "Second answer" };
+  requests.update(second, reply);
+  assert.equal(state.chat[1].pending, true);
+  assert.equal(state.chat[3].text, "Second answer");
+  assert.equal(state.chat[3].pending, false);
+  assert.equal(timers.size, 1);
+  requests.fail(second, new Error("late send failure"));
+  assert.equal(state.chat[3].text, "Second answer", "Late send failure cannot overwrite delivered answer");
+  assert.equal(requests.update(second, reply).duplicate, true);
+  assert.throws(() => requests.update(second, { status: "answered", text: "Different answer" }), { code: "chat_request_finished" });
+  assert.throws(() => requests.update(second, { status: "working" }), { code: "chat_request_finished" });
+  requests.update(first, { status: "failed", text: "Unable to read page" });
+  assert.equal(state.chat[1].status, "failed");
+  assert.equal(timers.size, 0);
+});
+
+test("chat updates reject invalid, foreign, expired, trimmed and closed requests", (t) => {
+  const { requests, state, timers } = requestsFixture(t);
+  const first = requests.begin("first");
+  for (const input of [
+    { status: "unknown" }, { status: "answered", text: "" }, { status: "answered", text: "  " },
+    { status: "failed" }, { status: "answered", text: "é".repeat(MAX_CHAT_REPLY_BYTES) },
+  ]) assert.throws(() => requests.update(first, input), { code: "invalid_chat_reply" });
+  assert.throws(() => requests.update("foreign-id", { status: "working" }), { code: "chat_request_missing" });
+  timers.values().next().value();
+  assert.equal(state.chat[1].status, "expired");
+  assert.equal(timers.size, 0);
+  assert.throws(() => requests.update(first, { status: "answered", text: "Late" }), { code: "chat_request_finished" });
+  for (let i = 0; i < 26; i++) requests.begin(`question ${i}`);
+  assert.equal(state.chat.length, 50);
+  assert.equal(timers.size, 25);
+  assert.throws(() => requests.update(first, { status: "working" }), { code: "chat_request_missing" });
+  requests.close();
+  assert.equal(timers.size, 0);
+  assert.ok(state.chat.filter((m) => m.role === "graph").every((m) => !m.pending && m.status === "cancelled"));
+  assert.throws(() => requests.update(state.chat[1].id, { status: "working" }), { code: "chat_closed" });
+  assert.throws(() => requests.begin("after close"), { code: "chat_closed" });
 });

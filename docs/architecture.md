@@ -11,6 +11,8 @@ hand-authored; there is no generated marketplace site or documentation generator
 | `build-info.mjs` | Runtime version/source SHA; Git on source checkouts, then package/file stamps |
 | `atlas/` | Store discovery, Markdown parsing, node linking and multi-Atlas merge |
 | `atlas/chat.mjs` | Host-session chat envelope and local-search fallback for HTTP/dev |
+| `atlas/atlas-chat.md` | Bundled answering activation: read evidence, cite, report progress and acknowledge delivery |
+| `atlas/chat-requests.mjs` | Bounded per-instance requests, idempotent replies, timeout and close cleanup |
 | `atlas/schema.mjs` | Confined metadata-only schema catalog and deterministic ownership diagnostics |
 | `atlas/watch.mjs` | Replaceable, unprivileged open-root filesystem change source |
 | `atlas/live.mjs` | Debounced rescans, watcher status and explicit creation/deletion deltas |
@@ -60,6 +62,30 @@ transport, then exercises its real handlers and server. The harness stays outsid
 the distributed runtime. It validates registration shape and data flow, not the
 host's actual `session.resume` implementation or renderer; exact-artifact native
 acceptance remains external to the local packaging check.
+
+## Chat delivery
+
+The SDK's `session.send()` resolves with a message ID, not answer text.
+Cartograph ignores that ID as display content. Each submitted question creates
+a UUID-correlated pending message; the envelope names that request, its canvas
+instance, and the deployed `atlas/atlas-chat.md` activation path.
+
+The agent calls `update_chat` with `status: working` when it begins, then with
+`status: answered` and the full Markdown answer (or `failed` plus an explanation).
+The action checks both instance ownership and the joined session, validates a
+nonempty reply capped at 128 KiB, updates only that request, broadcasts the
+revisioned snapshot and returns a delivery acknowledgement. Identical terminal
+retries are idempotent; conflicting, foreign, missing and late replies fail.
+No session-wide “latest assistant message” listener can misattribute unrelated
+turns. Failure to report completion expires the request after ten minutes.
+Timers are bounded by the 50-message history and released on trimming/close.
+Closing cancels pending requests, not the host's whole session.
+
+The browser distinguishes queued from working and shows reduced-motion-aware
+pending dots. Only the request's progress changes its indicator: unrelated
+session work does not make it appear active. The host transcript remains
+host-owned, while answer delivery is explicitly to the canvas. Local HTTP/dev
+search remains synchronous and does not activate the agent.
 
 ## Schema metadata flow
 

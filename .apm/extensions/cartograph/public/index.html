@@ -60,7 +60,7 @@
           <div class="search-field">
             <input id="search" type="search" autocomplete="off" placeholder="Search stars" aria-label="Search nodes" aria-controls="node-browser" aria-describedby="node-browser-help search-error" />
           </div>
-          <button id="chat-toggle" class="icon-btn" type="button" aria-label="Chat with this Atlas" aria-pressed="false" title="Chat with this Atlas">
+          <button id="chat-toggle" class="icon-btn" type="button" aria-label="Local Atlas search" aria-pressed="false" title="Local Atlas search">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v7A2.5 2.5 0 0 1 16.5 16H11l-4.2 3.2c-.7.54-1.8.04-1.8-.83V6.5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
             </svg>
@@ -126,12 +126,13 @@
         <div id="graph-chat" class="graph-chat hidden">
           <div id="chat-panel" class="chat-panel">
             <div class="chat-head">
-              <p id="chat-kicker" class="kicker">Chat with this Atlas</p>
+              <p id="chat-kicker" class="kicker">Local Atlas search</p>
               <button id="chat-close" type="button">Close</button>
             </div>
-            <div id="chat-log" class="chat-log"></div>
+            <div id="chat-status" class="chat-announcement" role="status" aria-live="polite" aria-atomic="true"></div>
+            <div id="chat-log" class="chat-log" role="log" aria-live="polite" aria-busy="false" aria-label="Chat messages"></div>
             <form id="chat-form" class="chat-form">
-              <input id="chat-input" autocomplete="off" placeholder="Ask this Atlas…" aria-label="Ask this Atlas" />
+              <input id="chat-input" autocomplete="off" placeholder="Search this Atlas…" aria-label="Search this Atlas" />
               <button type="submit">Send</button>
             </form>
           </div>

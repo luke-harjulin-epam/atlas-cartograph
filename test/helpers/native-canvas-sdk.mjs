@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-export const registration = { calls: 0, metadataCalls: 0, canvas: null };
+export const registration = { calls: 0, metadataCalls: 0, canvas: null, sent: [] };
 let metadata;
 
 export function setMetadata(value) {
@@ -29,8 +29,9 @@ export async function joinSession(config) {
     sessionId: "observatory-session",
     send: async ({ prompt }) => {
       assert.equal(typeof prompt, "string");
-      assert.match(prompt, /^Cartograph chat:/);
-      return `Synthetic session reply for ${prompt.split("\n")[0]}`;
+      assert.match(prompt, /^Cartograph atlas-chat request/);
+      registration.sent.push(prompt);
+      return "11111111-2222-4333-8444-555555555555";
     },
     rpc: {
       metadata: {

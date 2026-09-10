@@ -37,6 +37,7 @@ let state = { phase: "crawl", stores: [], graph: null, root: "", query: "", sele
 let latestStateRevision = null;
 let latestActivityRevision = null;
 let chatOpen = false;
+let chatRenderSignature = null;
 let map = null;
 const activityControls = mountActivityControls($("activity-controls"), applyActivity,
   (enabled) => map?.setAutoFocus(enabled));
@@ -625,20 +626,43 @@ function renderChat() {
   toggle?.setAttribute("aria-pressed", chatOpen ? "true" : "false");
   const sessionChat = state.chatMode === "session";
   const kicker = $("chat-kicker");
-  if (kicker) kicker.textContent = sessionChat ? "Session chat" : "Local Atlas search";
+  const label = sessionChat ? "Chat with Copilot" : "Local Atlas search";
+  if (kicker) kicker.textContent = label;
+  toggle?.setAttribute("aria-label", label);
+  toggle?.setAttribute("title", label);
+  const input = $("chat-input");
+  input?.setAttribute("placeholder", sessionChat ? "Ask Copilot…" : "Search this Atlas…");
+  input?.setAttribute("aria-label", sessionChat ? "Ask Copilot" : "Search this Atlas");
   const msgs = state.chat || [];
+  const signature = JSON.stringify([sessionChat, msgs.map(({ role, pending, status, text, hits }) =>
+    ({ role, pending, status, text, hits }))]);
+  if (signature === chatRenderSignature) return;
+  chatRenderSignature = signature;
+  const isPending = (m) => m.role === "graph" && (m.pending === true || m.status === "queued" || m.status === "working");
+  const pendingMessages = msgs.filter(isPending);
+  log.setAttribute("aria-busy", String(pendingMessages.length > 0));
+  const announcement = $("chat-status");
+  const pendingText = pendingMessages.some((m) => m.status === "working") ? "Working…"
+    : pendingMessages.length ? sessionChat ? "Waiting for Copilot…" : "Waiting for search…" : "";
+  if (announcement && announcement.textContent !== pendingText) announcement.textContent = pendingText;
   log.innerHTML = msgs
     .map((m) => {
-      const who = m.role === "user" ? "You" : sessionChat ? "Session" : "Search";
+      const who = m.role === "user" ? "You" : sessionChat ? "Copilot" : "Search";
       const isGraph = m.role === "graph";
-      const body = isGraph ? renderMarkdown(m.text || "") : escapeHtml(m.text || "");
-      const hits = (m.hits || [])
+      const pending = isPending(m);
+      const working = pending && m.status === "working";
+      const statusText = working ? "Working…" : sessionChat ? "Waiting for Copilot…" : "Waiting for search…";
+      const fallback = { failed: "The request failed.", expired: "The request expired.", cancelled: "The request was cancelled." };
+      const body = pending
+        ? `<span class="chat-pending${working ? " working" : ""}"><span>${statusText}</span><span class="chat-dots" aria-hidden="true"><span>•</span><span>•</span><span>•</span></span></span>`
+        : isGraph ? renderMarkdown(m.text || fallback[m.status] || "") : escapeHtml(m.text || "");
+      const hits = (pending ? [] : m.hits || [])
         .map(
           (h) =>
             `<button type="button" class="hit" data-node="${escapeHtml(h.id)}">${escapeHtml(h.title)} · ${escapeHtml(h.kind)}</button>`,
         )
         .join("");
-      const bubbleClass = isGraph ? "bubble wiki-md" : "bubble";
+      const bubbleClass = isGraph && !pending ? "bubble wiki-md" : "bubble";
       return `<div class="chat-msg ${escapeHtml(m.role)}"><span class="who">${who}</span><div class="${bubbleClass}">${body}${hits}</div></div>`;
     })
     .join("");

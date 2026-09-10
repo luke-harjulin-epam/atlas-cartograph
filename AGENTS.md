@@ -83,6 +83,12 @@
 - Reject duplicate mount keys before changing the mounted graph or selection.
   Explicit Atlas links must not fall back to another store; generate each mesh
   relationship once. Chat completions must update their own request placeholder.
+- Treat SDK `send()` results as message IDs, never answer text. Native
+  `atlas-chat` activation must deliver via `update_chat` with the originating
+  instance/request and check acknowledgement. Enforce owner-session matching,
+  idempotent retries, bounded replies and timeout/close cleanup. Keep queued
+  and working indicators distinct, honour reduced motion, and keep standalone
+  local search explicitly labelled. Do not capture unrelated session replies.
 - Exclude fenced and inline code before extracting graph links from Markdown
   bodies. Preserve frontmatter relationship kinds and the original preview text.
 - Resolve source-relative page links consistently in graph edges and preview

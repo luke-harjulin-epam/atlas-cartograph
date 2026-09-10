@@ -11,6 +11,15 @@
   session. The host reads mounted pages; local keyword search remains only for
   HTTP/dev servers without a session.
 
+### Fixed
+
+- Deliver native chat answers through acknowledged, request-scoped canvas
+  callbacks instead of displaying SDK message IDs. Reject wrong-session,
+  conflicting and stale replies; expire unanswered requests and release timers.
+- Label native replies **Copilot** and show queued/working status with animated
+  dots that respect reduced motion. Ship the `atlas-chat` answering activation
+  with the runtime so the agent sends its answer into the originating drawer.
+
 ## 0.3.0 - 2026-09-09
 
 ### Added

@@ -107,6 +107,12 @@ requires a new grant. A bundle-name-only or legacy `allowExecutables` grant
 does not approve the archive.
 The viewer uses local fallback fonts; it does not fetch Google Fonts or other
 third-party UI assets.
+Native canvas chat asks the same Copilot session, shows queued/working status,
+and receives **Copilot** answers back in the drawer through request-scoped
+callbacks. Its bundled `atlas-chat` activation reads mounted pages and cites
+sources; standalone development mode remains labelled local search.
+See [chat usage](docs/usage.md#chat-with-this-atlas) for timeouts and delivery.
+
 The small bottom-left badge shows the runtime version and abbreviated source SHA.
 Hover for the full SHA; `+ local` marks uncommitted runtime changes. Release
 archives carry their source identity in stamped runtime metadata. Unstamped or

@@ -820,6 +820,117 @@ test("versionless legacy snapshots protect pending clicks without taking lifelon
   assert.equal(controls.layersRevision, null);
 });
 
+test("chat labels distinguish Copilot from local search and preserve legacy messages", () => {
+  const { document, apply } = appFixture();
+  const log = document.getElementById("chat-log");
+  const chat = [{ role: "user", text: "Question" }, { role: "graph", text: "**Answer**" }];
+  for (const chatMode of [undefined, "local", "session", "local"]) {
+    apply({ chatMode, chat });
+    const native = chatMode === "session";
+    const label = native ? "Chat with Copilot" : "Local Atlas search";
+    assert.equal(document.getElementById("chat-kicker").textContent, label);
+    assert.equal(document.getElementById("chat-toggle").getAttribute("aria-label"), label);
+    assert.equal(document.getElementById("chat-toggle").getAttribute("title"), label);
+    assert.equal(document.getElementById("chat-input").getAttribute("aria-label"), native ? "Ask Copilot" : "Search this Atlas");
+    assert.deepEqual(log.querySelectorAll(".who").map((node) => node.textContent), ["You", native ? "Copilot" : "Search"]);
+    assert.equal(log.querySelector("strong").textContent, "Answer");
+    assert.equal(log.getAttribute("aria-busy"), "false");
+    assert.equal(log.querySelector(".chat-pending"), null);
+  }
+});
+
+test("chat moves from queued to working to final answers or errors without exposing request IDs", () => {
+  const { document, apply, calls, opened } = appFixture();
+  const log = document.getElementById("chat-log");
+  const status = document.getElementById("chat-status");
+  const message = { role: "graph", id: "internal-request-secret", hits: [{ id: "node", title: "Node", kind: "page" }] };
+  assert.equal(log.getAttribute("role"), "log");
+  assert.equal(status.getAttribute("role"), "status");
+  assert.equal(status.getAttribute("aria-live"), "polite");
+  assert.equal(log.contains(status), false, "pending announcements are outside the busy log");
+  for (const phase of ["queued", "working"]) {
+    apply({ chatMode: "session", chat: [{ ...message, pending: true, status: phase, text: "Not a finalized answer" }] });
+    assert.equal(log.getAttribute("aria-busy"), "true");
+    assert.match(status.textContent, phase === "queued" ? /Waiting for Copilot/ : /Working…/);
+    assert.equal(log.querySelector(".chat-pending").classList.contains("working"), phase === "working");
+    assert.equal(log.querySelector(".chat-dots").getAttribute("aria-hidden"), "true");
+    assert.equal(log.querySelector(".hit"), null);
+    assert.doesNotMatch(log.textContent, /Not a finalized answer|internal-request-secret/);
+    if (phase === "queued") assert.doesNotMatch(log.textContent, /Working|writing/i);
+  }
+  apply({ chat: [{ ...message, pending: false, status: "answered", text: "[[other]] [External](https://example.com)" }] });
+  assert.equal(log.getAttribute("aria-busy"), "false");
+  assert.equal(status.textContent, "");
+  assert.equal(log.querySelector(".chat-pending"), null);
+  log.querySelector(".wikilink").click();
+  log.querySelector(".hit").click();
+  log.querySelector("a").click();
+  assert.deepEqual(calls.map(({ action, nodeId }) => ({ action, nodeId })), [
+    { action: "select", nodeId: "other" }, { action: "select", nodeId: "node" },
+  ]);
+  assert.equal(opened.length, 1);
+  for (const outcome of ["failed", "expired", "cancelled"]) {
+    apply({ chat: [{ ...message, pending: true, status: "working", text: "" }] });
+    apply({ chat: [{ ...message, pending: false, status: outcome, text: "", hits: [] }] });
+    assert.equal(log.getAttribute("aria-busy"), "false");
+    assert.equal(log.querySelector(".chat-pending"), null);
+    assert.match(log.textContent, new RegExp(outcome));
+    assert.doesNotMatch(log.textContent, /internal-request-secret/);
+  }
+  apply({ chat: [{ ...message, pending: false, status: "failed", text: "Please retry.", hits: [] }] });
+  assert.match(log.textContent, /Please retry/);
+});
+
+test("unchanged chat snapshots preserve pending animation, focused links and draft caret", () => {
+  const { document, apply } = appFixture();
+  const log = document.getElementById("chat-log");
+  const input = document.getElementById("chat-input");
+  const chat = [{ role: "graph", id: "private-id", pending: true, status: "working", text: "", hits: [] }];
+  apply({ chatMode: "session", chat });
+  document.getElementById("chat-toggle").click();
+  input.value = "unfinished question";
+  input.selectionStart = 3;
+  input.selectionEnd = 7;
+  const pending = log.querySelector(".chat-pending");
+  log.scrollTop = 12;
+  apply({ query: "unrelated snapshot", queryRevision: 1, chat });
+  assert.equal(log.querySelector(".chat-pending"), pending);
+  assert.equal(log.scrollTop, 12);
+  assert.equal(document.activeElement, input);
+  assert.equal(input.value, "unfinished question");
+  assert.equal(input.selectionStart, 3);
+  assert.equal(input.selectionEnd, 7);
+  apply({ chat: [{ ...chat[0], pending: false, status: "answered", text: "[[other]]" }] });
+  assert.equal(log.querySelector(".chat-pending"), null);
+  assert.equal(document.activeElement, input);
+  assert.equal(input.selectionStart, 3);
+  const link = log.querySelector(".wikilink");
+  link.focus();
+  apply({});
+  assert.equal(document.activeElement, link);
+  assert.equal(log.querySelector(".wikilink"), link);
+  apply({ chat: [{ role: "graph", text: "Revised", hits: [] }] });
+  assert.match(log.textContent, /Revised/);
+  apply({ chat: [{ role: "graph", text: "Revised", hits: [{ id: "node", title: "New hit", kind: "page" }] }] });
+  assert.match(log.querySelector(".hit").textContent, /New hit/);
+});
+
+test("legacy pending chat waits honestly and working dots use reduced-motion-safe CSS only", () => {
+  const { document, apply, frames } = appFixture({ reducedMotion: true });
+  const log = document.getElementById("chat-log");
+  apply({ chat: [{ role: "graph", pending: true, text: "Unfinished" }] });
+  assert.match(log.textContent, /Waiting for search/);
+  assert.doesNotMatch(log.textContent, /Unfinished|Working/);
+  assert.equal(log.getAttribute("aria-busy"), "true");
+  apply({ chat: [{ role: "graph", status: "working", text: "" }] });
+  assert.match(log.textContent, /Working…/);
+  assert.equal(frames.size, 0);
+  const css = readFileSync(new URL("../.apm/extensions/cartograph/public/styles.css", import.meta.url), "utf8");
+  assert.match(css, /\.chat-pending\.working \.chat-dots span\s*\{\s*animation: chat-working/);
+  assert.match(css, /@keyframes chat-working/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)\s*\{\s*\.chat-pending\.working \.chat-dots span\s*\{\s*animation: none; opacity: 1; transform: none;/);
+});
+
 test("actual preview and chat clicks each navigate once, including after snapshot rerenders", () => {
   const { document, calls, opened, apply } = appFixture();
   apply({});

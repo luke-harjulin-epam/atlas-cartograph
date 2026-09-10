@@ -120,19 +120,6 @@ focused entry and filter text; deleting that entry moves focus to the filter.
 Wiki links, preview relationship links and the native `select_node` action
 remain explicit page navigation and open the preview directly.
 
-## Chat with this Atlas
-
-The map chat button talks to the same Copilot session that opened the canvas.
-Cartograph sends the question plus open Atlas identities, the selected node and
-the current search query. It does not paste page bodies. The session should
-read mounted Atlas Markdown with its own file tools when it needs content;
-those reads can light Knowledge Activation. Canvas HTTP scans and previews stay
-excluded from the collector.
-
-A failed session turn shows an error on that prompt. It does not fall back to
-keyword search. The standalone `npm start` server still uses local Atlas search
-because it has no host session.
-
 Layer buttons update immediately and serialise rapid changes. A saving message
 remains until acknowledgement; failures restore the last confirmed view and show
 an error. Versioned snapshots prevent delayed responses undoing newer changes.
@@ -147,6 +134,36 @@ to remove the filter.
 The map uses WebGL where available, with the same labels, camera and controls
 as its 2D fallback. If WebGL is interrupted, rendering continues in 2D with a
 status notice; graph selection and playback are retained.
+
+## Chat with this Atlas
+
+The map chat button talks to the same Copilot session that opened the canvas.
+Replies are labelled **Copilot**, not a session identifier. Cartograph sends
+your question, open Atlas identities, selection, query and request routing,
+without page bodies. Its bundled `atlas/atlas-chat.md` activation directs the
+agent to read mounted Markdown through session file tools, cite sources, and
+send the answer back to this drawer with the `update_chat` canvas action.
+
+**Waiting for Copilot…** means the request is queued. **Working…** and animated
+dots appear when the agent reports that it has started. Reduced motion keeps a
+static status. Sending the prompt is not completion: the indicator remains
+until the answer, an error, or a ten-minute timeout. An identical reply retry
+does not duplicate the answer; replies cannot overwrite another completed
+request. The drawer retains the most recent 50 messages. Older pending
+requests are discarded when trimmed, and closing the canvas cancels its
+pending requests. Reopening starts a new chat.
+
+The answer appears in the canvas. The host may also retain the prompt, tool
+calls and a brief acknowledgement in its session transcript. A transcript-only
+answer is not a delivered canvas reply. If a request expires, send it again.
+Chat is unavailable for a canvas owned by a different session from the joined
+extension; it never silently sends that question to another session.
+
+Session page reads can light Knowledge Activation when its collector is
+connected. Canvas scans and previews remain excluded; no collector starts
+automatically. Failures never fall back to keyword search. Standalone
+`npm start` still uses explicitly labelled **Local Atlas search**, because it
+has no host session.
 
 ## Atlas grouping
 

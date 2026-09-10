@@ -115,7 +115,14 @@ shared playback/camera behaviour and WebGL initialisation/context-loss fallback.
 Cover duplicate mount rejection and recovery, missing explicit Atlas targets,
 single-store URI navigation, and unique edge IDs/degrees. Chat regressions must
 exercise overlapping success/failure replies and pending entries trimmed from
-history. Markdown blocks must work without blank lines around headings or quotes.
+history. The SDK stub must return a message ID from `send`, never pretend to
+return assistant text. Cover `update_chat` progress/completion, identical retries,
+foreign owners/instances, timeout and close cleanup with
+`node --test test/session-chat.test.mjs test/native-extension.test.mjs test/frontend-interactions.test.mjs`.
+The native harness exercises callbacks in both canonical and copied deployments;
+also verify an actual host question/read/reply cycle in the canvas drawer.
+Ship `atlas/atlas-chat.md` inside the runtime bundle, not as an installed-user
+patch. Markdown blocks must work without blank lines around headings or quotes.
 Relative-link cases must use duplicate basenames and confirm that graph edges
 and preview navigation resolve the same source-directory target.
 Use fake clocks to cover normal 400 ms spacing and adaptive 200/100/50 ms targets,

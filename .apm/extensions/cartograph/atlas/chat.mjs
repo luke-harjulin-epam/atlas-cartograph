@@ -1,4 +1,7 @@
 import { loadPageFromRoots } from "./scan.mjs";
+import { fileURLToPath } from "node:url";
+
+export const CHAT_ACTIVATION_PATH = fileURLToPath(new URL("./atlas-chat.md", import.meta.url));
 
 function queryPage(state, id) {
   const roots = state.roots?.length ? state.roots : state.root ? [state.root] : [];
@@ -60,24 +63,6 @@ export function searchAtlas(state, query) {
   }));
 }
 
-export function asText(value) {
-  if (value == null) return "";
-  if (typeof value === "string") return value.trim();
-  if (Array.isArray(value)) return value.map(asText).filter(Boolean).join("\n\n").trim();
-  if (typeof value === "object") {
-    if (typeof value.content === "string") return value.content.trim();
-    if (typeof value.summary === "string") return value.summary.trim();
-    if (typeof value.text === "string") return value.text.trim();
-    if (value.data != null) return asText(value.data);
-  }
-  return "";
-}
-
-export function pickGraphReply({ messages = [], response, summary } = {}) {
-  const lastMessage = [...messages].reverse().map(asText).find(Boolean);
-  return lastMessage || asText(response) || asText(summary) || "";
-}
-
 function storeLines(state) {
   const stores = state.graph?.stores || [];
   if (stores.length) {
@@ -98,9 +83,16 @@ function selectedLine(state) {
   return `Selected node: ${id}${path}`;
 }
 
-export function graphChatPrompt(text, state = {}) {
+export function graphChatPrompt(text, state = {}, context = {}) {
   const query = String(state.query || "").trim();
   return [
+    "Cartograph atlas-chat request",
+    `Routing: ${JSON.stringify({ instanceId: context.instanceId, requestId: context.requestId })}`,
+    `Read and follow the Cartograph activation at ${JSON.stringify(CHAT_ACTIVATION_PATH)}.`,
+    'First report status "working", then deliver your final answer with invoke_canvas_action, actionName "update_chat".',
+    'Use the Routing instanceId and input {requestId, status: "answered", text: "<answer>"}.',
+    "A transcript answer or task_complete alone does NOT reply to this canvas.",
+    "",
     `Cartograph chat: ${String(text || "").trim()}`,
     "",
     "Open Atlas stores:",
@@ -112,17 +104,15 @@ export function graphChatPrompt(text, state = {}) {
   ].join("\n");
 }
 
-export async function askHostSession(host, text, state) {
+export async function askHostSession(host, text, state, context) {
   if (typeof host?.send !== "function") {
     throw new Error("Host session cannot accept chat.");
   }
-  const response = await host.send({ prompt: graphChatPrompt(text, state) });
-  const out = pickGraphReply({
-    response,
-    messages: response && typeof response === "object" ? response.messages : [],
-  });
-  if (!out) throw new Error("Session produced an empty reply.");
-  return { text: out, hits: [] };
+  if (!context?.requestId || !context?.instanceId) throw new Error("Chat reply routing is required.");
+  // send resolves with a message ID, not assistant content. Only the correlated
+  // update_chat action can complete this request, independently of other turns.
+  await host.send({ prompt: graphChatPrompt(text, state, context) });
+  return { accepted: true };
 }
 
 function firstSentence(text) {
