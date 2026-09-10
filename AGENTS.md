@@ -12,6 +12,11 @@
   Reuse the same validation and package workflows for tag releases. Publication
   requires a matching SemVer tag in main history, completed checks and verified
   artifacts; never publish from PR events or replace an existing release.
+- Marketplace publication is a separate reviewed change in
+  `sergio-sisternes-epam/apm-marketplace`. Its catalog pins a released version
+  and commit; publish the source release before updating that pin. Regenerate
+  its catalog from its authoritative manifest rather than editing generated
+  output. Neither publication automatically updates existing consumer installs.
 - Keep CI actions commit-pinned and the APM download checksum-pinned. Use
   `scripts/package-apm.mjs` for isolated release packaging and producer/consumer
   lockfile audits; do not edit generated plugin manifests or install over the

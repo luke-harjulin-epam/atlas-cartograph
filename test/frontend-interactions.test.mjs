@@ -1260,6 +1260,39 @@ test("chat fullscreen restores the drawer and preserves draft, history and graph
   assert.equal(calls.length, 0);
 });
 
+test("fullscreen chat restores the drawer for citations and local hits so previews remain readable", () => {
+  for (const [text, hits, selector, target] of [
+    ["[Evidence](atlas://synthetic/node)", [], ".wikilink", "atlas://synthetic/node"],
+    ["[[node]]", [], ".wikilink", "node"],
+    ["Found a page", [{ id: "node", title: "Node", kind: "page" }], ".hit", "node"],
+  ]) {
+    const { document, apply, calls } = appFixture();
+    apply({ previewOpen: false, chat: [{ role: "graph", text, hits }] });
+    const input = document.getElementById("chat-input");
+    const drawer = document.getElementById("graph-chat");
+    const preview = document.getElementById("preview");
+    const log = document.getElementById("chat-log");
+    const message = log.children[0];
+    document.getElementById("chat-toggle").click();
+    input.value = "Keep my follow-up";
+    document.getElementById("chat-fullscreen").click();
+    assert.equal(preview.inert, true);
+
+    log.querySelector(selector).click();
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].action, "select");
+    assert.equal(calls[0].nodeId, target);
+    assert.equal(drawer.classList.contains("chat-fullscreen"), false);
+    assert.equal(document.getElementById("phase-map").classList.contains("chat-fullscreen"), false);
+    assert.equal(Boolean(preview.inert), false);
+    apply({ selectedId: "node", previewOpen: true });
+    assert.equal(preview.classList.contains("hidden"), false);
+    assert.equal(drawer.classList.contains("chat-open"), true);
+    assert.equal(log.children[0], message);
+    assert.equal(input.value, "Keep my follow-up");
+  }
+});
+
 test("chat sizing reserves a responsive quarter-width beside the graph without a modal backdrop", () => {
   const css = readFileSync(new URL("../.apm/extensions/cartograph/public/styles.css", import.meta.url), "utf8");
   assert.match(css, /\.map \{[^}]*--chat-width: min\(90vw, max\(22\.5rem, 25vw\)\); --chat-inset: 0px;/);

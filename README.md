@@ -96,6 +96,12 @@ Install from a ref containing `apm.yml`. Use `#<tag-or-commit>` on the package
 reference to pin a version. `#v0.3.0` is the latest published release;
 use `#v0.4.0` once its release is published.
 
+The private [marketplace](https://github.com/sergio-sisternes-epam/apm-marketplace)
+pins releases separately. Publishing a GitHub release does not update its catalog
+or existing installations automatically. Consumers need access to both private
+repositories; maintainers should follow the
+[marketplace handoff](CONTRIBUTING.md#marketplace-handoff).
+
 Reload project extensions and open **Cartograph**. APM deploys the complete
 runtime to `.github/extensions/cartograph/`; it does not deploy the development
 shim or depend on a `src/` directory in the consumer. Only Node built-ins and

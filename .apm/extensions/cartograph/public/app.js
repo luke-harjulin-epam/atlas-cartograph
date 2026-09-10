@@ -264,6 +264,10 @@ function chipLabel(path) {
 }
 
 function navigateWiki(target) {
+  if (chatOpen && chatFullscreen) {
+    chatFullscreen = false;
+    renderChat();
+  }
   return post("select", { nodeId: target });
 }
 
@@ -866,7 +870,7 @@ function renderChat() {
     })
     .join("");
   log.querySelectorAll("[data-node]").forEach((btn) => {
-    btn.addEventListener("click", () => post("select", { nodeId: btn.getAttribute("data-node") }));
+    btn.addEventListener("click", () => navigateWiki(btn.getAttribute("data-node")));
   });
   log.scrollTop = log.scrollHeight;
 }

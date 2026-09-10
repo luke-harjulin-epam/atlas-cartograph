@@ -344,3 +344,25 @@ Rerunning a failed final publication job can finish its existing draft; a full
 rerun deliberately refuses an existing release. Only after confirming a draft
 was never published may its owner delete that failed draft and rerun. Never
 delete/recreate a published release or force-move a tag: ship a new version.
+
+### Marketplace handoff
+
+The private
+[`sergio-sisternes-epam/apm-marketplace`](https://github.com/sergio-sisternes-epam/apm-marketplace)
+catalog pins Cartograph by version and commit. Source release publication does
+not advance that pin. Follow the marketplace's own contribution guidance for
+the separate catalog PR:
+
+1. Finish the source release first. Record its URL and resolved tag commit;
+   confirm the published assets and manifest version match that commit.
+2. Update only Cartograph's authoritative `apm.yml` catalog entry to the released
+   version and full commit SHA. Do not pin unreleased branch work.
+3. Use the marketplace's pinned APM version (currently 0.30.0) to run `apm pack`.
+   Commit the manifest and regenerated `.claude-plugin/marketplace.json`, align
+   the README package row and `Unreleased` notes, and review its `AGENTS.md`
+   and `CONTRIBUTING.md`. Never hand-edit the generated catalog.
+4. Require `validate-and-pack` and maintainer review before merging. That merge
+   publishes the catalog change; no separate marketplace release is required.
+5. In an approved consumer, refresh/update the package and confirm it resolves
+   the released SHA. Consumers need access to both private repositories, and
+   existing lockfiles/installations must not be assumed to update automatically.

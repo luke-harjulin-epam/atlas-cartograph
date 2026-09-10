@@ -6,6 +6,10 @@
 
 ### Changed
 
+- Document the separate, commit-pinned marketplace handoff after source release
+  publication; catalog and consumer updates are not automatic.
+- Restore the chat drawer when opening a citation or local search hit from
+  full-screen chat, so the destination preview is visible and interactive.
 - Match the search results panel to the input's full width, adapting to window
   size and chat visibility.
 - Keep the version/FPS badge behind Options so it cannot cover the Graph section.
