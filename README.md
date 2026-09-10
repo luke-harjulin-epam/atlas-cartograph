@@ -152,7 +152,10 @@ Large overviews use subtle
 relationships and fewer labels, restoring detail through zoom, search,
 selection and activation. The toolbar **Search stars** field finds every page by title, ID,
 Atlas, path, type or kind, including hidden-layer pages; its query also drives
-map highlighting. Results appear as you type; press Down with an empty field
+map highlighting. Search fills the available toolbar width between controls.
+The menu opens Options as a full-height right-hand overlay over the Atlas,
+beside chat when it is open. Close or Escape dismisses Options.
+Results appear as you type; press Down with an empty field
 to browse every node. Escape closes results without hiding the query.
 Clear the field to reset highlighting.
 This is deterministic visual organization, not a gravity simulation.

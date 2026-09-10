@@ -833,6 +833,43 @@ test("versionless legacy snapshots protect pending clicks without taking lifelon
   assert.equal(controls.layersRevision, null);
 });
 
+test("options overlay opens accessibly and closes without changing graph or search state", () => {
+  const { document, apply, calls } = appFixture();
+  const panel = document.getElementById("panel");
+  const toggle = document.getElementById("toggle-panel");
+  const close = document.getElementById("panel-close");
+  assert.equal(panel.getAttribute("aria-hidden"), "true");
+  toggle.click();
+  assert.equal(panel.classList.contains("hidden"), false);
+  assert.equal(panel.inert, false);
+  assert.equal(panel.getAttribute("aria-hidden"), "false");
+  assert.equal(toggle.getAttribute("aria-expanded"), "true");
+  assert.equal(document.activeElement, close);
+  apply({});
+  assert.equal(panel.classList.contains("hidden"), false);
+  close.dispatchEvent(new FrontendEvent("keydown", { key: "Escape" }));
+  assert.equal(panel.inert, true);
+  assert.equal(document.activeElement, toggle);
+  assert.equal(toggle.getAttribute("aria-expanded"), "false");
+  toggle.click();
+  close.click();
+  toggle.click();
+  toggle.click();
+  assert.equal(panel.classList.contains("hidden"), true);
+  assert.equal(calls.length, 0);
+  toggle.click();
+  document.getElementById("add-atlas").click();
+  assert.equal(panel.inert, true);
+  assert.equal(toggle.getAttribute("aria-expanded"), "false");
+  assert.equal(document.activeElement, document.getElementById("atlas-add-close"));
+});
+
+test("search fills its toolbar and options overlay the full-height right side", () => {
+  const css = readFileSync(new URL("../.apm/extensions/cartograph/public/styles.css", import.meta.url), "utf8");
+  assert.doesNotMatch(css.match(/\.search-field \{[^}]*\}/)[0], /max-width/);
+  assert.match(css, /\.panel \{[^}]*top: 0; bottom: 0; right: var\(--chat-inset\);[^}]*width: min\(22\.5rem, calc\(100% - var\(--chat-inset\)\)\)/);
+});
+
 test("chat folds into an inert drawer and preserves graph, history and drafts across toggles", () => {
   const { document, apply, calls, graphs } = appFixture();
   apply({ previewOpen: false, chat: [{ role: "graph", text: "Existing reply" }] });

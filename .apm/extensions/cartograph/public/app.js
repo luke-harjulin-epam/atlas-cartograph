@@ -629,11 +629,30 @@ $("chat-form").addEventListener("submit", (e) => {
   e.preventDefault();
   sendChat();
 });
-$("toggle-panel").addEventListener("click", () => $("panel").classList.toggle("hidden"));
+function setOptionsOpen(open, restoreFocus = true) {
+  const panel = $("panel");
+  panel.classList.toggle("hidden", !open);
+  panel.inert = !open;
+  panel.setAttribute("aria-hidden", String(!open));
+  $("toggle-panel").setAttribute("aria-expanded", String(open));
+  $("toggle-panel").setAttribute("aria-label", open ? "Hide options" : "Show options");
+  if (open) $("panel-close").focus({ preventScroll: true });
+  else if (restoreFocus) $("toggle-panel").focus({ preventScroll: true });
+}
+$("toggle-panel").addEventListener("click", () => setOptionsOpen($("panel").classList.contains("hidden")));
+$("panel-close").addEventListener("click", () => setOptionsOpen(false));
+$("panel").addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    e.preventDefault();
+    e.stopPropagation();
+    setOptionsOpen(false);
+  }
+});
 $("add-atlas")?.addEventListener("click", () => {
   renderAtlasAdd();
   $("atlas-add")?.classList.remove("hidden");
-  $("panel")?.classList.add("hidden");
+  setOptionsOpen(false, false);
+  $("atlas-add-close")?.focus({ preventScroll: true });
 });
 $("atlas-add-close")?.addEventListener("click", () => $("atlas-add")?.classList.add("hidden"));
 $("atlas-add-grid")?.addEventListener("click", (e) => {

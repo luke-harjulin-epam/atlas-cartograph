@@ -116,7 +116,8 @@ input, textarea { font: inherit; color: inherit; }
 .toolbar > * { position: relative; z-index: 40; pointer-events: auto; }
 .map:not(.chat-open) .toolbar { padding-right: 3.45rem; }
 #chat-toggle { position: absolute; top: 0.45rem; right: 0.7rem; z-index: 111; width: 32px; height: 32px; min-height: 32px; padding: 0; }
-.search-field { flex: 1 1 auto; min-width: 0; max-width: 28rem; }
+.search-field { flex: 1 1 auto; min-width: 0; }
+.toolbar > .icon-btn { flex-shrink: 0; }
 .node-browser {
   position: absolute; top: 4.25rem; left: calc((100% - var(--chat-inset)) / 2); transform: translateX(-50%); z-index: 56; width: min(28rem, calc(100% - var(--chat-inset) - 1.5rem));
   max-height: calc(100% - 5rem); overflow: auto; padding: 1rem;
@@ -191,10 +192,16 @@ input, textarea { font: inherit; color: inherit; }
   border: 1px solid var(--color-border); border-radius: 16px; background: rgba(12, 18, 28, 0.92);
 }
 .panel {
-  position: absolute; top: 4rem; left: 0.75rem; right: calc(var(--chat-inset) + 0.75rem); z-index: 50; max-height: min(70vh, 32rem); overflow: auto;
-  border: 1px solid var(--color-border); border-radius: 16px; background: rgba(12, 18, 28, 0.9);
-  padding: 1rem; backdrop-filter: blur(12px);
+  position: absolute; top: 0; bottom: 0; right: var(--chat-inset); z-index: 74;
+  width: min(22.5rem, calc(100% - var(--chat-inset))); overflow: auto;
+  border-left: 1px solid var(--color-border); background: var(--color-surface);
+  padding: 1rem 1rem max(1rem, env(safe-area-inset-bottom, 0px));
+  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.25);
 }
+.panel-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding-right: 2.5rem; }
+.map.chat-open .panel-head { padding-right: 0; }
+.panel-head .kicker { margin: 0; }
+.panel :focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 .layers { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; margin-top: 0.5rem; }
 .layer {
   border: 1px solid var(--color-border); border-radius: 10px; background: transparent; padding: 0.45rem 0.6rem;

@@ -72,6 +72,9 @@
   pending text/caret protection and visible query text when results close.
   Down opens results/all-node browsing; Escape returns focus to the field.
   Do not replace the field with a search-button popup.
+- Let search fill the toolbar's available width. Options overlays the right
+  side of the Atlas at full height without resizing the graph or covering chat.
+  Keep its expanded state, inert contents and Escape/Close focus return aligned.
 - Show the runtime version and source SHA in the small build badge. Only source
   checkouts may inspect Git; deployments use stamped runtime metadata, never
   the consumer repository's SHA. Mark uncommitted runtime changes explicitly.
