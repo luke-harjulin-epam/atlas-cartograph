@@ -131,6 +131,13 @@ test("View popup supports arrow keys, Escape, outside dismissal and exclusive st
   assert.equal(menu.open, false);
 });
 
+test("build badge stays below the Options panel", () => {
+  const css = readFileSync(new URL("../.apm/extensions/cartograph/public/styles.css", import.meta.url), "utf8");
+  const badgeZ = Number(css.match(/\.build-info \{[^}]*z-index: (\d+)/)[1]);
+  const panelZ = Number(css.match(/\.panel \{[^}]*z-index: (\d+)/)[1]);
+  assert.ok(badgeZ > 0 && badgeZ < panelZ);
+});
+
 test("build badge shows version and short SHA, exposes full provenance, and rejects stale state", () => {
   const { document, apply } = appFixture();
   const badge = document.getElementById("build-info");

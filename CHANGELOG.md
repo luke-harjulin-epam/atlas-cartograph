@@ -4,6 +4,7 @@
 
 ### Changed
 
+- Keep the version/FPS badge behind Options so it cannot cover the Graph section.
 - Replace the Add atlas text with a compact SVG plus icon and accessible label.
 - Removing the last selected node layer now restores all node layers, including
   schema types and fallback categories, without changing link visibility.

@@ -31,7 +31,7 @@ input, textarea { font: inherit; color: inherit; }
 
 #app { height: 100%; position: relative; overflow: hidden; }
 .build-info {
-  position: absolute; left: 0.75rem; bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px)); z-index: 90; max-width: calc(100% - 1.5rem);
+  position: absolute; left: 0.75rem; bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px)); z-index: 73; max-width: calc(100% - 1.5rem);
   color: var(--color-muted); background: rgba(5, 8, 14, 0.85); border-radius: 4px;
   padding: 0.15rem 0.4rem; font: 10px/1.4 var(--font-mono);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;

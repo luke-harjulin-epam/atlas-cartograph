@@ -194,8 +194,8 @@
   for the forming UX principles and proposed review-skill scope; do not treat
   that protostar as an accepted cross-project standard.
   Keep Options grouped into Atlases, Layout, Layers, Links and Graph, with a
-  fixed branded header and scrolling body. Keep full store/schema identities
-  and errors visible; collapse fallback categories under Other pages without
+  fixed branded header and scrolling body, above the version/FPS badge. Keep
+  full store/schema identities and errors visible; collapse fallback categories under Other pages without
   changing filters. Retain disclosure state and Atlas-control focus on updates.
   Layer clicks isolate from All, then add/remove selections; removing the last
   selection restores all node layers, never changing relationship visibility.
