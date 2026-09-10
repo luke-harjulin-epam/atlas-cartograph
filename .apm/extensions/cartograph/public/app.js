@@ -548,9 +548,17 @@ $("chat-toggle").addEventListener("click", () => {
   renderChat();
   if (chatOpen) $("chat-input")?.focus();
 });
-$("chat-close").addEventListener("click", () => {
+function closeChat() {
   chatOpen = false;
   renderChat();
+  $("chat-toggle")?.focus();
+}
+$("chat-close").addEventListener("click", closeChat);
+$("graph-chat").addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    e.preventDefault();
+    closeChat();
+  }
 });
 $("chat-form").addEventListener("submit", (e) => {
   e.preventDefault();
@@ -620,10 +628,12 @@ function renderChat() {
   const mapEl = $("phase-map");
   const toggle = $("chat-toggle");
   if (!log || !drawer) return;
-  drawer.classList.toggle("hidden", !chatOpen);
+  drawer.inert = !chatOpen;
+  drawer.setAttribute("aria-hidden", chatOpen ? "false" : "true");
   drawer.classList.toggle("chat-open", chatOpen);
   mapEl?.classList.toggle("chat-open", chatOpen);
   toggle?.setAttribute("aria-pressed", chatOpen ? "true" : "false");
+  toggle?.setAttribute("aria-expanded", chatOpen ? "true" : "false");
   const sessionChat = state.chatMode === "session";
   const kicker = $("chat-kicker");
   const label = sessionChat ? "Chat with Copilot" : "Local Atlas search";

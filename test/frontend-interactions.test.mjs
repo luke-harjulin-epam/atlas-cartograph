@@ -820,6 +820,64 @@ test("versionless legacy snapshots protect pending clicks without taking lifelon
   assert.equal(controls.layersRevision, null);
 });
 
+test("chat folds into an inert drawer and preserves graph, history and drafts across toggles", () => {
+  const { document, apply, calls, graphs } = appFixture();
+  apply({ previewOpen: false, chat: [{ role: "graph", text: "Existing reply" }] });
+  const drawer = document.getElementById("graph-chat");
+  const map = document.getElementById("phase-map");
+  const toggle = document.getElementById("chat-toggle");
+  const input = document.getElementById("chat-input");
+  const log = document.getElementById("chat-log");
+  const message = log.children[0];
+  const graphCount = graphs.length;
+  assert.equal(drawer.tagName, "ASIDE");
+  assert.equal(drawer.inert, true);
+  assert.equal(drawer.getAttribute("aria-hidden"), "true");
+  assert.equal(toggle.getAttribute("aria-expanded"), "false");
+  assert.equal(toggle.getAttribute("aria-controls"), drawer.id);
+  assert.equal(map.classList.contains("chat-open"), false);
+
+  toggle.click();
+  assert.equal(drawer.inert, false);
+  assert.equal(drawer.getAttribute("aria-hidden"), "false");
+  assert.equal(drawer.classList.contains("chat-open"), true);
+  assert.equal(map.classList.contains("chat-open"), true);
+  assert.equal(toggle.getAttribute("aria-expanded"), "true");
+  assert.equal(document.activeElement, input);
+  input.value = "A question in progress";
+  log.scrollTop = 12;
+  input.dispatchEvent(new FrontendEvent("keydown", { key: "Escape" }));
+  assert.equal(drawer.inert, true);
+  assert.equal(drawer.classList.contains("chat-open"), false);
+  assert.equal(map.classList.contains("chat-open"), false);
+  assert.equal(document.activeElement, toggle);
+  assert.equal(toggle.getAttribute("aria-expanded"), "false");
+
+  for (const close of [document.getElementById("chat-close"), toggle]) {
+    toggle.click();
+    assert.equal(input.value, "A question in progress");
+    assert.equal(log.children[0], message);
+    assert.equal(log.scrollTop, 12);
+    close.click();
+    assert.equal(drawer.inert, true);
+    assert.equal(map.classList.contains("chat-open"), false);
+  }
+  assert.equal(graphs.length, graphCount, "folding never remounts or rebuilds the graph");
+  assert.equal(calls.length, 0, "folding does not mutate server selection, query or layers");
+});
+
+test("chat sizing reserves a responsive quarter-width beside the graph without a modal backdrop", () => {
+  const css = readFileSync(new URL("../.apm/extensions/cartograph/public/styles.css", import.meta.url), "utf8");
+  assert.match(css, /\.map \{ --chat-width: 25vw; --chat-inset: 0px; \}/);
+  assert.match(css, /\.map\.chat-open \{ --chat-inset: var\(--chat-width\); \}/);
+  assert.match(css, /#graph-wrap \{[^}]*inset: 0 var\(--chat-inset\) 0 0;/);
+  assert.match(css, /\.graph-chat \{[^}]*right: 0;[^}]*width: var\(--chat-width\);[^}]*transform: translateX\(100%\); visibility: hidden;/);
+  assert.match(css, /\.graph-chat\.chat-open \{ transform: translateX\(0\); visibility: visible;/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*\}[^}]*\.graph-chat \{ transition: none; \}/);
+  assert.match(html, /<form id="chat-form"[\s\S]*?<\/form>\s*<\/div>\s*<\/aside>/);
+  assert.doesNotMatch(html, /id="chat-backdrop"/);
+});
+
 test("chat labels distinguish Copilot from local search and preserve legacy messages", () => {
   const { document, apply } = appFixture();
   const log = document.getElementById("chat-log");

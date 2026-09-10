@@ -112,6 +112,10 @@ and receives **Copilot** answers back in the drawer through request-scoped
 callbacks. Its bundled `atlas-chat` activation reads mounted pages and cites
 sources; standalone development mode remains labelled local search.
 See [chat usage](docs/usage.md#chat-with-this-atlas) for timeouts and delivery.
+Chat starts folded. Its toolbar button opens a right-hand panel occupying 25%
+of the window width, resizing proportionally while the graph and its controls
+use the remaining 75%. Close or Escape inside chat folds it away and restores
+the full map without clearing the conversation or draft.
 
 The small bottom-left badge shows the runtime version and abbreviated source SHA.
 Hover for the full SHA; `+ local` marks uncommitted runtime changes. Release

@@ -4,6 +4,9 @@
 
 ### Changed
 
+- Fold chat into a right-hand panel using 25% of the window width, with the
+  graph and its controls kept alongside it. Resize proportionally, preserve
+  drafts/history on collapse, and support Escape with focus restoration.
 - Stamp deployed runtimes with `cartograph-build.json` as well as
   `cartographBuild`, so installed canvases keep the source SHA when Git is
   absent. Unsubstituted export placeholders still show `SHA unavailable`.

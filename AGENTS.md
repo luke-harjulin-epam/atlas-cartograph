@@ -89,6 +89,10 @@
   idempotent retries, bounded replies and timeout/close cleanup. Keep queued
   and working indicators distinct, honour reduced motion, and keep standalone
   local search explicitly labelled. Do not capture unrelated session replies.
+- Keep chat folded by default in a right-hand drawer at 25% of the viewport
+  width. Reserve the remaining map area for both renderers and graph controls;
+  keep resizing proportional and preserve drafts/history when collapsing.
+  Folded chat must be inert; Escape and Close return focus to its toolbar toggle.
 - Exclude fenced and inline code before extracting graph links from Markdown
   bodies. Preserve frontmatter relationship kinds and the original preview text.
 - Resolve source-relative page links consistently in graph edges and preview
