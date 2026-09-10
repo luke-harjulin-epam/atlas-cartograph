@@ -1257,7 +1257,9 @@ test("external source focus and hover expose the full URL with generous high-con
   assert.match(css, /\.external-source:focus-visible\s*\{[^}]*outline:\s*2px/);
   assert.match(css, /\.external-source:hover \.external-source-url,\s*\.external-source:focus \.external-source-url\s*\{\s*display: block/);
   assert.match(css, /\.external-source\s*\{[^}]*min-height: 56px;[^}]*color: var\(--color-fg\)/);
-  assert.match(css, /\.external-source-label\s*\{[^}]*font-size: 15px/);
+  assert.match(css, /\.external-source-label\s*\{[^}]*font-size: 14px/);
+  assert.match(css, /\.external-source-context\s*\{[^}]*font-size: 12px/);
+  assert.match(css, /\.external-source-url\s*\{[^}]*font-size: 11px/);
 });
 
 test("actual layer wiring updates buttons immediately, keeps grouping/SSE data, and handles non-2xx JSON", async () => {
