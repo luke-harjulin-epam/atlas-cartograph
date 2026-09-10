@@ -92,6 +92,9 @@ For activation settings, cover duration drafts across blur, updates, toggle
 saves and failures; Cancel uses the latest confirmed value. Keep setup metadata
 provider-owned, render diagnostics literally, and verify reduced-motion status
 and normal-text contrast without starting a collector.
+Information popups need keyboard/focus, outside dismissal, live-text, owner
+closure and narrow-viewport coverage. Keep private commands out of help copies
+and keep operational errors and permission warnings visible.
 Preserve visible keyboard focus and local-only assets. HTTP route changes must
 retain same-origin/custom-header checks and JSON-only mutation requests;
 page-loading changes must preserve mounted-root containment and Atlas identity.

@@ -213,6 +213,8 @@ Collector setup and diagnostics are collapsed until needed. The panel shows queu
 current speed and aggregation. Actual file access and graph changes are never
 delayed; each displayed highlight gets the full configured lifetime.
 Connection status comes first, with a **Set up collector** shortcut when needed.
+Menus keep labels brief. Use the round **i** buttons for explanations, setup
+instructions and detailed diagnostics; Escape or the cross closes the popup.
 Duration drafts survive live updates until Save or Cancel; checkboxes apply
 immediately. The inline ms value describes visual playback pace, not collection
 latency.

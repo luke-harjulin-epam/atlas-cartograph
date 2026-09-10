@@ -4,6 +4,9 @@
 
 ### Changed
 
+- Keep menu text brief and move explanations into shared **i** information
+  popups across activation settings, layer controls and search. Preserve
+  visible errors, permissions, private-token warnings and key counters.
 - Prioritize collector/file-change status and a contextual setup shortcut in
   Knowledge Activation. Preserve unsaved duration drafts until Save or Cancel,
   improve helper-text contrast, show reduced-motion suppression, and clarify

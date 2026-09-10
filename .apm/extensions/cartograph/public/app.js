@@ -1,6 +1,7 @@
 import { mountGraphCanvas } from "./graph-canvas.js";
 import { escapeHtml, renderMarkdown } from "./markdown.js";
 import { mountActivityControls } from "./activity-controls.js";
+import { mountMenuInfo } from "./menu-info.js";
 import { mountGraphWatchControls } from "./graph-watch-controls.js";
 import { allNodeLayersOn, createLayerControls } from "./layer-controls.js";
 import { createStateControls } from "./state-controls.js";
@@ -26,6 +27,7 @@ The map remembers so you don't
 have to grep the dark.`;
 
 const $ = (id) => document.getElementById(id);
+const menuInfo = mountMenuInfo(document);
 const phases = {
   crawl: $("phase-crawl"),
   welcome: $("phase-welcome"),
@@ -118,6 +120,7 @@ function applyActivity(activity) {
 }
 
 function showPhase(name) {
+  if (name !== "map") menuInfo.close();
   if (name !== "map") $("frame-rate").textContent = " | -- FPS";
   for (const [key, el] of Object.entries(phases)) {
     el.classList.toggle("hidden", key !== name);
@@ -661,7 +664,7 @@ const chatInputResize = new ResizeObserver(([entry]) => {
   resizeChatInput();
 });
 chatInputResize.observe($("chat-input"));
-window.addEventListener("pagehide", () => chatInputResize.disconnect());
+window.addEventListener("pagehide", () => { chatInputResize.disconnect(); menuInfo.close(); });
 window.addEventListener("pageshow", () => chatInputResize.observe($("chat-input")));
 function sendChat() {
   const input = $("chat-input");
@@ -687,6 +690,7 @@ $("chat-form").addEventListener("submit", (e) => {
 });
 function setOptionsOpen(open, restoreFocus = true) {
   const panel = $("panel");
+  if (!open) menuInfo.closeWithin(panel);
   panel.classList.toggle("options-open", open);
   panel.inert = !open;
   panel.setAttribute("aria-hidden", String(!open));
@@ -756,6 +760,7 @@ $("panel").addEventListener("click", (e) => {
 });
 
 function renderChat() {
+  if (chatOpen && chatFullscreen) menuInfo.close();
   const log = $("chat-log");
   const drawer = $("graph-chat");
   const mapEl = $("phase-map");

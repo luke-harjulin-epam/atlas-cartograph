@@ -69,9 +69,10 @@
         <section id="node-browser" class="node-browser hidden" aria-labelledby="node-browser-title">
           <div class="node-browser-head">
             <h2 id="node-browser-title">Search results</h2>
+            <button class="info-button" type="button" data-info="search-info" data-info-title="Search" aria-label="About search" aria-controls="menu-info" aria-haspopup="dialog" aria-expanded="false">i</button>
             <button id="node-browser-close" class="btn btn-ghost" type="button">Close results</button>
           </div>
-          <p id="node-browser-help" class="search-help">Search by title, ID, Atlas, path, type or kind, including hidden layers. Press Down to browse results or all nodes when empty. Select once to focus its relationships; select again to open Markdown. Escape closes results and returns to the search field. Clear the field to restore the full map.</p>
+          <div id="search-info" hidden><p id="node-browser-help">Search by title, ID, Atlas, path, type or kind, including hidden layers. Press Down to browse results or all nodes when empty. Select once to focus its relationships; select again to open Markdown. Escape closes results and returns to the search field. Clear the field to restore the full map.</p></div>
           <p id="search-error" class="danger hidden" role="alert"></p>
           <p id="node-count" class="muted" role="status" aria-live="polite" aria-atomic="true"></p>
           <ul id="node-list" class="node-list" aria-label="Graph nodes"></ul>
@@ -107,35 +108,42 @@
             </div>
             <div class="activity-health">
               <div class="activity-connection-head">
-                <h3>Read collector</h3>
+                <div class="info-label"><h3>Read collector</h3><button class="info-button" type="button" data-info="collector-info" data-info-title="Read collector" aria-label="About the read collector" aria-controls="menu-info" aria-haspopup="dialog" aria-expanded="false">i</button></div>
                 <button id="activity-connect" class="btn btn-ghost" type="button" aria-controls="activity-setup">Set up collector</button>
               </div>
-              <p id="activity-message" class="muted"></p>
-              <h3>File changes</h3>
-              <p id="graph-watch-message" class="muted"></p>
+              <p id="activity-collector-state" class="muted">Waiting</p>
+              <p id="activity-collector-error" class="danger hidden" role="alert"></p>
+              <div id="collector-info" hidden><p id="activity-message"></p></div>
+              <div class="info-label"><h3>File changes</h3><button class="info-button" type="button" data-info="watch-info" data-info-title="File changes" aria-label="About file changes" aria-controls="menu-info" aria-haspopup="dialog" aria-expanded="false">i</button></div>
+              <p id="graph-watch-state" class="muted">Idle</p>
+              <p id="graph-watch-error" class="danger hidden" role="alert"></p>
+              <div id="watch-info" hidden><p id="graph-watch-message"></p><p id="graph-watch-help"></p></div>
             </div>
-            <label class="activity-toggle"><input id="activity-auto-focus" type="checkbox" checked aria-describedby="activity-camera-help activity-camera-status" /> Follow activity</label>
-            <p id="activity-camera-help" class="subtle">Keep active nodes in view. Manual navigation temporarily pauses following.</p>
+            <div class="info-label"><label class="activity-toggle"><input id="activity-auto-focus" type="checkbox" checked aria-describedby="activity-camera-help activity-camera-status" /> Follow activity</label><button class="info-button" type="button" data-info="follow-info" data-info-title="Follow activity" aria-label="About following activity" aria-controls="menu-info" aria-haspopup="dialog" aria-expanded="false">i</button></div>
+            <div id="follow-info" hidden><p id="activity-camera-help">Keep active nodes in view. Manual navigation temporarily pauses following. Reduced motion suppresses automatic movement without clearing your preference.</p></div>
             <p id="activity-camera-status" class="subtle hidden" role="status"></p>
             <label class="activity-toggle"><input id="activity-enabled" type="checkbox" checked /> Highlight file access</label>
             <form id="activity-form">
-              <label for="activity-duration">Highlight duration</label>
+              <div class="info-label"><label for="activity-duration">Highlight duration</label><button class="info-button" type="button" data-info="duration-info" data-info-title="Highlight duration" aria-label="About highlight duration" aria-controls="menu-info" aria-haspopup="dialog" aria-expanded="false">i</button></div>
               <div class="activity-duration-row">
                 <input id="activity-duration" type="number" min="0.1" max="300" step="any" value="5" required aria-describedby="activity-duration-help activity-duration-status" />
                 <span>seconds</span>
                 <button id="activity-save" class="btn btn-ghost" type="submit" disabled>Save</button>
                 <button id="activity-cancel" class="btn btn-ghost" type="button" disabled>Cancel</button>
               </div>
-              <p id="activity-duration-help" class="subtle">0.1–300 seconds per node.</p>
+              <div id="duration-info" hidden><p id="activity-duration-help">0.1–300 seconds per node. Use Save to apply the duration, or Cancel to restore the latest saved value. Unsaved edits survive live updates and closing this panel, but not a page reload.</p></div>
               <p id="activity-duration-status" class="subtle" role="status">Saved</p>
             </form>
             <p id="activity-config-error" class="danger hidden" role="alert"></p>
             <details id="activity-setup" class="activity-disclosure">
               <summary id="activity-setup-summary">Collector setup</summary>
-            <h3 id="activity-setup-title">Activity provider setup</h3>
+            <div class="info-label"><h3 id="activity-setup-title">Activity provider setup</h3><button class="info-button" type="button" data-info="setup-info" data-info-title="Collector instructions" aria-label="Collector instructions and permissions" aria-controls="menu-info" aria-haspopup="dialog" aria-expanded="false">i</button></div>
             <p id="activity-provider-label" class="subtle hidden"></p>
-            <p id="activity-setup-description" class="muted">Waiting for provider setup information.</p>
-            <ol id="activity-setup-steps" class="muted"></ol>
+            <p id="activity-permissions" class="subtle hidden"></p>
+            <div id="setup-info" hidden>
+              <p id="activity-setup-description">Waiting for provider setup information.</p>
+              <ol id="activity-setup-steps"></ol>
+            </div>
             <p id="activity-setup-notice" class="subtle">Connection details are private. Do not share them.</p>
             <pre id="activity-command-wrap" class="hidden"><code id="activity-command"></code></pre>
             <p id="activity-connection-status" class="muted hidden" role="status"></p>
@@ -144,13 +152,14 @@
             </details>
             <details class="activity-disclosure">
               <summary>Diagnostics</summary>
-              <p id="activity-scope" class="subtle"></p>
-              <p id="activity-provider-diagnostics" class="subtle hidden"></p>
-              <p id="activity-playback-detail" class="subtle"></p>
+              <div class="info-label"><h3>Scope</h3><button class="info-button" type="button" data-info="scope-info" data-info-title="Process scope" aria-label="About process scope" aria-controls="menu-info" aria-haspopup="dialog" aria-expanded="false">i</button></div>
+              <p id="activity-scope-label" class="muted"></p>
+              <div id="scope-info" hidden><p id="activity-scope"></p><p id="activity-provider-diagnostics"></p></div>
+              <div class="info-label"><h3>Playback</h3><button class="info-button" type="button" data-info="playback-info" data-info-title="Playback" aria-label="About playback and counters" aria-controls="menu-info" aria-haspopup="dialog" aria-expanded="false">i</button></div>
+              <p id="activity-playback-counts" class="muted"></p>
+              <div id="playback-info" hidden><p id="activity-playback-detail"></p><p id="activity-spacing"></p></div>
               <ul id="activity-repeat-counts" class="subtle"></ul>
               <p id="activity-repeat-more" class="subtle"></p>
-              <p id="activity-spacing" class="subtle"></p>
-              <p id="graph-watch-help" class="subtle"></p>
             </details>
           </div>
         </details>
@@ -223,13 +232,13 @@
             <button class="layer" data-grouping="atlases" type="button">Atlases</button>
             <button class="layer" data-grouping="proximity" type="button">Proximity</button>
           </div>
-          <p class="muted" style="margin:0.5rem 0 0">Layers</p>
+          <div class="info-label"><p class="muted">Layers</p><button class="info-button" type="button" data-info="layers-info" data-info-title="Layers" aria-label="About layers" aria-controls="menu-info" aria-haspopup="dialog" aria-expanded="false">i</button></div>
           <div class="layers">
             <button class="layer active" data-layer="all" type="button">All</button>
             <button class="layer active" data-layer="relations" type="button">Relates</button>
             <button class="layer active" data-layer="sources" type="button">Provenance</button>
           </div>
-          <p class="subtle">Choose a schema or type to isolate it from All; then toggle to combine layers. Newly discovered types start visible.</p>
+          <div id="layers-info" hidden><p>Choose a schema or type to isolate it from All; then toggle to combine layers. Newly discovered types start visible.</p></div>
           <div id="schema-layers" aria-label="Schema and type layers"></div>
           <p class="muted">Pages without schema declarations</p>
           <div class="layers">
@@ -281,6 +290,15 @@
           </div>
         </article>
       </section>
+      <div id="menu-info" popover="auto" role="dialog" aria-labelledby="menu-info-title" aria-describedby="menu-info-body">
+        <div class="info-popup-head">
+          <h2 id="menu-info-title"></h2>
+          <button id="menu-info-close" class="icon-btn" type="button" aria-label="Close information">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <div id="menu-info-body"></div>
+      </div>
       <small class="build-info">
         <span id="build-info" class="hidden" aria-label="Cartograph build"></span>
         <span id="frame-rate" aria-label="Rendering frame rate" title="Rendered frames per second, sampled over one second; not GPU timing."> | -- FPS</span>

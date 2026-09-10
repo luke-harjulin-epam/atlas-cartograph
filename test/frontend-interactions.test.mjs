@@ -40,7 +40,7 @@ test("floating status bar groups activation and independent zoom outside the gra
   }
   assert.equal(summary.querySelector("path").getAttribute("d"), document.getElementById("view-summary").querySelector("path").getAttribute("d"));
   const body = document.getElementById("activity-settings");
-  assert.ok(body.children.indexOf(body.querySelector(".activity-health")) < body.children.indexOf(body.querySelector(".activity-toggle")));
+  assert.ok(body.children.indexOf(body.querySelector(".activity-health")) < body.children.indexOf(body.querySelector(".activity-toggle").parentElement));
   assert.equal(document.getElementById("activity-connect").getAttribute("aria-controls"), "activity-setup");
   renderers[0].onReducedMotion(true);
   assert.equal(document.getElementById("activity-camera-status").textContent, "true");
@@ -276,6 +276,7 @@ function appFixture({ reducedMotion = false, phase = "map", clusters = [] } = {}
       setReducedMotion(reduced) { document.getElementById("activity-camera-status").textContent = String(reduced); },
     }),
     mountGraphWatchControls: () => ({ setWatch() {} }),
+    mountMenuInfo: () => ({ close() {}, closeWithin() {} }),
     mountGraphCanvas: (_wrap, options) => {
       renderers.push(options);
       return {

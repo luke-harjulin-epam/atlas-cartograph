@@ -91,6 +91,7 @@ export function mountActivityControls(root, onActivity, onAutoFocus = () => {}) 
     get("activity-playback-status").setAttribute("aria-label",
       `Playback pace: ${status.summary}. Time between displayed activations, not collection latency.`);
     get("activity-playback-detail").textContent = status.detail;
+    get("activity-playback-counts").textContent = `${playback?.aggregatedCount ?? 0} merged · ${playback?.cancelledCount ?? 0} cancelled`;
     const repeats = [
       ...(playback?.repeatedNodes ?? []).map((entry) => ({ ...entry, kind: "node" })),
       ...(playback?.repeatedEdges ?? []).map((entry) => ({ ...entry, kind: "edge" })),
@@ -117,6 +118,10 @@ export function mountActivityControls(root, onActivity, onAutoFocus = () => {}) 
     const setup = provider?.setup;
     get("activity-provider-label").textContent = text(provider?.label);
     get("activity-provider-label").classList.toggle("hidden", !provider?.label);
+    const permissions = Array.isArray(provider?.permissions)
+      ? provider.permissions.filter(value => typeof value === "string").map(value => value.replaceAll("-", " ")) : [];
+    get("activity-permissions").textContent = permissions.length ? `Permissions: ${permissions.join(" · ")}` : "";
+    get("activity-permissions").classList.toggle("hidden", !permissions.length);
     get("activity-setup-title").textContent = text(setup?.title, "Activity provider setup");
     get("activity-setup-description").textContent = text(setup?.description, text(provider?.description, "Waiting for provider setup information."));
     const steps = Array.isArray(setup?.steps) ? setup.steps.filter((step) => typeof step === "string") : [];
@@ -160,10 +165,14 @@ export function mountActivityControls(root, onActivity, onAutoFocus = () => {}) 
     root.dataset.status = status.status;
     get("activity-status").textContent = status.label;
     const collector = activityStatus({ collector: activity?.collector }, connected);
+    get("activity-collector-state").textContent = collector.label;
     get("activity-message").textContent = collector.message;
+    error(get("activity-collector-error"), ["error", "disconnected", "unsupported"].includes(collector.status) ? collector.message : "");
     get("activity-connect").classList.toggle("hidden",
       !connected || !["waiting", "disconnected", "error"].includes(collector.status));
     get("activity-scope").textContent = activityScopeLabel(activity?.scope);
+    get("activity-scope-label").textContent = activity?.scope?.mode === "session" ? "This session"
+      : activity?.scope?.mode === "all" ? "All applications" : "Unavailable";
     enabled.checked = activity?.enabled !== false;
     enabled.disabled = saving;
     renderDuration();
@@ -212,7 +221,7 @@ export function mountActivityControls(root, onActivity, onAutoFocus = () => {}) 
       const result = await requestActivity("/api/activity/connection", { signal: request.signal });
       if (request.signal.aborted || !root.open || !setupPanel.open) return;
       if (result.command === null) {
-        connectionStatus.textContent = "Connection ready. This provider reports activity directly; follow its setup instructions. No terminal command is required.";
+        connectionStatus.textContent = "No terminal command needed.";
         connectionStatus.classList.remove("hidden");
       } else {
         if (typeof result.command !== "string" || !result.command.trim()) throw new Error("The server did not return a valid activity command.");

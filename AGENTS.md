@@ -186,6 +186,9 @@
   labels, stable focus across snapshots and local-only camera selection.
   Keep everyday settings concise, setup and diagnostics in disclosures, and
   private connection fetching scoped to the open Collector setup disclosure.
+  Move long menu explanations into shared information popups. Keep errors,
+  permissions, private-token warnings and key counters visible; render popup
+  text literally and release its observer when dismissed or its menu closes.
   Show collector health separately from the highlight toggle; keep dirty
   duration input through snapshots and failed saves until Save or Cancel.
   Report reduced-motion suppression without changing the follow preference,

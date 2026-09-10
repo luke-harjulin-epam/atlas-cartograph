@@ -382,16 +382,24 @@ Click the activation section to open settings above
 the bar. Zoom buttons do not open or close settings. Escape or the cross closes
 settings and returns focus to the status section.
 
+Menus show short labels and status values. Select a round **i** button for
+the full explanation, collector instructions or diagnostic details. Information
+opens above the interface, stays up to date, and does not change settings.
+Escape or the cross returns focus to its button; clicking outside dismisses
+it. Search and layer controls use the same information popup.
+
 Use **Follow activity**, **Highlight file access**, and **Highlight duration**
 for everyday controls. Read collector and file-change status appear first and
 remain separate, even when highlighting is off. **Set up collector** opens the
 setup instructions when the collector is waiting, disconnected or reporting an
 error. This shortcut is hidden while the canvas connection itself is lost.
-Expand **Collector setup** for provider instructions and the private connection
+Expand **Collector setup** for the private connection
 command; opening settings alone does not fetch connection details or start a
-collector. Closing setup clears the command. **Diagnostics** contains process
-scope, provider process mechanics, playback counters, repeated observations and
-timing details. Setup keeps authorization and private-token warnings visible.
+collector. Read the setup **i** popup for the provider's instructions before
+running a command. Closing setup clears the command. **Diagnostics** shows
+scope and merged/cancelled counts; its **i** buttons explain process mechanics,
+timing and capture limitations. Permissions and private-token warnings remain
+visible beside setup, and errors remain visible rather than hidden in help.
 Settings belong to the current canvas; a new canvas defaults to five seconds.
 Valid durations are 0.1 to 300 seconds.
 

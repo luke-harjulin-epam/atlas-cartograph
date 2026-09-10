@@ -311,6 +311,9 @@ test("setup shortcut reflects collector health independently of highlighting and
   controls.setActivity({ ...activity, collector: { status: "error", message: "Collector failed." } });
   assert.equal(get("activity-connect").classList.contains("hidden"), false);
   assert.equal(get("activity-message").textContent, "Collector failed.");
+  assert.equal(get("activity-collector-state").textContent, "Error");
+  assert.equal(get("activity-collector-error").textContent, "Collector failed.");
+  assert.equal(get("activity-collector-error").classList.contains("hidden"), false);
   controls.setConnected(false);
   assert.equal(get("activity-connect").classList.contains("hidden"), true);
 });
@@ -427,6 +430,7 @@ test("eslogger setup comes from provider metadata and is not rebuilt for heartbe
   assert.equal(get("activity-setup-title").textContent, esloggerProvider.setup.title);
   assert.equal(get("activity-setup-description").textContent, esloggerProvider.setup.description);
   assert.equal(get("activity-setup-notice").textContent, esloggerProvider.setup.notice);
+  assert.equal(get("activity-permissions").textContent, "Permissions: administrator · full disk access");
   assert.equal(get("activity-provider-diagnostics").textContent, esloggerProvider.setup.diagnostics);
   const list = get("activity-setup-steps");
   assert.deepEqual(list.children.map((item) => item.textContent), esloggerProvider.setup.steps);
@@ -448,6 +452,7 @@ test("an alternative provider replaces all macOS and administrator setup prompts
   assert.equal(get("activity-setup-description").textContent, directProvider.setup.description);
   assert.equal(get("activity-provider-diagnostics").textContent, "");
   assert.equal(get("activity-provider-diagnostics").classList.contains("hidden"), true);
+  assert.equal(get("activity-permissions").textContent, "");
   assert.deepEqual(get("activity-setup-steps").children.map((item) => item.textContent), directProvider.setup.steps);
   const visibleText = [...elements.values()].flatMap((element) => [element.textContent, ...element.children.map((child) => child.textContent)]).join(" ");
   assert.doesNotMatch(visibleText, /macOS|eslogger|sudo|root|Full Disk Access|Node\.js 22/i);
@@ -490,7 +495,7 @@ test("null commands intentionally support direct reporting without exposing conn
   assert.equal(get("activity-command").textContent, "");
   assert.equal(get("activity-command-wrap").classList.contains("hidden"), true);
   assert.equal(get("activity-connection-error").classList.contains("hidden"), true);
-  assert.match(get("activity-connection-status").textContent, /Connection ready.*reports activity directly.*No terminal command/);
+  assert.equal(get("activity-connection-status").textContent, "No terminal command needed.");
   assert.equal(get("activity-status").textContent, "Waiting");
   assert.ok([...elements.values()].every((element) => !element.textContent.includes("never-display-this-token")));
   root.open = false;
