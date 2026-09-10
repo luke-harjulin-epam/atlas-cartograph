@@ -1713,7 +1713,11 @@ test("preview separates readable external source rows from internal source and r
 test("external source focus and hover expose the full URL with generous high-contrast targets", () => {
   const css = readFileSync(new URL("../.apm/extensions/cartograph/public/styles.css", import.meta.url), "utf8");
   assert.match(css, /\.external-source:focus-visible\s*\{[^}]*outline:\s*2px/);
-  assert.match(css, /\.external-source:hover \.external-source-url,\s*\.external-source:focus \.external-source-url\s*\{\s*display: block/);
+  const hidden = css.match(/\.search-help,\s*\.external-source:not\(:hover\):not\(:focus\) \.external-source-url\s*\{([^}]+)\}/)?.[1];
+  assert.ok(hidden, "Source URLs reuse the visually-hidden helper only while neither hovered nor focused");
+  assert.match(hidden, /position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset\(50%\)/);
+  assert.doesNotMatch(hidden, /display:\s*none|visibility:\s*hidden/);
+  assert.match(css, /\.external-source-url\s*\{\s*display: block/);
   assert.match(css, /\.external-source\s*\{[^}]*min-height: 56px;[^}]*color: var\(--color-fg\)/);
   assert.match(css, /\.external-source-label\s*\{[^}]*font-size: 12px/);
   assert.match(css, /\.external-source-context\s*\{[^}]*font-size: 12px/);

@@ -6,6 +6,8 @@
 
 ### Changed
 
+- Keep source URL descriptions visually hidden instead of removing them from
+  display, retaining their full hover and keyboard-focus reveal.
 - Use chat revisions to skip full-history serialization on unchanged snapshots,
   preserving progress updates, draft focus and older-server compatibility.
 - Document the separate, commit-pinned marketplace handoff after source release
