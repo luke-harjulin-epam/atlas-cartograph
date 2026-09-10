@@ -839,6 +839,9 @@ test("options overlay opens accessibly and closes without changing graph or sear
   const toggle = document.getElementById("toggle-panel");
   const close = document.getElementById("panel-close");
   assert.equal(panel.getAttribute("aria-hidden"), "true");
+  assert.equal(panel.querySelector(".panel-brand").querySelector("span").textContent, "Atlas Cartograph");
+  assert.equal(panel.querySelector(".panel-brand").querySelector("svg").getAttribute("aria-hidden"), "true");
+  assert.equal(document.getElementById("panel-title").textContent, "Options");
   toggle.click();
   assert.equal(panel.classList.contains("hidden"), false);
   assert.equal(panel.inert, false);
@@ -864,10 +867,10 @@ test("options overlay opens accessibly and closes without changing graph or sear
   assert.equal(document.activeElement, document.getElementById("atlas-add-close"));
 });
 
-test("search fills its toolbar and options overlay the full-height right side", () => {
+test("search fills its toolbar and options overlay the full-height left side", () => {
   const css = readFileSync(new URL("../.apm/extensions/cartograph/public/styles.css", import.meta.url), "utf8");
   assert.doesNotMatch(css.match(/\.search-field \{[^}]*\}/)[0], /max-width/);
-  assert.match(css, /\.panel \{[^}]*top: 0; bottom: 0; right: var\(--chat-inset\);[^}]*width: min\(22\.5rem, calc\(100% - var\(--chat-inset\)\)\)/);
+  assert.match(css, /\.panel \{[^}]*top: 0; bottom: 0; left: 0;[^}]*width: min\(22\.5rem, calc\(100% - var\(--chat-inset\)\)\)/);
 });
 
 test("chat folds into an inert drawer and preserves graph, history and drafts across toggles", () => {

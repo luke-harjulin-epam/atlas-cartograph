@@ -5,7 +5,8 @@
 ### Changed
 
 - Fill the available toolbar width with search and show Options in a
-  full-height right-side overlay with independent scrolling and Escape/Close.
+  full-height left-side overlay with an Atlas Cartograph logo/header,
+  independent scrolling and Escape/Close.
 - Add a full-screen chat toggle for reading wide tables. Restore or Escape
   returns to the drawer, preserving the conversation and draft.
   Use one persistent top-right panel icon to open or close chat in every size.

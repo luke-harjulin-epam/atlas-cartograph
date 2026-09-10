@@ -152,9 +152,18 @@
         </aside>
         <aside id="panel" class="panel hidden" aria-labelledby="panel-title" aria-hidden="true" inert>
           <div class="panel-head">
-            <p id="panel-title" class="kicker">Options</p>
+            <div class="panel-brand">
+              <svg width="28" height="28" viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false">
+                <path d="m7 23 9-17 9 17M10 18h12M7 23h18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="16" cy="6" r="3" fill="currentColor"/>
+                <circle cx="7" cy="23" r="3" fill="currentColor"/>
+                <circle cx="25" cy="23" r="3" fill="currentColor"/>
+              </svg>
+              <span>Atlas Cartograph</span>
+            </div>
             <button id="panel-close" class="btn btn-ghost" type="button" aria-label="Close options">Close</button>
           </div>
+          <h2 id="panel-title" class="kicker panel-options-title">Options</h2>
           <p class="muted" style="margin:0.5rem 0 0">Atlases</p>
           <div id="open-atlases" class="open-atlases"></div>
           <button id="add-atlas" class="btn-ghost btn" type="button" style="margin:0.5rem 0 0.75rem;width:100%">Add atlas</button>

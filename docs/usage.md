@@ -94,9 +94,10 @@ require SDK context or metadata.
 
 Type in the always-visible **Search stars** field in the map toolbar.
 The field fills the available toolbar width, leaving space for the menu and
-chat controls. The menu opens a full-height **Options** panel over the right
-side of the Atlas without shrinking the graph. With chat open, Options sits
-beside it within the Atlas area. Its contents scroll independently; Close or
+chat controls. The menu opens a full-height panel over the left side of the
+Atlas without shrinking the graph. A logo and **Atlas Cartograph** header sit
+above **Options**. With chat open, the panel stays within the Atlas area.
+Its contents scroll independently; Close or
 Escape dismisses it and returns focus to the menu button.
 One field searches by title, ID, Atlas,
 full path, type or kind and uses that same query to highlight matching visible
