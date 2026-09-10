@@ -3,7 +3,7 @@ import { esloggerProvider } from "./eslogger.mjs";
 
 /**
  * @typedef {object} MonitorProvider
- * @property {{id:string,label:string,description:string,permissions:string[],operations:string[],processScopes?:("all"|"session")[],setup:{title:string,description:string,steps:string[],notice:string}}} metadata Public, secret-free UI metadata.
+ * @property {{id:string,label:string,description:string,permissions:string[],operations:string[],processScopes?:("all"|"session")[],setup:{title:string,description:string,steps:string[],notice:string,diagnostics?:string}}} metadata Public, secret-free UI metadata; optional setup diagnostics are plain text, never markup.
  * @property {(platform:string) => {supported:boolean,message:string}} availability
  * @property {string} waitingMessage
  * @property {(context:{endpoint:string,token:string,collectorPath:string,scope:object}) => {command:string|null}|Promise<{command:string|null}>} createConnection Null command means a component reports directly to the normalized HTTP API.
@@ -24,6 +24,7 @@ export function validateMonitorProvider(provider) {
         !meta.processScopes.every((scope) => scope === "all" || scope === "session"))) ||
       !text(meta.setup?.title) || !text(meta.setup.description) ||
       !texts(meta.setup.steps) || !text(meta.setup.notice) ||
+      (meta.setup.diagnostics !== undefined && !text(meta.setup.diagnostics)) ||
       typeof provider.availability !== "function" || typeof provider.createConnection !== "function" ||
       !text(provider.waitingMessage) || provider.waitingMessage.length > MAX_MESSAGE_LENGTH) {
     throw new TypeError("Invalid monitor provider contract.");
@@ -48,6 +49,7 @@ export function monitorMetadata(provider) {
     setup: {
       title: setup.title, description: setup.description,
       steps: [...setup.steps], notice: setup.notice,
+      ...(setup.diagnostics !== undefined ? { diagnostics: setup.diagnostics } : {}),
     },
   };
 }

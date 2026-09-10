@@ -58,9 +58,14 @@ export function mountActivityControls(root, onActivity, onAutoFocus = () => {}) 
   const enabled = get("activity-enabled");
   const autoFocus = get("activity-auto-focus");
   autoFocus.checked = true;
-  autoFocus.addEventListener("change", () => onAutoFocus(autoFocus.checked));
+  autoFocus.addEventListener("change", () => {
+    onAutoFocus(autoFocus.checked);
+    renderCamera();
+  });
   const duration = get("activity-duration");
   const save = get("activity-save");
+  const cancel = get("activity-cancel");
+  const durationStatus = get("activity-duration-status");
   const configError = get("activity-config-error");
   const connectionError = get("activity-connection-error");
   const connectionStatus = get("activity-connection-status");
@@ -71,6 +76,9 @@ export function mountActivityControls(root, onActivity, onAutoFocus = () => {}) 
   let activity;
   let connected = true;
   let saving = false;
+  let savingDuration = false;
+  let durationDirty = false;
+  let reducedMotion = false;
   let connectionRequest;
   let providerKey;
   let playback;
@@ -80,6 +88,8 @@ export function mountActivityControls(root, onActivity, onAutoFocus = () => {}) 
     const status = playbackStatus(playback);
     get("activity-playback-status").textContent = status.summary;
     get("activity-playback-status").dataset.status = status.status;
+    get("activity-playback-status").setAttribute("aria-label",
+      `Playback pace: ${status.summary}. Time between displayed activations, not collection latency.`);
     get("activity-playback-detail").textContent = status.detail;
     const repeats = [
       ...(playback?.repeatedNodes ?? []).map((entry) => ({ ...entry, kind: "node" })),
@@ -118,6 +128,29 @@ export function mountActivityControls(root, onActivity, onAutoFocus = () => {}) 
     const notice = text(setup?.notice, "Connection details are private. Do not share them.");
     get("activity-setup-notice").textContent = notice;
     get("activity-setup-notice").classList.toggle("hidden", !notice);
+    const diagnostics = text(setup?.diagnostics);
+    get("activity-provider-diagnostics").textContent = diagnostics;
+    get("activity-provider-diagnostics").classList.toggle("hidden", !diagnostics);
+  }
+
+  function renderCamera() {
+    const paused = reducedMotion && autoFocus.checked;
+    const message = paused ? "Paused by reduced motion" : "";
+    const status = get("activity-camera-status");
+    if (status.textContent !== message) status.textContent = message;
+    status.classList.toggle("hidden", !paused);
+  }
+
+  function renderDuration() {
+    duration.disabled = saving;
+    save.disabled = saving || !durationDirty;
+    cancel.disabled = saving || !durationDirty;
+    save.textContent = savingDuration ? "Saving…" : "Save";
+    const message = savingDuration ? "Saving…" : durationDirty ? "Unsaved changes" : "Saved";
+    if (durationStatus.textContent !== message) durationStatus.textContent = message;
+    if (!durationDirty && document.activeElement !== duration) {
+      duration.value = String((activity?.durationMs ?? DEFAULT_ACTIVITY_DURATION_MS) / 1000);
+    }
   }
 
   function render() {
@@ -126,14 +159,15 @@ export function mountActivityControls(root, onActivity, onAutoFocus = () => {}) 
     const status = activityStatus(activity, connected);
     root.dataset.status = status.status;
     get("activity-status").textContent = status.label;
-    get("activity-message").textContent = status.message;
+    const collector = activityStatus({ collector: activity?.collector }, connected);
+    get("activity-message").textContent = collector.message;
+    get("activity-connect").classList.toggle("hidden",
+      !connected || !["waiting", "disconnected", "error"].includes(collector.status));
     get("activity-scope").textContent = activityScopeLabel(activity?.scope);
     enabled.checked = activity?.enabled !== false;
     enabled.disabled = saving;
-    duration.disabled = saving;
-    save.disabled = saving;
-    save.textContent = saving ? "Saving…" : "Save";
-    if (document.activeElement !== duration) duration.value = String((activity?.durationMs ?? DEFAULT_ACTIVITY_DURATION_MS) / 1000);
+    renderDuration();
+    renderCamera();
   }
 
   function error(el, message = "") {
@@ -141,20 +175,23 @@ export function mountActivityControls(root, onActivity, onAutoFocus = () => {}) 
     el.classList.toggle("hidden", !message);
   }
 
-  async function configure(next) {
+  async function configure(next, saveDuration = false) {
     if (saving) return;
     saving = true;
+    savingDuration = saveDuration;
     error(configError);
     render();
     try {
       const result = await requestActivity("/api/activity/config", { method: "POST", body: JSON.stringify(next) });
       activity = result;
-      duration.value = String(result.durationMs / 1000);
+      if (saveDuration) durationDirty = false;
       onActivity(result);
+      if (saveDuration) duration.value = String(activity.durationMs / 1000);
     } catch (err) {
       error(configError, `Settings were not saved. ${err.message}`);
     } finally {
       saving = false;
+      savingDuration = false;
       render();
     }
   }
@@ -195,10 +232,21 @@ export function mountActivityControls(root, onActivity, onAutoFocus = () => {}) 
   enabled.addEventListener("change", () => configure({
     enabled: enabled.checked, durationMs: activity?.durationMs ?? DEFAULT_ACTIVITY_DURATION_MS,
   }));
+  duration.addEventListener("input", () => {
+    durationDirty = duration.value !== String((activity?.durationMs ?? DEFAULT_ACTIVITY_DURATION_MS) / 1000);
+    renderDuration();
+  });
+  cancel.addEventListener("click", () => {
+    durationDirty = false;
+    error(configError);
+    duration.value = String((activity?.durationMs ?? DEFAULT_ACTIVITY_DURATION_MS) / 1000);
+    renderDuration();
+    duration.focus({ preventScroll: true });
+  });
   get("activity-form").addEventListener("submit", (event) => {
     event.preventDefault();
     try {
-      configure({ enabled: activity?.enabled !== false, durationMs: activityDuration(duration.value) });
+      configure({ enabled: activity?.enabled !== false, durationMs: activityDuration(duration.value) }, true);
     } catch (err) {
       error(configError, err.message);
     }
@@ -227,6 +275,10 @@ export function mountActivityControls(root, onActivity, onAutoFocus = () => {}) 
     if (setupPanel.open) loadConnection();
     else clearConnection();
   });
+  get("activity-connect").addEventListener("click", () => {
+    setupPanel.open = true;
+    get("activity-setup-summary").focus();
+  });
   get("activity-close").addEventListener("click", close);
   root.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
@@ -238,6 +290,7 @@ export function mountActivityControls(root, onActivity, onAutoFocus = () => {}) 
   render();
   return {
     autoFocusEnabled: () => autoFocus.checked,
+    setReducedMotion(next) { reducedMotion = next; renderCamera(); },
     setActivity(next) { activity = next; if (next?.enabled === false) playback = null; render(); },
     setPlayback(next) { playback = next; renderPlayback(); },
     setConnected(next) { connected = next; render(); },

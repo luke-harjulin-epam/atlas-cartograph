@@ -530,8 +530,10 @@ export function mountGraphCanvas(wrap, options) {
   const onMotionChange = (event) => {
     if (event.matches) pauseAutoFocus();
     s.reduce = event.matches;
+    options.onReducedMotion?.(s.reduce);
   };
   motionPreference.addEventListener("change", onMotionChange);
+  options.onReducedMotion?.(s.reduce);
 
   const zoomControls = options.zoomControls ?? wrap;
   const zoomEl = zoomControls.querySelector("[data-zoom]");

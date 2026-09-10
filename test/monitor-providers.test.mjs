@@ -105,6 +105,46 @@ test("registry supports multiple implementations without silently switching defa
   assert.throws(() => parseCollectorArgs(["--url", "http://127.0.0.1/", "--url", "http://127.0.0.1/"], tokenEnv), /Usage/);
 });
 
+test("eslogger setup keeps three short safety-preserving steps and separate diagnostics", () => {
+  const { setup } = monitorMetadata(esloggerProvider);
+  assert.equal(setup.steps.length, 3);
+  assert.ok(setup.steps.every((step) => step.length < 200));
+  assert.match(setup.steps[0], /Terminal.*Node\.js 22.*Full Disk Access/);
+  assert.match(setup.steps[1], /displayed command manually/);
+  assert.match(setup.steps[1], /Only eslogger runs as root; Node runs as your normal user/);
+  assert.match(setup.steps[1], /Do not sudo the whole pipeline/);
+  assert.match(setup.steps[2], /Terminal running.*Ctrl-C to stop/);
+  assert.match(setup.steps[2], /Live only after an accepted file access, not a process lifecycle event/);
+  assert.match(setup.description, /macOS authorization is required/);
+  assert.match(setup.description, /system-wide metadata.*unprivileged collector forwards only graph-file accesses.*process scope/);
+  assert.match(setup.description, /never starts or elevates.*automatically/);
+  assert.match(setup.notice, /private connection token.*Do not share/);
+  assert.doesNotMatch([setup.description, ...setup.steps].join(" "), /fork\/exec\/exit|PID\/parent|ancestry|subscribes/);
+  assert.match(setup.diagnostics, /open\/close.*fork\/exec\/exit.*read-only ps PID\/parent\/birth-time/);
+  assert.match(setup.diagnostics, /excludes the viewer subtree.*drops unknown ancestry/);
+  assert.match(setup.diagnostics, /lifecycle events.*cannot make monitoring Live/);
+});
+
+test("optional setup diagnostics preserve literal text without changing other provider contracts", () => {
+  assert.equal(validateMonitorProvider(testProvider), testProvider);
+  assert.equal(Object.hasOwn(monitorMetadata(testProvider).setup, "diagnostics"), false);
+  const withDiagnostics = (diagnostics) => ({
+    ...testProvider,
+    metadata: { ...testProvider.metadata, setup: { ...testProvider.metadata.setup, diagnostics } },
+  });
+  const diagnostics = '<script>not markup</script> & **literal text**';
+  const provider = withDiagnostics(diagnostics);
+  assert.equal(validateMonitorProvider(provider), provider);
+  const metadata = monitorMetadata(provider);
+  assert.equal(JSON.parse(JSON.stringify(metadata)).setup.diagnostics, diagnostics);
+  metadata.setup.diagnostics = "local mutation";
+  assert.equal(provider.metadata.setup.diagnostics, diagnostics);
+  assert.equal(Object.hasOwn(monitorMetadata(withDiagnostics(undefined)).setup, "diagnostics"), false);
+  for (const invalid of [null, 42, {}, [], "", " "]) {
+    assert.throws(() => validateMonitorProvider(withDiagnostics(invalid)), /Invalid monitor provider contract/);
+  }
+});
+
 test("providers without ancestry support cannot silently enable session scope", async () => {
   const registry = createMonitorRegistry([testProvider], testProvider.metadata.id);
   const state = freshState(root);
@@ -145,6 +185,7 @@ test("a selected unavailable provider does not fall back to another registered m
   assert.equal(response.status, 409);
   assert.equal(entry.state.activity.provider.id, DEFAULT_MONITOR_PROVIDER);
   assert.equal(entry.state.activity.collector.status, "unsupported");
+  assert.equal(entry.state.activity.provider.setup.diagnostics, esloggerProvider.metadata.setup.diagnostics);
 });
 
 test("recreating a service preserves the selected provider from its public snapshot", (t) => {

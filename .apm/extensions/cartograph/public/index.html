@@ -94,7 +94,7 @@
             <span class="activity-status-row">
               <span id="activity-status" role="status" aria-live="polite">Waiting</span>
               <span id="graph-watch-status" role="status" aria-live="polite">Changes idle</span>
-              <span id="activity-playback-status" aria-label="Knowledge activation playback queue">400 ms</span>
+              <span id="activity-playback-status" title="Playback pace: time between displayed activations, not collection latency." aria-label="Playback pace: 400 milliseconds between displayed activations">400 ms</span>
             </span>
             <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><path d="m4 10 4-4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </summary>
@@ -105,27 +105,33 @@
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
               </button>
             </div>
-            <label class="activity-toggle"><input id="activity-auto-focus" type="checkbox" checked aria-describedby="activity-camera-help" /> Follow activity</label>
-            <p id="activity-camera-help" class="subtle">Frame active nodes. Manual navigation pauses following; reduced motion disables it.</p>
-            <label class="activity-toggle"><input id="activity-enabled" type="checkbox" checked /> Highlight file access</label>
-            <form id="activity-form">
-              <label for="activity-duration">Highlight duration</label>
-              <div class="activity-duration-row">
-                <input id="activity-duration" type="number" min="0.1" max="300" step="any" value="5" required aria-describedby="activity-duration-help" />
-                <span>seconds</span>
-                <button id="activity-save" class="btn btn-ghost" type="submit">Save</button>
-              </div>
-              <p id="activity-duration-help" class="subtle">0.1–300 seconds per node.</p>
-            </form>
-            <p id="activity-config-error" class="danger hidden" role="alert"></p>
             <div class="activity-health">
-              <h3>Read collector</h3>
+              <div class="activity-connection-head">
+                <h3>Read collector</h3>
+                <button id="activity-connect" class="btn btn-ghost" type="button" aria-controls="activity-setup">Set up collector</button>
+              </div>
               <p id="activity-message" class="muted"></p>
               <h3>File changes</h3>
               <p id="graph-watch-message" class="muted"></p>
             </div>
+            <label class="activity-toggle"><input id="activity-auto-focus" type="checkbox" checked aria-describedby="activity-camera-help activity-camera-status" /> Follow activity</label>
+            <p id="activity-camera-help" class="subtle">Keep active nodes in view. Manual navigation temporarily pauses following.</p>
+            <p id="activity-camera-status" class="subtle hidden" role="status"></p>
+            <label class="activity-toggle"><input id="activity-enabled" type="checkbox" checked /> Highlight file access</label>
+            <form id="activity-form">
+              <label for="activity-duration">Highlight duration</label>
+              <div class="activity-duration-row">
+                <input id="activity-duration" type="number" min="0.1" max="300" step="any" value="5" required aria-describedby="activity-duration-help activity-duration-status" />
+                <span>seconds</span>
+                <button id="activity-save" class="btn btn-ghost" type="submit" disabled>Save</button>
+                <button id="activity-cancel" class="btn btn-ghost" type="button" disabled>Cancel</button>
+              </div>
+              <p id="activity-duration-help" class="subtle">0.1–300 seconds per node.</p>
+              <p id="activity-duration-status" class="subtle" role="status">Saved</p>
+            </form>
+            <p id="activity-config-error" class="danger hidden" role="alert"></p>
             <details id="activity-setup" class="activity-disclosure">
-              <summary>Collector setup</summary>
+              <summary id="activity-setup-summary">Collector setup</summary>
             <h3 id="activity-setup-title">Activity provider setup</h3>
             <p id="activity-provider-label" class="subtle hidden"></p>
             <p id="activity-setup-description" class="muted">Waiting for provider setup information.</p>
@@ -139,6 +145,7 @@
             <details class="activity-disclosure">
               <summary>Diagnostics</summary>
               <p id="activity-scope" class="subtle"></p>
+              <p id="activity-provider-diagnostics" class="subtle hidden"></p>
               <p id="activity-playback-detail" class="subtle"></p>
               <ul id="activity-repeat-counts" class="subtle"></ul>
               <p id="activity-repeat-more" class="subtle"></p>

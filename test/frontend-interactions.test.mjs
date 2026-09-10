@@ -39,6 +39,11 @@ test("floating status bar groups activation and independent zoom outside the gra
     assert.equal(document.getElementById(id).parentElement, row);
   }
   assert.equal(summary.querySelector("path").getAttribute("d"), document.getElementById("view-summary").querySelector("path").getAttribute("d"));
+  const body = document.getElementById("activity-settings");
+  assert.ok(body.children.indexOf(body.querySelector(".activity-health")) < body.children.indexOf(body.querySelector(".activity-toggle")));
+  assert.equal(document.getElementById("activity-connect").getAttribute("aria-controls"), "activity-setup");
+  renderers[0].onReducedMotion(true);
+  assert.equal(document.getElementById("activity-camera-status").textContent, "true");
 });
 
 test("View popup replaces the island row, selects keyed views and returns to All", () => {
@@ -266,7 +271,10 @@ function appFixture({ reducedMotion = false, phase = "map", clusters = [] } = {}
     requestAnimationFrame(callback) { frames.set(++frameId, callback); return frameId; },
     cancelAnimationFrame(id) { frames.delete(id); },
     setTimeout(callback) { timers.push(callback); return timers.length; }, clearTimeout() {},
-    mountActivityControls: () => ({ setActivity(activity) { activityStatuses.push(activity); }, autoFocusEnabled: () => true, setPlayback() {} }),
+    mountActivityControls: () => ({
+      setActivity(activity) { activityStatuses.push(activity); }, autoFocusEnabled: () => true, setPlayback() {},
+      setReducedMotion(reduced) { document.getElementById("activity-camera-status").textContent = String(reduced); },
+    }),
     mountGraphWatchControls: () => ({ setWatch() {} }),
     mountGraphCanvas: (_wrap, options) => {
       renderers.push(options);

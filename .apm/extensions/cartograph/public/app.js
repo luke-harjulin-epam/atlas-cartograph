@@ -225,6 +225,7 @@ function ensureMap() {
   if (map) return map;
   map = mountGraphCanvas($("graph-wrap"), {
     zoomControls: $("status-zoom"),
+    onReducedMotion: (reduced) => activityControls.setReducedMotion(reduced),
     autoFocus: activityControls.autoFocusEnabled(),
     onPlayback: (playback) => activityControls.setPlayback(playback),
     onFrameRate: (fps) => {

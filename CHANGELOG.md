@@ -4,6 +4,11 @@
 
 ### Changed
 
+- Prioritize collector/file-change status and a contextual setup shortcut in
+  Knowledge Activation. Preserve unsaved duration drafts until Save or Cancel,
+  improve helper-text contrast, show reduced-motion suppression, and clarify
+  playback pace. Keep setup task-oriented and move process mechanics into
+  provider diagnostics without removing permission or private-token warnings.
 - Move view navigation into a status-bar popup showing the selected view.
   Keep all available views reachable through bounded pages and keyboard controls.
   Match its two-line label and chevron in Knowledge Activation, with collector

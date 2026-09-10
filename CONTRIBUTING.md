@@ -88,6 +88,10 @@ independent of the activation disclosure, Escape restores focus, and private
 connection details load only for Collector setup and clear when it closes.
 Cover the View popup with large group lists, duplicate labels, live updates,
 keyboard navigation and selection; it must not change search or layer filters.
+For activation settings, cover duration drafts across blur, updates, toggle
+saves and failures; Cancel uses the latest confirmed value. Keep setup metadata
+provider-owned, render diagnostics literally, and verify reduced-motion status
+and normal-text contrast without starting a collector.
 Preserve visible keyboard focus and local-only assets. HTTP route changes must
 retain same-origin/custom-header checks and JSON-only mutation requests;
 page-loading changes must preserve mounted-root containment and Atlas identity.

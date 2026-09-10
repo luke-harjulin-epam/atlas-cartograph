@@ -212,6 +212,10 @@ activation section to open settings above the bar; zoom works independently.
 Collector setup and diagnostics are collapsed until needed. The panel shows queue depth, lag,
 current speed and aggregation. Actual file access and graph changes are never
 delayed; each displayed highlight gets the full configured lifetime.
+Connection status comes first, with a **Set up collector** shortcut when needed.
+Duration drafts survive live updates until Save or Cancel; checkboxes apply
+immediately. The inline ms value describes visual playback pace, not collection
+latency.
 
 **Follow activity** is on by default in Knowledge Activation.
 The camera gently pans, zooms and turns toward the active surface for displayed
@@ -219,7 +223,8 @@ accesses and node/relationship creation/deletion effects. Drag to rotate while
 automatic framing continues; your angle takes priority for five seconds after
 release. Manual zoom/reset/island navigation pause following for five seconds;
 selected nodes keep focus. Idle restoration preserves manual rotation. Turn the option
-off for manual framing. Reduced-motion preferences suppress automatic movement.
+off for manual framing. Reduced-motion preferences suppress automatic movement;
+the panel shows **Paused by reduced motion** without clearing the checkbox.
 Single-node close-in framing uses a faster zoom with coordinated translation;
 multi-node following, zoom-out, orbit and idle restoration keep their usual pace.
 The return pan follows zoom progress to keep the Atlas in view during zoom-out.

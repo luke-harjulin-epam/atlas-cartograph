@@ -42,6 +42,7 @@ const esloggerProvider = {
       "Leave that terminal open. Status becomes Live only after the collector observes a valid OS event. Use Control-C to stop it.",
     ],
     notice: "The command contains a private connection token. Do not share it.",
+    diagnostics: "Process lifecycle events maintain session ancestry.",
   },
 };
 const directProvider = {
@@ -187,6 +188,8 @@ function fakeElement(tag = "div") {
   return {
     style: {}, dataset: {}, open: false, value: "", checked: true, textContent: "",
     tagName: tag.toUpperCase(), children: [], replacements: 0,
+    setAttribute(name, value) { this[name] = String(value); },
+    getAttribute(name) { return this[name] ?? null; },
     focus() { document.activeElement = this; },
     set innerHTML(_value) { assert.fail("UI text must never be assigned as HTML"); },
     replaceChildren(...children) { this.children = children; this.replacements++; },
@@ -227,6 +230,102 @@ test("scope is displayed independently of provider setup metadata", (t) => {
   assert.match(get("activity-scope").textContent, /PID 400/);
   controls.setActivity({ ...activity, scope: { mode: "all", excludePids: [] } });
   assert.match(get("activity-scope").textContent, /all applications/);
+});
+
+test("duration drafts survive blur, snapshots, checkbox saves and panel close until Save or Cancel", async (t) => {
+  const requests = [];
+  t.mock.method(globalThis, "fetch", async (_path, options) => {
+    const body = JSON.parse(options.body);
+    requests.push(body);
+    return { ok: true, json: async () => ({ ...activity, ...body }) };
+  });
+  const { root, controls, get } = controlsFixture(t);
+  controls.setActivity(activity);
+  const duration = get("activity-duration");
+  duration.value = "12";
+  duration.fire("input");
+  get("activity-auto-focus").focus();
+  controls.setActivity({ ...activity, durationMs: 6000 });
+  assert.equal(duration.value, "12");
+  assert.equal(get("activity-duration-status").textContent, "Unsaved changes");
+  get("activity-enabled").checked = false;
+  await get("activity-enabled").fire("change");
+  assert.equal(requests[0].durationMs, 6000, "The checkbox must not save a duration draft");
+  assert.equal(duration.value, "12");
+  root.open = false;
+  root.fire("toggle");
+  assert.equal(duration.value, "12");
+  get("activity-cancel").fire("click");
+  assert.equal(duration.value, "6");
+  assert.equal(requests.length, 1, "Cancel is local only");
+  assert.equal(get("activity-duration-status").textContent, "Saved");
+  assert.equal(get("activity-save").disabled, true);
+  duration.value = "9";
+  duration.fire("input");
+  get("activity-form").fire("submit", { preventDefault() {} });
+  assert.equal(get("activity-duration-status").textContent, "Saving…");
+  await settle();
+  assert.equal(requests[1].durationMs, 9000);
+  assert.equal(duration.value, "9");
+  assert.equal(get("activity-duration-status").textContent, "Saved");
+});
+
+test("failed or invalid duration saves preserve the draft and expose a retryable error", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => ({ ok: false, status: 500, json: async () => ({ error: "Offline" }) }));
+  const { controls, get } = controlsFixture(t);
+  controls.setActivity(activity);
+  const duration = get("activity-duration");
+  duration.value = "13";
+  duration.fire("input");
+  get("activity-form").fire("submit", { preventDefault() {} });
+  await settle();
+  assert.equal(duration.value, "13");
+  assert.match(get("activity-config-error").textContent, /Offline/);
+  assert.equal(get("activity-duration-status").textContent, "Unsaved changes");
+  assert.equal(get("activity-save").disabled, false);
+  duration.value = "";
+  duration.fire("input");
+  get("activity-form").fire("submit", { preventDefault() {} });
+  assert.match(get("activity-config-error").textContent, /between 0.1 and 300/);
+  controls.setActivity({ ...activity, durationMs: 7000 });
+  assert.equal(duration.value, "");
+  get("activity-cancel").fire("click");
+  assert.equal(duration.value, "7");
+  assert.equal(get("activity-config-error").classList.contains("hidden"), true);
+});
+
+test("setup shortcut reflects collector health independently of highlighting and does not auto-connect", (t) => {
+  t.mock.method(globalThis, "fetch", () => assert.fail("Status updates must not fetch a private connection"));
+  const { root, controls, get } = controlsFixture(t);
+  root.open = true;
+  controls.setActivity(activity);
+  assert.equal(get("activity-connect").classList.contains("hidden"), false);
+  assert.equal(get("activity-setup").open, false);
+  get("activity-connect").fire("click");
+  assert.equal(get("activity-setup").open, true);
+  assert.equal(document.activeElement, get("activity-setup-summary"));
+  controls.setActivity({ ...activity, enabled: false, collector: { status: "live", message: "Receiving accesses." } });
+  assert.equal(get("activity-status").textContent, "Off");
+  assert.equal(get("activity-message").textContent, "Receiving accesses.");
+  assert.equal(get("activity-connect").classList.contains("hidden"), true);
+  controls.setActivity({ ...activity, collector: { status: "error", message: "Collector failed." } });
+  assert.equal(get("activity-connect").classList.contains("hidden"), false);
+  assert.equal(get("activity-message").textContent, "Collector failed.");
+  controls.setConnected(false);
+  assert.equal(get("activity-connect").classList.contains("hidden"), true);
+});
+
+test("reduced motion exposes suppression without changing the stored follow preference", (t) => {
+  const { controls, get } = controlsFixture(t);
+  controls.setReducedMotion(true);
+  assert.equal(controls.autoFocusEnabled(), true);
+  assert.match(get("activity-camera-status").textContent, /Paused by reduced motion/);
+  assert.equal(get("activity-camera-status").classList.contains("hidden"), false);
+  get("activity-auto-focus").checked = false;
+  get("activity-auto-focus").fire("change");
+  assert.equal(get("activity-camera-status").classList.contains("hidden"), true);
+  controls.setReducedMotion(false);
+  assert.equal(controls.autoFocusEnabled(), false);
 });
 
 test("Knowledge Activation camera toggle defaults on and stays independent of read monitoring", (t) => {
@@ -328,6 +427,7 @@ test("eslogger setup comes from provider metadata and is not rebuilt for heartbe
   assert.equal(get("activity-setup-title").textContent, esloggerProvider.setup.title);
   assert.equal(get("activity-setup-description").textContent, esloggerProvider.setup.description);
   assert.equal(get("activity-setup-notice").textContent, esloggerProvider.setup.notice);
+  assert.equal(get("activity-provider-diagnostics").textContent, esloggerProvider.setup.diagnostics);
   const list = get("activity-setup-steps");
   assert.deepEqual(list.children.map((item) => item.textContent), esloggerProvider.setup.steps);
   const items = list.children;
@@ -346,6 +446,8 @@ test("an alternative provider replaces all macOS and administrator setup prompts
   assert.equal(get("activity-provider-label").textContent, directProvider.label);
   assert.equal(get("activity-setup-title").textContent, directProvider.setup.title);
   assert.equal(get("activity-setup-description").textContent, directProvider.setup.description);
+  assert.equal(get("activity-provider-diagnostics").textContent, "");
+  assert.equal(get("activity-provider-diagnostics").classList.contains("hidden"), true);
   assert.deepEqual(get("activity-setup-steps").children.map((item) => item.textContent), directProvider.setup.steps);
   const visibleText = [...elements.values()].flatMap((element) => [element.textContent, ...element.children.map((child) => child.textContent)]).join(" ");
   assert.doesNotMatch(visibleText, /macOS|eslogger|sudo|root|Full Disk Access|Node\.js 22/i);
@@ -357,10 +459,10 @@ test("provider setup strings are literal text rather than executable HTML", (t) 
   controls.setActivity({
     ...activity, provider: {
       ...directProvider, label: payload,
-      setup: { title: payload, description: payload, steps: [payload, "<script>throw new Error('injected')</script>"], notice: payload },
+      setup: { title: payload, description: payload, steps: [payload, "<script>throw new Error('injected')</script>"], notice: payload, diagnostics: payload },
     },
   });
-  for (const id of ["activity-provider-label", "activity-setup-title", "activity-setup-description", "activity-setup-notice"]) {
+  for (const id of ["activity-provider-label", "activity-setup-title", "activity-setup-description", "activity-setup-notice", "activity-provider-diagnostics"]) {
     assert.equal(get(id).textContent, payload);
   }
   const steps = get("activity-setup-steps").children;
@@ -629,6 +731,17 @@ test("external status-bar zoom controls update the renderer and detach on destro
   map.destroy();
   elements.get("[data-zoom-in]").fire("click");
   assert.equal(elements.get("[data-zoom]").textContent, "100%");
+});
+
+test("renderer reports reduced motion through its existing lifecycle-managed listener", (t) => {
+  const changes = [];
+  const { map, preference } = lifecycleCanvasFixture(t, true, { onReducedMotion: value => changes.push(value) });
+  assert.deepEqual(changes, [true]);
+  preference.fire("change", { matches: false });
+  assert.deepEqual(changes, [true, false]);
+  map.destroy();
+  preference.fire("change", { matches: true });
+  assert.deepEqual(changes, [true, false]);
 });
 
 test("mounted camera follows read activity, expands for many nodes and restores after expiry", (t) => {
@@ -1006,6 +1119,7 @@ test("playback controls show pressure, lag, counts and honest loss status withou
   controls.setPlayback(stats);
   assert.equal(get("activity-playback-status").dataset.status, "overloaded");
   assert.match(get("activity-playback-status").textContent, /50 queued.*6.4s lag.*50 ms/);
+  assert.match(get("activity-playback-status").getAttribute("aria-label"), /Playback pace.*not collection latency/);
   assert.match(get("activity-playback-detail").textContent, /123 merged.*2 cancelled/);
   assert.match(get("activity-playback-detail").textContent, /Capture loss is unknown/);
   assert.equal(get("activity-repeat-counts").children[0].textContent, "<unsafe>: 100 observations");

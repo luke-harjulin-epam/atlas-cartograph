@@ -383,13 +383,25 @@ the bar. Zoom buttons do not open or close settings. Escape or the cross closes
 settings and returns focus to the status section.
 
 Use **Follow activity**, **Highlight file access**, and **Highlight duration**
-for everyday controls. Read collector and file-change status remain separate.
+for everyday controls. Read collector and file-change status appear first and
+remain separate, even when highlighting is off. **Set up collector** opens the
+setup instructions when the collector is waiting, disconnected or reporting an
+error. This shortcut is hidden while the canvas connection itself is lost.
 Expand **Collector setup** for provider instructions and the private connection
 command; opening settings alone does not fetch connection details or start a
 collector. Closing setup clears the command. **Diagnostics** contains process
-scope, playback counters, repeated observations and timing details.
+scope, provider process mechanics, playback counters, repeated observations and
+timing details. Setup keeps authorization and private-token warnings visible.
 Settings belong to the current canvas; a new canvas defaults to five seconds.
 Valid durations are 0.1 to 300 seconds.
+
+Checkboxes apply immediately. Duration edits show **Unsaved changes** until you
+choose **Save** or **Cancel**. A draft survives live updates, moving focus,
+checkbox changes and closing/reopening settings; a failed save keeps it for
+retry. Cancel restores the latest confirmed duration without sending a request.
+Drafts are local to the current page and do not survive a browser reload.
+The inline **ms** value is playback pace between displayed activations, not
+collection latency; its tooltip and accessible description explain the difference.
 
 **Follow activity** is on by default. The camera smoothly
 pans and zooms to currently displayed read highlights, new/deleted nodes, and
@@ -420,7 +432,9 @@ angle replaces the original angle for that restoration.
 During the return, pan follows zoom progress so the Atlas stays in view instead
 of drifting away while zoom unwinds. The zoom-out duration is unchanged.
 Uncheck the option to stop following without restoring the old zoom.
-Reduced-motion preferences suppress automatic camera movement.
+Reduced-motion preferences suppress automatic camera movement. When following
+is enabled, **Paused by reduced motion** explains the suppression without
+clearing your preference.
 This checkbox belongs to the current browser page and resets to on after a
 page reload. It remains independent of read highlighting: filesystem changes
 can frame themselves even without a running read collector.

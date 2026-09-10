@@ -186,6 +186,10 @@
   labels, stable focus across snapshots and local-only camera selection.
   Keep everyday settings concise, setup and diagnostics in disclosures, and
   private connection fetching scoped to the open Collector setup disclosure.
+  Show collector health separately from the highlight toggle; keep dirty
+  duration input through snapshots and failed saves until Save or Cancel.
+  Report reduced-motion suppression without changing the follow preference,
+  using the renderer's existing media listener.
   Fit displayed activations and lifecycle endpoints/ghosts, never raw queued
   reads. Use padded, capped zoom and at most one bounds fit per 200 ms.
   Keep pan/zoom following during manual orbit; yield only automatic orientation
