@@ -224,6 +224,7 @@ function renderAtlasAdd() {
 function ensureMap() {
   if (map) return map;
   map = mountGraphCanvas($("graph-wrap"), {
+    zoomControls: $("status-zoom"),
     autoFocus: activityControls.autoFocusEnabled(),
     onPlayback: (playback) => activityControls.setPlayback(playback),
     onFrameRate: (fps) => {

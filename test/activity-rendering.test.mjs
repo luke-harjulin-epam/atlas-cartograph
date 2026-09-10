@@ -187,6 +187,7 @@ function fakeElement(tag = "div") {
   return {
     style: {}, dataset: {}, open: false, value: "", checked: true, textContent: "",
     tagName: tag.toUpperCase(), children: [], replacements: 0,
+    focus() { document.activeElement = this; },
     set innerHTML(_value) { assert.fail("UI text must never be assigned as HTML"); },
     replaceChildren(...children) { this.children = children; this.replacements++; },
     classList: {
@@ -243,13 +244,13 @@ test("Knowledge Activation camera toggle defaults on and stays independent of re
   get("activity-auto-focus").fire("change");
   assert.deepEqual(changes, [false, true]);
   const html = readFileSync(new URL("../.apm/extensions/cartograph/public/index.html", import.meta.url), "utf8");
-  assert.match(html, /<summary>Knowledge Activation /);
-  const summary = html.match(/<summary>([\s\S]*?)<\/summary>/)[1].replace(/<[^>]*>/g, "");
+  assert.match(html, /id="activity-summary"[^>]*>Knowledge Activation /);
+  const summary = html.match(/<summary[^>]*>([\s\S]*?)<\/summary>/)[1].replace(/<[^>]*>/g, "");
   assert.match(summary, /Changes idle\s+400 ms/);
   assert.match(html, /id="activity-auto-focus"[^>]*checked/);
 });
 
-test("controls fetch secrets only when expanded, clear them on close, and surface toggle failures", async (t) => {
+test("controls fetch secrets only for Collector setup, clear them on close, and surface toggle failures", async (t) => {
   const calls = [];
   t.mock.method(globalThis, "fetch", async (path) => {
     calls.push(path);
@@ -261,16 +262,52 @@ test("controls fetch secrets only when expanded, clear them on close, and surfac
   root.open = true;
   root.fire("toggle");
   await settle();
+  assert.equal(calls.length, 0, "Opening settings must not fetch private connection details");
+  root.querySelector("#activity-setup").open = true;
+  root.querySelector("#activity-setup").fire("toggle");
+  await settle();
   assert.equal(calls.length, 1);
   assert.equal(root.querySelector("#activity-command").textContent, "private-command");
   root.open = false;
   root.fire("toggle");
   assert.equal(root.querySelector("#activity-command").textContent, "");
+  assert.equal(root.querySelector("#activity-setup").open, false);
   root.querySelector("#activity-enabled").checked = false;
   await root.querySelector("#activity-enabled").fire("change");
   assert.equal(root.querySelector("#activity-enabled").checked, true);
   assert.match(root.querySelector("#activity-config-error").textContent, /not saved.*No connection/);
   assert.equal(received.length, 0);
+});
+
+test("closing setup aborts pending secrets, and Escape or Close restores the status trigger", async (t) => {
+  let respond;
+  let signal;
+  t.mock.method(globalThis, "fetch", (_path, options) => {
+    signal = options.signal;
+    return new Promise(resolve => { respond = resolve; });
+  });
+  const { root, get } = controlsFixture(t);
+  root.open = true;
+  get("activity-setup").open = true;
+  get("activity-setup").fire("toggle");
+  get("activity-setup").open = false;
+  get("activity-setup").fire("toggle");
+  assert.equal(signal.aborted, true);
+  respond({ ok: true, json: async () => ({ command: "late-private-command" }) });
+  await settle();
+  assert.equal(get("activity-command").textContent, "");
+  assert.equal(root.open, true);
+  let prevented = false;
+  root.fire("keydown", { key: "Escape", preventDefault() { prevented = true; }, stopPropagation() {} });
+  assert.equal(prevented, true);
+  assert.equal(root.open, false);
+  assert.equal(document.activeElement, get("activity-summary"));
+  root.open = true;
+  get("activity-setup").open = true;
+  get("activity-close").fire("click");
+  assert.equal(root.open, false);
+  assert.equal(get("activity-setup").open, false);
+  assert.equal(document.activeElement, get("activity-summary"));
 });
 
 test("provider setup has a generic fallback and no built-in macOS privilege prompts", (t) => {
@@ -344,6 +381,8 @@ test("null commands intentionally support direct reporting without exposing conn
   assert.equal(calls.length, 0);
   root.open = true;
   root.fire("toggle");
+  get("activity-setup").open = true;
+  get("activity-setup").fire("toggle");
   await settle();
   assert.equal(calls.length, 1);
   assert.equal(get("activity-command").textContent, "");
@@ -362,9 +401,10 @@ test("missing, empty, and invalid non-null commands remain visible errors", asyn
   t.mock.method(globalThis, "fetch", async () => ({ ok: true, json: async () => response }));
   const { root, get } = controlsFixture(t);
   root.open = true;
+  get("activity-setup").open = true;
   for (const command of [undefined, "", "  ", false, 42, {}]) {
     response = { providerId: directProvider.id, command };
-    root.fire("toggle");
+    get("activity-setup").fire("toggle");
     await settle();
     assert.match(get("activity-connection-error").textContent, /valid activity command/);
     assert.equal(get("activity-connection-error").classList.contains("hidden"), false);
@@ -568,6 +608,28 @@ function lifecycleCanvasFixture(t, reduce = true, options = {}) {
   });
   return { map, frame, pointer, selected, preference, zoom, wrap, clock: (value) => { now = value; } };
 }
+
+test("external status-bar zoom controls update the renderer and detach on destroy", (t) => {
+  const elements = new Map(["[data-zoom]", "[data-zoom-in]", "[data-zoom-out]", "[data-zoom-reset]"].map(id => [id, fakeElement()]));
+  const zoomControls = { querySelector: selector => elements.get(selector) };
+  const { map, frame, zoom } = lifecycleCanvasFixture(t, false, { zoomControls });
+  map.setGraph(nodes, graphEdges);
+  frame();
+  assert.equal(elements.get("[data-zoom]").textContent, "100%");
+  assert.equal(zoom.textContent, "", "Controls no longer need to live inside the graph pointer surface");
+  elements.get("[data-zoom-in]").fire("click");
+  assert.equal(elements.get("[data-zoom]").textContent, "125%");
+  elements.get("[data-zoom-out]").fire("click");
+  assert.equal(elements.get("[data-zoom]").textContent, "100%");
+  elements.get("[data-zoom-in]").fire("click");
+  elements.get("[data-zoom-reset]").fire("click");
+  const began = performance.now();
+  for (let ms = 0; ms <= 3000; ms += 20) frame(began + ms);
+  assert.equal(elements.get("[data-zoom]").textContent, "100%");
+  map.destroy();
+  elements.get("[data-zoom-in]").fire("click");
+  assert.equal(elements.get("[data-zoom]").textContent, "100%");
+});
 
 test("mounted camera follows read activity, expands for many nodes and restores after expiry", (t) => {
   const { map, frame, clock, zoom } = lifecycleCanvasFixture(t, false);
@@ -944,7 +1006,7 @@ test("playback controls show pressure, lag, counts and honest loss status withou
   controls.setPlayback(stats);
   assert.equal(get("activity-playback-status").dataset.status, "overloaded");
   assert.match(get("activity-playback-status").textContent, /50 queued.*6.4s lag.*50 ms/);
-  assert.match(get("activity-playback-detail").textContent, /123 observations merged; 2 pending observations cancelled/);
+  assert.match(get("activity-playback-detail").textContent, /123 merged.*2 cancelled/);
   assert.match(get("activity-playback-detail").textContent, /Capture loss is unknown/);
   assert.equal(get("activity-repeat-counts").children[0].textContent, "<unsafe>: 100 observations");
   assert.equal(get("activity-repeat-counts").children[1].textContent, "3 traversals; latest direction: A -> B");

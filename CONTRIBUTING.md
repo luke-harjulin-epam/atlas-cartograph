@@ -83,6 +83,9 @@ package; do not add an SPDX license without an explicit licensing decision.
 
 For renderer changes, inspect both WebGL and Canvas 2D paths, reduced-motion
 behavior, selection, and the return to baseline after activity expires.
+Exercise the floating status bar beside chat and at narrow widths: zoom stays
+independent of the activation disclosure, Escape restores focus, and private
+connection details load only for Collector setup and clear when it closes.
 Preserve visible keyboard focus and local-only assets. HTTP route changes must
 retain same-origin/custom-header checks and JSON-only mutation requests;
 page-loading changes must preserve mounted-root containment and Atlas identity.

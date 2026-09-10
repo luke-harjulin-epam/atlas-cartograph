@@ -369,12 +369,21 @@ that command nor subsequent refreshes.
 
 ## Activity controls
 
-Open **Knowledge Activation** in the map to see collector status, change the
-highlight duration in seconds, pause highlighting, and get the collector
-command. Settings belong to the current canvas; a new canvas defaults to five
-seconds. Valid durations are 0.1 to 300 seconds.
+The floating bottom bar keeps **Knowledge Activation** status on the left and
+zoom controls on the right. Click the activation section to open settings above
+the bar. Zoom buttons do not open or close settings. Escape or the cross closes
+settings and returns focus to the status section.
 
-**Automatically frame changing nodes** is on by default. The camera smoothly
+Use **Follow activity**, **Highlight file access**, and **Highlight duration**
+for everyday controls. Read collector and file-change status remain separate.
+Expand **Collector setup** for provider instructions and the private connection
+command; opening settings alone does not fetch connection details or start a
+collector. Closing setup clears the command. **Diagnostics** contains process
+scope, playback counters, repeated observations and timing details.
+Settings belong to the current canvas; a new canvas defaults to five seconds.
+Valid durations are 0.1 to 300 seconds.
+
+**Follow activity** is on by default. The camera smoothly
 pans and zooms to currently displayed read highlights, new/deleted nodes, and
 both ends of new/deleted relationships. It fits the whole changing set, rather
 than chasing individual events under load. Search matches and visible layers

@@ -4,6 +4,10 @@
 
 ### Changed
 
+- Combine Knowledge Activation and zoom in a floating bottom status bar,
+  removing the click-to-focus hint. Open concise activation settings above
+  the bar, with separate Collector setup and Diagnostics disclosures.
+  Fetch private connection details only while Collector setup is open.
 - Fill the available toolbar width with search and show Options in a
   full-height left-side overlay with an Atlas Cartograph logo/header,
   independent scrolling and Escape/Close.

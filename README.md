@@ -204,11 +204,14 @@ returns after the last highlight expires.
 
 Visual activations normally stay **400 ms apart**, smoothly accelerating toward
 **200, 100, or 50 ms** as the queue grows or ages. Repeated observations share a
-file's queue slot and display a count. The Knowledge Activation panel shows queue depth, lag,
+file's queue slot and display a count. The floating bottom status bar shows
+Knowledge Activation on the left and zoom controls on the right. Click its
+activation section to open settings above the bar; zoom works independently.
+Collector setup and diagnostics are collapsed until needed. The panel shows queue depth, lag,
 current speed and aggregation. Actual file access and graph changes are never
 delayed; each displayed highlight gets the full configured lifetime.
 
-**Automatically frame changing nodes** is on by default in Knowledge Activation.
+**Follow activity** is on by default in Knowledge Activation.
 The camera gently pans, zooms and turns toward the active surface for displayed
 accesses and node/relationship creation/deletion effects. Drag to rotate while
 automatic framing continues; your angle takes priority for five seconds after

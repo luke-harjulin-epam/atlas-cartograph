@@ -18,6 +18,22 @@ const app = readFileSync(new URL("../.apm/extensions/cartograph/public/app.js", 
 const all = Object.fromEntries(["experiences", "decisions", "work", "indexes", "other", "relations", "sources"].map((key) => [key, true]));
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
+test("floating status bar groups activation and independent zoom outside the graph pointer surface", () => {
+  const { document, renderers } = appFixture();
+  const bar = document.getElementById("status-bar");
+  const activation = document.getElementById("activity-controls");
+  const zoom = document.getElementById("status-zoom");
+  assert.equal(activation.parentElement, bar);
+  assert.equal(zoom.parentElement, bar);
+  assert.equal(renderers[0].zoomControls, zoom);
+  assert.equal(document.getElementById("graph-wrap").querySelector("[data-zoom-in]"), null);
+  assert.equal(document.querySelector(".hint"), null);
+  assert.equal(document.querySelectorAll("[data-zoom-in]").length, 1);
+  assert.equal(document.getElementById("activity-setup").tagName, "DETAILS");
+  assert.equal(document.getElementById("activity-setup").getAttribute("open"), null);
+  assert.equal(document.getElementById("activity-summary").getAttribute("aria-controls"), "activity-settings");
+});
+
 test("build badge shows version and short SHA, exposes full provenance, and rejects stale state", () => {
   const { document, apply } = appFixture();
   const badge = document.getElementById("build-info");

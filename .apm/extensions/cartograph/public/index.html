@@ -46,15 +46,7 @@
       </section>
 
       <section id="phase-map" class="phase hidden map">
-        <div id="graph-wrap">
-          <p class="hint">Click once: focus · again: read</p>
-          <div class="zoom-bar">
-            <button type="button" data-zoom-out aria-label="Zoom out">−</button>
-            <span data-zoom>100%</span>
-            <button type="button" data-zoom-in aria-label="Zoom in">+</button>
-            <button type="button" data-zoom-reset aria-label="Reset view">⌂</button>
-          </div>
-        </div>
+        <div id="graph-wrap"></div>
         <div class="toolbar">
           <button id="toggle-panel" class="icon-btn" type="button" aria-label="Show options" title="Atlas options" aria-expanded="false" aria-controls="panel">
             <svg width="24" height="24" viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false">
@@ -94,31 +86,39 @@
           </div>
           <p id="node-error" class="danger hidden" role="alert"></p>
         </section>
+        <div class="status-dock">
+          <nav id="islands" class="islands" aria-label="Island navigation"></nav>
+          <div id="status-bar" class="status-bar" role="group" aria-label="Map status and zoom">
         <details id="activity-controls" class="activity-controls">
-          <summary>Knowledge Activation <span id="activity-status" role="status" aria-live="polite">Waiting</span> · <span id="graph-watch-status" role="status" aria-live="polite">Changes idle</span> <span id="activity-playback-status" aria-label="Knowledge activation playback queue">400 ms</span></summary>
-          <div class="activity-body">
-            <label class="activity-toggle"><input id="activity-auto-focus" type="checkbox" checked aria-describedby="activity-camera-help" /> Automatically frame changing nodes</label>
-            <p id="activity-camera-help" class="subtle">Gently frame active reads and node/relationship changes, turning their surface toward you. Drag to rotate while automatic framing continues; your angle takes priority for 5 seconds after release. Manual zoom, reset and island navigation pause following for 5 seconds. Selected nodes keep focus. Returns to the previous framing after activity, preserving your manual angle. Disabled by reduced-motion preferences. Resets to on when this page reloads.</p>
-            <h3>Filesystem changes</h3>
-            <p id="graph-watch-message" class="muted"></p>
-            <p id="graph-watch-help" class="subtle"></p>
-            <h3>Read activity</h3>
-            <p id="activity-message" class="muted"></p>
-            <p id="activity-scope" class="subtle"></p>
-            <p id="activity-spacing" class="subtle"></p>
-            <p id="activity-playback-detail" class="subtle"></p>
-            <ul id="activity-repeat-counts" class="subtle"></ul>
-            <p id="activity-repeat-more" class="subtle"></p>
-            <label class="activity-toggle"><input id="activity-enabled" type="checkbox" checked /> Highlight external file access</label>
+          <summary id="activity-summary" aria-controls="activity-settings">Knowledge Activation <span id="activity-status" role="status" aria-live="polite">Waiting</span> · <span id="graph-watch-status" role="status" aria-live="polite">Changes idle</span> <span id="activity-playback-status" aria-label="Knowledge activation playback queue">400 ms</span></summary>
+          <div id="activity-settings" class="activity-body">
+            <div class="activity-settings-head">
+              <h2>Knowledge Activation</h2>
+              <button id="activity-close" class="icon-btn" type="button" aria-label="Close activation settings" title="Close activation settings">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+              </button>
+            </div>
+            <label class="activity-toggle"><input id="activity-auto-focus" type="checkbox" checked aria-describedby="activity-camera-help" /> Follow activity</label>
+            <p id="activity-camera-help" class="subtle">Frame active nodes. Manual navigation pauses following; reduced motion disables it.</p>
+            <label class="activity-toggle"><input id="activity-enabled" type="checkbox" checked /> Highlight file access</label>
             <form id="activity-form">
-              <label for="activity-duration">Highlight duration (seconds)</label>
+              <label for="activity-duration">Highlight duration</label>
               <div class="activity-duration-row">
                 <input id="activity-duration" type="number" min="0.1" max="300" step="any" value="5" required aria-describedby="activity-duration-help" />
+                <span>seconds</span>
                 <button id="activity-save" class="btn btn-ghost" type="submit">Save</button>
               </div>
-              <p id="activity-duration-help" class="subtle">0.1–300 seconds. Each file has its own expiry.</p>
+              <p id="activity-duration-help" class="subtle">0.1–300 seconds per node.</p>
             </form>
             <p id="activity-config-error" class="danger hidden" role="alert"></p>
+            <div class="activity-health">
+              <h3>Read collector</h3>
+              <p id="activity-message" class="muted"></p>
+              <h3>File changes</h3>
+              <p id="graph-watch-message" class="muted"></p>
+            </div>
+            <details id="activity-setup" class="activity-disclosure">
+              <summary>Collector setup</summary>
             <h3 id="activity-setup-title">Activity provider setup</h3>
             <p id="activity-provider-label" class="subtle hidden"></p>
             <p id="activity-setup-description" class="muted">Waiting for provider setup information.</p>
@@ -128,9 +128,26 @@
             <p id="activity-connection-status" class="muted hidden" role="status"></p>
             <button id="activity-retry" class="btn btn-ghost" type="button">Load connection</button>
             <p id="activity-connection-error" class="danger hidden" role="alert"></p>
+            </details>
+            <details class="activity-disclosure">
+              <summary>Diagnostics</summary>
+              <p id="activity-scope" class="subtle"></p>
+              <p id="activity-playback-detail" class="subtle"></p>
+              <ul id="activity-repeat-counts" class="subtle"></ul>
+              <p id="activity-repeat-more" class="subtle"></p>
+              <p id="activity-spacing" class="subtle"></p>
+              <p id="graph-watch-help" class="subtle"></p>
+            </details>
           </div>
         </details>
-        <nav id="islands" class="islands" aria-label="Island navigation"></nav>
+            <div id="status-zoom" class="zoom-bar" role="group" aria-label="Zoom controls">
+              <button type="button" data-zoom-out aria-label="Zoom out">−</button>
+              <span data-zoom>100%</span>
+              <button type="button" data-zoom-in aria-label="Zoom in">+</button>
+              <button type="button" data-zoom-reset aria-label="Reset view">⌂</button>
+            </div>
+          </div>
+        </div>
         <aside id="graph-chat" class="graph-chat" aria-labelledby="chat-kicker" aria-hidden="true" inert>
           <div id="chat-panel" class="chat-panel">
             <div class="chat-head">

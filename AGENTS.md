@@ -181,6 +181,9 @@
 - Activity must remain scoped to open Atlas files, exclude viewer reads, expire
   independently per node, and preserve selection/search/layer state.
 - Keep the Knowledge Activation camera option client-side and default-on.
+  Put its status in the floating bottom bar with independent zoom controls.
+  Keep everyday settings concise, setup and diagnostics in disclosures, and
+  private connection fetching scoped to the open Collector setup disclosure.
   Fit displayed activations and lifecycle endpoints/ghosts, never raw queued
   reads. Use padded, capped zoom and at most one bounds fit per 200 ms.
   Keep pan/zoom following during manual orbit; yield only automatic orientation

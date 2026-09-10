@@ -533,7 +533,8 @@ export function mountGraphCanvas(wrap, options) {
   };
   motionPreference.addEventListener("change", onMotionChange);
 
-  const zoomEl = wrap.querySelector("[data-zoom]");
+  const zoomControls = options.zoomControls ?? wrap;
+  const zoomEl = zoomControls.querySelector("[data-zoom]");
   const syncZoom = () => {
     const text = `${Math.round(s.cam.k * 100)}%`;
     if (zoomEl && zoomEl.textContent !== text) zoomEl.textContent = text;
@@ -909,7 +910,7 @@ export function mountGraphCanvas(wrap, options) {
     ["[data-zoom-in]", () => { pauseAutoFocus(); applyZoom(s, s.cam.k * 1.25, s.w / 2, s.h / 2); syncZoom(); }],
     ["[data-zoom-out]", () => { pauseAutoFocus(); applyZoom(s, s.cam.k / 1.25, s.w / 2, s.h / 2); syncZoom(); }],
     ["[data-zoom-reset]", () => { flyTo(null); syncZoom(); }],
-  ].map(([selector, handler]) => [wrap.querySelector(selector), handler]);
+  ].map(([selector, handler]) => [zoomControls.querySelector(selector), handler]);
   for (const [button, handler] of zoomHandlers) button?.addEventListener("click", handler);
 
   return {

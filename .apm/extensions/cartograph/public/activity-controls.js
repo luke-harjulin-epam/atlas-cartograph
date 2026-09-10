@@ -8,9 +8,9 @@ export function playbackStatus(playback) {
   return {
     status: pending > 40 || lag >= 5 ? "overloaded" : pending > 5 || lag >= 2 ? "catching-up" : "normal",
     summary: pending ? `${pending} queued · ${lag.toFixed(1)}s lag · ${spacing} ms` : `${spacing} ms`,
-    detail: `${pending} pending; oldest waiting ${lag.toFixed(1)}s; ${spacing} ms between activations. ` +
-      `${playback?.aggregatedCount ?? 0} observations merged; ${playback?.cancelledCount ?? 0} pending observations cancelled by graph changes. ` +
-      "Counts cover received observations, not individual read syscalls. Capture loss is unknown; collector errors appear above.",
+    detail: `${pending} queued · ${lag.toFixed(1)}s lag · ${spacing} ms spacing. ` +
+      `${playback?.aggregatedCount ?? 0} merged · ${playback?.cancelledCount ?? 0} cancelled. ` +
+      "Received observations, not read syscalls. Capture loss is unknown; collector errors are shown separately.",
   };
 }
 
@@ -21,7 +21,7 @@ export function activityStatus(activity, connected = true) {
   const labels = { live: "Live", waiting: "Waiting", disconnected: "Disconnected", error: "Error", unsupported: "Unsupported", paused: "Off" };
   return {
     status, label: labels[status] || "Waiting",
-    message: activity?.collector?.message || "Waiting for activity from the selected provider. Follow its setup instructions below.",
+    message: activity?.collector?.message || "Waiting for a collector. Open Collector setup to connect.",
   };
 }
 
@@ -66,7 +66,8 @@ export function mountActivityControls(root, onActivity, onAutoFocus = () => {}) 
   const connectionStatus = get("activity-connection-status");
   const command = get("activity-command");
   const retry = get("activity-retry");
-  get("activity-spacing").textContent = `Adaptive playback: 1–5 queued = 400 ms, 6–15 = 200 ms, 16–40 = 100 ms, 41+ = ${MIN_ACTIVITY_SPACING_MS} ms. Older queues also accelerate. Speed changes smoothly; highlights keep their full lifetime. Repeated observations merge; uncertain path segments are not drawn. File reads and graph changes are not delayed.`;
+  const setupPanel = get("activity-setup");
+  get("activity-spacing").textContent = `Playback adapts from ${ACTIVITY_SPACING_MS} to ${MIN_ACTIVITY_SPACING_MS} ms as the queue grows. Only animation is paced; file reads are never delayed.`;
   let activity;
   let connected = true;
   let saving = false;
@@ -159,7 +160,7 @@ export function mountActivityControls(root, onActivity, onAutoFocus = () => {}) 
   }
 
   async function loadConnection() {
-    if (!root.open) return;
+    if (!root.open || !setupPanel.open) return;
     connectionRequest?.abort();
     const request = new AbortController();
     connectionRequest = request;
@@ -172,7 +173,7 @@ export function mountActivityControls(root, onActivity, onAutoFocus = () => {}) 
     error(connectionError);
     try {
       const result = await requestActivity("/api/activity/connection", { signal: request.signal });
-      if (request.signal.aborted || !root.open) return;
+      if (request.signal.aborted || !root.open || !setupPanel.open) return;
       if (result.command === null) {
         connectionStatus.textContent = "Connection ready. This provider reports activity directly; follow its setup instructions. No terminal command is required.";
         connectionStatus.classList.remove("hidden");
@@ -202,15 +203,36 @@ export function mountActivityControls(root, onActivity, onAutoFocus = () => {}) 
       error(configError, err.message);
     }
   });
-  root.addEventListener("toggle", () => {
-    if (root.open) loadConnection();
-    else {
-      connectionRequest?.abort();
-      command.textContent = "";
-      get("activity-command-wrap").classList.add("hidden");
-      connectionStatus.textContent = "";
-      connectionStatus.classList.add("hidden");
+  function clearConnection() {
+    connectionRequest?.abort();
+    command.textContent = "";
+    get("activity-command-wrap").classList.add("hidden");
+    connectionStatus.textContent = "";
+    connectionStatus.classList.add("hidden");
+  }
+  function close() {
+    root.open = false;
+    setupPanel.open = false;
+    clearConnection();
+    get("activity-summary").focus({ preventScroll: true });
+  }
+  root.addEventListener("toggle", (event) => {
+    if (event.target && event.target !== root) return;
+    if (!root.open) {
+      setupPanel.open = false;
+      clearConnection();
     }
+  });
+  setupPanel.addEventListener("toggle", () => {
+    if (setupPanel.open) loadConnection();
+    else clearConnection();
+  });
+  get("activity-close").addEventListener("click", close);
+  root.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    event.preventDefault();
+    event.stopPropagation();
+    close();
   });
   retry.addEventListener("click", loadConnection);
   render();

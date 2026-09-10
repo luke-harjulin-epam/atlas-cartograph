@@ -166,14 +166,17 @@ that HTTP server; host file tools run in the Copilot session and can appear as
 ordinary Atlas opens.
 
 Transport is loopback HTTP, bound to `127.0.0.1`. Every collector request uses a
-random per-canvas bearer token. The connection command is fetched only on
-request by the same-origin canvas UI; it is absent from normal graph/SSE
+random per-canvas bearer token. The connection command is fetched only when
+**Collector setup** is expanded inside the floating bar's **Knowledge Activation**
+settings (or its connection is refreshed). Closing setup clears the displayed
+command. It is absent from normal graph/SSE
 snapshots. Treat the command as a temporary secret. The token is not stored
 in source control or written to a telemetry file.
 
 ## Troubleshooting
 
-**Waiting:** run the command from activity controls. Live status requires
+**Waiting:** open **Knowledge Activation → Collector setup** and run its command.
+Live status requires
 evidence that the system logger is emitting valid file-access events.
 Fork/exec/exit records update ancestry but do not make monitoring Live.
 A lifecycle-only stream ending without a file-access observation reports an error.
