@@ -56,7 +56,14 @@
           </div>
         </div>
         <div class="toolbar">
-          <button id="toggle-panel" class="icon-btn" type="button" aria-label="Show options" aria-expanded="false" aria-controls="panel">☰</button>
+          <button id="toggle-panel" class="icon-btn" type="button" aria-label="Show options" title="Atlas options" aria-expanded="false" aria-controls="panel">
+            <svg width="24" height="24" viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false">
+              <path d="m7 23 9-17 9 17M10 18h12M7 23h18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="16" cy="6" r="3" fill="currentColor"/>
+              <circle cx="7" cy="23" r="3" fill="currentColor"/>
+              <circle cx="25" cy="23" r="3" fill="currentColor"/>
+            </svg>
+          </button>
           <div class="search-field">
             <input id="search" type="search" autocomplete="off" placeholder="Search stars" aria-label="Search nodes" aria-controls="node-browser" aria-describedby="node-browser-help search-error" />
           </div>
