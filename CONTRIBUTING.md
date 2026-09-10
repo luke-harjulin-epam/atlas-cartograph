@@ -121,8 +121,10 @@ foreign owners/instances, timeout and close cleanup with
 `node --test test/session-chat.test.mjs test/native-extension.test.mjs test/frontend-interactions.test.mjs`.
 The native harness exercises callbacks in both canonical and copied deployments;
 also verify an actual host question/read/reply cycle in the canvas drawer.
-Ship `atlas/atlas-chat.md` inside the runtime bundle, not as an installed-user
-patch. Markdown blocks must work without blank lines around headings or quotes.
+Ship `atlas/cartograph-chat.md` inside the runtime bundle, not as an installed-user
+patch. Keep chat prompts limited to activation-card data; progress, retrieval
+and delivery instructions belong in that file. Cover escaped card values and
+the deployed activation path. Markdown blocks must work without blank lines around headings or quotes.
 Relative-link cases must use duplicate basenames and confirm that graph edges
 and preview navigation resolve the same source-directory target.
 Use fake clocks to cover normal 400 ms spacing and adaptive 200/100/50 ms targets,

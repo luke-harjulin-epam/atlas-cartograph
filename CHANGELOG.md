@@ -4,6 +4,9 @@
 
 ### Changed
 
+- Rename the bundled answering activation to `cartograph-chat` and send only
+  its compact activation card. Keep progress, retrieval and reply-delivery
+  instructions in the bundled file instead of repeating them in every question.
 - Show brief request-specific chat progress labels as the agent searches,
   reads pages and prepares its answer. Replace each stage in place, keep the
   original timeout, and retain plain Working status for older callers.
@@ -26,7 +29,7 @@
   callbacks instead of displaying SDK message IDs. Reject wrong-session,
   conflicting and stale replies; expire unanswered requests and release timers.
 - Label native replies **Copilot** and show queued/working status with animated
-  dots that respect reduced motion. Ship the `atlas-chat` answering activation
+  dots that respect reduced motion. Ship the `cartograph-chat` answering activation
   with the runtime so the agent sends its answer into the originating drawer.
 
 ## 0.3.0 - 2026-09-09

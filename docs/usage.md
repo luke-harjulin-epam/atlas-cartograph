@@ -139,8 +139,10 @@ status notice; graph selection and playback are retained.
 
 The map chat button talks to the same Copilot session that opened the canvas.
 Replies are labelled **Copilot**, not a session identifier. Cartograph sends
-your question, open Atlas identities, selection, query and request routing,
-without page bodies. Its bundled `atlas/atlas-chat.md` activation directs the
+only a compact `cartograph-chat` activation card: the bundled activation path,
+your question, open Atlas identities/roots, selection, query and request routing.
+No page bodies or repeated answering instructions are included.
+The bundled `atlas/cartograph-chat.md` activation directs the
 agent to read mounted Markdown through session file tools, cite sources, and
 send the answer back to this drawer with the `update_chat` canvas action.
 

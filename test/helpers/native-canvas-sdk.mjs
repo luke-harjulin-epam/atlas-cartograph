@@ -29,7 +29,9 @@ export async function joinSession(config) {
     sessionId: "observatory-session",
     send: async ({ prompt }) => {
       assert.equal(typeof prompt, "string");
-      assert.match(prompt, /^Cartograph atlas-chat request/);
+      assert.match(prompt, /^```text\nactivation: "cartograph-chat"\nactivation_path: /);
+      assert.ok(prompt.endsWith("\n```"));
+      assert.doesNotMatch(prompt, /First report status|A transcript answer or task_complete/);
       registration.sent.push(prompt);
       return "11111111-2222-4333-8444-555555555555";
     },

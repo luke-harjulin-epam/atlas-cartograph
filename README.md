@@ -109,8 +109,10 @@ The viewer uses local fallback fonts; it does not fetch Google Fonts or other
 third-party UI assets.
 Native canvas chat asks the same Copilot session, shows queued/working status,
 and receives **Copilot** answers back in the drawer through request-scoped
-callbacks. Its bundled `atlas-chat` activation reads mounted pages and cites
-sources; standalone development mode remains labelled local search.
+callbacks. Each question sends only a compact **cartograph-chat** activation
+card; the bundled `atlas/cartograph-chat.md` owns the instructions for reading
+mounted pages, citing sources and delivering replies. Standalone development
+mode remains labelled local search.
 While it works, brief labels such as **Searching the Atlas**, **Reading pages**
 and **Preparing answer** explain the current stage beside the animated dots.
 See [chat usage](docs/usage.md#chat-with-this-atlas) for timeouts and delivery.

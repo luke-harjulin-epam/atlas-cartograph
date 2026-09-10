@@ -125,9 +125,9 @@ try {
   assert.equal(registration.sent.length, 2);
   const prompt = registration.sent[0];
   assert.ok(prompt.includes(JSON.stringify({ instanceId: ctx.instanceId, requestId: firstChat })));
-  assert.ok(prompt.includes(JSON.stringify(join(runtime, "atlas", "atlas-chat.md"))),
+  assert.ok(prompt.includes(JSON.stringify(join(runtime, "atlas", "cartograph-chat.md"))),
     "Activation must point inside the canonical or deployed bundle");
-  assert.match(readFileSync(join(runtime, "atlas", "atlas-chat.md"), "utf8"), /update_chat/);
+  assert.match(readFileSync(join(runtime, "atlas", "cartograph-chat.md"), "utf8"), /update_chat/);
   state = await action(ctx, "get_state");
   assert.ok(state.chat.filter((m) => m.role === "graph").every((m) => m.pending));
   assert.ok(!JSON.stringify(state.chat).includes("11111111-2222-4333-8444-555555555555"),

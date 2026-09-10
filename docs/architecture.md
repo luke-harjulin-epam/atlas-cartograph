@@ -10,8 +10,8 @@ hand-authored; there is no generated marketplace site or documentation generator
 | `server.mjs` | Per-canvas loopback HTTP server, Atlas state, full-state SSE |
 | `build-info.mjs` | Runtime version/source SHA; Git on source checkouts, then package/file stamps |
 | `atlas/` | Store discovery, Markdown parsing, node linking and multi-Atlas merge |
-| `atlas/chat.mjs` | Host-session chat envelope and local-search fallback for HTTP/dev |
-| `atlas/atlas-chat.md` | Bundled answering activation: read evidence, cite, report progress and acknowledge delivery |
+| `atlas/chat.mjs` | Compact host-session activation card and local-search fallback for HTTP/dev |
+| `atlas/cartograph-chat.md` | Bundled answering activation: read evidence, cite, report progress and acknowledge delivery |
 | `atlas/chat-requests.mjs` | Bounded per-instance requests, idempotent replies, timeout and close cleanup |
 | `atlas/schema.mjs` | Confined metadata-only schema catalog and deterministic ownership diagnostics |
 | `atlas/watch.mjs` | Replaceable, unprivileged open-root filesystem change source |
@@ -67,8 +67,14 @@ acceptance remains external to the local packaging check.
 
 The SDK's `session.send()` resolves with a message ID, not answer text.
 Cartograph ignores that ID as display content. Each submitted question creates
-a UUID-correlated pending message; the envelope names that request, its canvas
-instance, and the deployed `atlas/atlas-chat.md` activation path.
+a UUID-correlated pending message. The prompt is only a fenced `text` activation
+card with `activation: "cartograph-chat"`, `activation_path`, `routing`,
+`question`, `atlases`, `selection` and `query`. Each field uses a JSON value;
+embedded newlines and quotes cannot introduce card fields. The absolute
+`activation_path` resolves to `atlas/cartograph-chat.md` in the runtime bundle.
+The card contains no page bodies or duplicated answering/delivery instructions;
+the agent loads that bundled file for the complete workflow. Atlas remains the
+retrieval substrate, not the owner of the chat transport.
 
 The agent calls `update_chat` with `status: working` when it begins and at
 meaningful task-stage changes. Optional `text` is a nonempty, single-line

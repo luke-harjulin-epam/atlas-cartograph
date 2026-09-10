@@ -1,7 +1,7 @@
 import { loadPageFromRoots } from "./scan.mjs";
 import { fileURLToPath } from "node:url";
 
-export const CHAT_ACTIVATION_PATH = fileURLToPath(new URL("./atlas-chat.md", import.meta.url));
+export const CHAT_ACTIVATION_PATH = fileURLToPath(new URL("./cartograph-chat.md", import.meta.url));
 
 function queryPage(state, id) {
   const roots = state.roots?.length ? state.roots : state.root ? [state.root] : [];
@@ -63,46 +63,36 @@ export function searchAtlas(state, query) {
   }));
 }
 
-function storeLines(state) {
+function chatStores(state) {
   const stores = state.graph?.stores || [];
   if (stores.length) {
-    return stores.map((store) => {
-      const id = store.atlasId || store.label || store.root || "atlas";
-      return `- ${id}${store.root ? ` (${store.root})` : ""}`;
-    });
+    return stores.map((store) => ({
+      id: store.atlasId || store.label || null,
+      root: store.root || null,
+    }));
   }
   const roots = state.roots?.length ? state.roots : state.root ? [state.root] : [];
-  return roots.length ? roots.map((root) => `- ${root}`) : ["- (none)"];
+  return roots.map((root) => ({ id: null, root }));
 }
 
-function selectedLine(state) {
+function chatSelection(state) {
   const id = state.selectedId;
-  if (!id) return "Selected node: (none)";
+  if (!id) return null;
   const node = state.graph?.nodes?.find((item) => item.id === id);
-  const path = node?.path ? ` (${node.path})` : "";
-  return `Selected node: ${id}${path}`;
+  return { id, path: node?.path || null };
 }
 
 export function graphChatPrompt(text, state = {}, context = {}) {
-  const query = String(state.query || "").trim();
-  return [
-    "Cartograph atlas-chat request",
-    `Routing: ${JSON.stringify({ instanceId: context.instanceId, requestId: context.requestId })}`,
-    `Read and follow the Cartograph activation at ${JSON.stringify(CHAT_ACTIVATION_PATH)}.`,
-    'First report status "working", then deliver your final answer with invoke_canvas_action, actionName "update_chat".',
-    'While working, update the same request with {requestId, status: "working", text: "<brief task stage>"} at meaningful stage changes, e.g. "Searching the Atlas", "Reading pages", "Preparing answer".',
-    'Use the Routing instanceId and input {requestId, status: "answered", text: "<answer>"}.',
-    "A transcript answer or task_complete alone does NOT reply to this canvas.",
-    "",
-    `Cartograph chat: ${String(text || "").trim()}`,
-    "",
-    "Open Atlas stores:",
-    ...storeLines(state),
-    selectedLine(state),
-    `Search query: ${query || "(none)"}`,
-    "",
-    "Read mounted Atlas Markdown with session file tools when you need page content. Do not invent bodies. Reply to the Cartograph chat question.",
-  ].join("\n");
+  const card = {
+    activation: "cartograph-chat",
+    activation_path: CHAT_ACTIVATION_PATH,
+    routing: { instanceId: context.instanceId, requestId: context.requestId },
+    question: String(text || "").trim(),
+    atlases: chatStores(state),
+    selection: chatSelection(state),
+    query: String(state.query || "").trim(),
+  };
+  return ["```text", ...Object.entries(card).map(([key, value]) => `${key}: ${JSON.stringify(value)}`), "```"].join("\n");
 }
 
 export async function askHostSession(host, text, state, context) {

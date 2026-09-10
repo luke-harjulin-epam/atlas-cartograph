@@ -84,11 +84,14 @@
   Explicit Atlas links must not fall back to another store; generate each mesh
   relationship once. Chat completions must update their own request placeholder.
 - Treat SDK `send()` results as message IDs, never answer text. Native
-  `atlas-chat` activation must deliver via `update_chat` with the originating
+  `cartograph-chat` activation must deliver via `update_chat` with the originating
   instance/request and check acknowledgement. Enforce owner-session matching,
   idempotent retries, bounded replies and timeout/close cleanup. Keep queued
   and working indicators distinct, honour reduced motion, and keep standalone
   local search explicitly labelled. Do not capture unrelated session replies.
+- Send only a compact activation card with routing and Atlas context. Keep
+  progress, retrieval and delivery rules in bundled `atlas/cartograph-chat.md`,
+  not repeated in prompts. JSON-escape each card value, including questions.
 - Report short, truthful task stages through working `update_chat` text.
   Validate progress separately from answers, render it as plain text, and
   replace labels in place without extending deadlines or adding chat entries.
