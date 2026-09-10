@@ -6,6 +6,8 @@
 
 ### Changed
 
+- Use chat revisions to skip full-history serialization on unchanged snapshots,
+  preserving progress updates, draft focus and older-server compatibility.
 - Document the separate, commit-pinned marketplace handoff after source release
   publication; catalog and consumer updates are not automatic.
 - Restore the chat drawer when opening a citation or local search hit from

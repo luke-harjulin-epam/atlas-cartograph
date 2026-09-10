@@ -102,6 +102,9 @@
 - Reject duplicate mount keys before changing the mounted graph or selection.
   Explicit Atlas links must not fall back to another store; generate each mesh
   relationship once. Chat completions must update their own request placeholder.
+- Advance chat revisions for history/progress mutations, not unrelated snapshots
+  or duplicate callbacks. Use that revision and chat mode to cache browser
+  rendering without serializing message bodies; retain older-server compatibility.
 - Treat SDK `send()` results as message IDs, never answer text. Native
   `cartograph-chat` activation must deliver via `update_chat` with the originating
   instance/request and check acknowledgement. Enforce owner-session matching,

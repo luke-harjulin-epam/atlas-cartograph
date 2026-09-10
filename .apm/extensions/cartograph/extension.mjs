@@ -226,6 +226,7 @@ const session = await joinSession({
               edgeCount: g?.edges?.length ?? 0,
               chatMode: entry.state.chatMode,
               chat: ctx.sessionId === entry.chatSessionId ? entry.state.chat : [],
+              chatRevision: ctx.sessionId === entry.chatSessionId ? entry.state.chatRevision ?? 0 : 0,
               page: entry.state.page
                 ? {
                     id: entry.state.page.id,

@@ -96,6 +96,7 @@ try {
   assert.equal(registration.metadataCalls, 0);
   let state = await action(ctx, "get_state");
   assert.equal(state.error, null);
+  assert.equal(state.chatRevision, 0);
   assert.equal(state.nodeCount, 4);
   assert.equal(new Set(state.nodes.map((node) => node.id)).size, 4);
   assert.equal(state.schemas.length, 2);
@@ -110,6 +111,7 @@ try {
   assert.equal(response.status, 200);
   const bootstrap = await response.json();
   assert.deepEqual(bootstrap.state.roots, [first, second]);
+  assert.equal(bootstrap.state.chatRevision, 0);
   assert.ok(!bootstrap.state.roots.some((root) => root.startsWith(runtime)));
 
   const signal = state.nodes.find((node) => node.title === "Signal");
@@ -125,6 +127,7 @@ try {
   assert.deepEqual(state.page.sources, [sourceUrl]);
   assert.deepEqual(state.page.sourceDetails, [{ path: sourceUrl, title: "Project guide" }]);
   assert.equal(state.layersRevision, layerResult.layersRevision);
+  assert.equal(state.chatRevision, 0, "Query, selection, layers and reload do not invalidate chat");
 
   const firstChat = await ask(initial.url, "What is Signal?");
   const secondChat = await ask(initial.url, "What is Observatory?");
@@ -136,6 +139,7 @@ try {
   assert.match(readFileSync(join(runtime, "atlas", "cartograph-chat.md"), "utf8"), /update_chat/);
   state = await action(ctx, "get_state");
   assert.ok(state.chat.filter((m) => m.role === "graph").every((m) => m.pending));
+  assert.equal(state.chatRevision, 2);
   assert.ok(!JSON.stringify(state.chat).includes("11111111-2222-4333-8444-555555555555"),
     "SDK message ID must not become an answer");
   await action(ctx, "update_chat", { requestId: firstChat, status: "working" });
@@ -147,6 +151,7 @@ try {
     assert.equal(progressSnapshot.state.chat[1].progress, text);
     assert.equal(progressSnapshot.state.chat[1].pending, true);
     assert.equal(progressSnapshot.state.chat[3].status, "queued");
+    assert.equal(progressSnapshot.state.chatRevision, (await action(ctx, "get_state")).chatRevision);
   }
   await assert.rejects(action(ctx, "update_chat", {
     requestId: firstChat, status: "working", text: "x".repeat(161),
@@ -156,6 +161,7 @@ try {
     requestId: firstChat, status: "working", text: "Wrong session",
   }), { code: "chat_session_mismatch" });
   assert.deepEqual((await action(otherOwner, "get_state")).chat, [], "Another caller cannot read chat history");
+  assert.equal((await action(otherOwner, "get_state")).chatRevision, 0);
   await assert.rejects(action(otherOwner, "update_chat", {
     requestId: firstChat, status: "answered", text: "Wrong session",
   }), { code: "chat_session_mismatch" });
@@ -167,12 +173,14 @@ try {
   assert.equal(state.chat[1].status, "working");
   assert.equal(state.chat[3].text, completed.text);
   assert.equal(state.chat[3].pending, false);
+  assert.equal(state.chatRevision, 6, "Duplicate and rejected completions do not advance chat");
   await action(ctx, "update_chat", { requestId: firstChat, status: "answered", text: "Signal is an observation." });
   const replySnapshot = await fetch(new URL("/api/bootstrap", initial.url), {
     headers: { "X-Cartograph-Client": "canvas" },
   }).then((response) => response.json());
   assert.equal(replySnapshot.state.chat[1].text, "Signal is an observation.",
     "The HTTP canvas, not only native get_state, receives the actual answer");
+  assert.equal(replySnapshot.state.chatRevision, 7);
 
   // A different caller context cannot inherit a previous open's workspace.
   const westCtx = context("west-map", west, {}, "infrared-session");

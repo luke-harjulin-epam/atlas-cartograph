@@ -471,7 +471,8 @@ function applyState(next) {
   const query = queryControls.snapshot(next.query, next.queryRevision);
   const activity = Object.hasOwn(next, "activity") && acceptActivity(next.activity) ? next.activity : state.activity;
   state = { ...state, ...next, grouping, layers, layersRevision: layerControls.layersRevision,
-    query, queryRevision: queryControls.revision, activity };
+    query, queryRevision: queryControls.revision, activity,
+    chatRevision: Object.hasOwn(next, "chat") ? next.chatRevision : state.chatRevision };
   if (state.build) {
     const { version, commit, dirty } = state.build;
     $("build-info").textContent = `v${version} / ${commit ? commit.slice(0, 8) : "SHA unavailable"}${dirty ? " + local" : ""}`;
@@ -835,8 +836,11 @@ function renderChat() {
   input?.setAttribute("placeholder", sessionChat ? "Ask Copilot…" : "Search this Atlas…");
   input?.setAttribute("aria-label", sessionChat ? "Ask Copilot" : "Search this Atlas");
   const msgs = state.chat || [];
-  const signature = JSON.stringify([sessionChat, msgs.map(({ role, pending, status, progress, text, hits }) =>
-    ({ role, pending, status, progress, text, hits }))]);
+  // Older running servers can still serve refreshed browser assets without revisions.
+  const signature = Number.isSafeInteger(state.chatRevision) && state.chatRevision >= 0
+    ? `${sessionChat}:${state.chatRevision}`
+    : JSON.stringify([sessionChat, msgs.map(({ role, pending, status, progress, text, hits }) =>
+      ({ role, pending, status, progress, text, hits }))]);
   if (signature === chatRenderSignature) return;
   chatRenderSignature = signature;
   const isPending = (m) => m.role === "graph" && (m.pending === true || m.status === "queued" || m.status === "working");

@@ -220,7 +220,7 @@ function controlsFixture(layersRevision = 0) {
   return { controls, calls, changes };
 }
 
-function appFixture({ reducedMotion = false, phase = "map", clusters = [] } = {}) {
+function appFixture({ reducedMotion = false, phase = "map", clusters = [], onChatSerialize = () => {} } = {}) {
   const document = frontendDocument(html);
   const calls = [];
   const opened = [];
@@ -262,6 +262,13 @@ function appFixture({ reducedMotion = false, phase = "map", clusters = [] } = {}
   }
   const bootstrap = deferred();
   const context = vm.createContext({
+    JSON: {
+      parse: JSON.parse,
+      stringify(value, ...args) {
+        if (Array.isArray(value) && typeof value[0] === "boolean" && Array.isArray(value[1])) onChatSerialize();
+        return JSON.stringify(value, ...args);
+      },
+    },
     document, allNodeLayersOn, createLayerControls, createStateControls, handleContentClick, mountNodeBrowser, escapeHtml, renderMarkdown,
     renderExternalSources, sourceKind,
     fallbackLayerLabel, nodeCategory, nodeLayer, layerCounts, mountSchemaLayers, nodeSearchText,
@@ -1546,6 +1553,42 @@ test("unchanged chat snapshots preserve pending animation, focused links and dra
   assert.match(log.textContent, /Revised/);
   apply({ chat: [{ role: "graph", text: "Revised", hits: [{ id: "node", title: "New hit", kind: "page" }] }] });
   assert.match(log.querySelector(".hit").textContent, /New hit/);
+});
+
+test("chat revisions avoid history serialization on unchanged snapshots and drawer toggles", () => {
+  let serializations = 0;
+  const { document, apply } = appFixture({ onChatSerialize: () => serializations++ });
+  serializations = 0;
+  const chat = Array.from({ length: 50 }, (_, id) => ({ id, role: "graph", text: "x".repeat(128 * 1024) }));
+  apply({ stateRevision: 1, chatRevision: 1, chatMode: "session", chat });
+  const log = document.getElementById("chat-log");
+  const message = log.children[0];
+  const input = document.getElementById("chat-input");
+  input.value = "Preserve my draft";
+  for (let revision = 2; revision <= 4; revision++) {
+    apply({ stateRevision: revision, chatRevision: 1, chat });
+    document.getElementById("chat-toggle").click();
+    assert.equal(log.children[0], message);
+  }
+  assert.equal(serializations, 0, "Revisioned snapshots never stringify chat history");
+  assert.equal(input.value, "Preserve my draft");
+  input.selectionStart = 3;
+  input.selectionEnd = 8;
+  apply({ stateRevision: 5, chatRevision: 2, chat: [{ role: "graph", status: "working", progress: "Reading pages" }] });
+  assert.match(log.textContent, /Reading pages/);
+  assert.equal(input.selectionStart, 3);
+  assert.equal(input.selectionEnd, 8);
+  assert.equal(document.activeElement, input);
+  apply({ stateRevision: 4, chatRevision: 1, chat });
+  assert.match(log.textContent, /Reading pages/, "Older emissions cannot restore the prior history");
+  apply({ stateRevision: 6, chatRevision: 3, chat: [{ role: "graph", status: "answered", text: "Final answer" }] });
+  assert.match(log.textContent, /Final answer/);
+  apply({ stateRevision: 7, chatRevision: 3, chatMode: "local" });
+  assert.equal(log.querySelector(".who").textContent, "Search", "Mode changes invalidate the render key");
+  assert.equal(serializations, 0);
+  apply({ stateRevision: 8, chat: [{ role: "graph", text: "Legacy snapshot" }] });
+  assert.match(log.textContent, /Legacy snapshot/);
+  assert.equal(serializations, 1, "Unversioned snapshots retain compatibility with older running servers");
 });
 
 test("legacy pending chat waits honestly and working dots use reduced-motion-safe CSS only", () => {

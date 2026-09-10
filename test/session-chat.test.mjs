@@ -130,6 +130,7 @@ test("native chat does not fall back to local search after a session failure", a
   });
   const snapshot = await response.json();
   assert.equal(snapshot.chatMode, "session");
+  assert.equal(snapshot.chatRevision, 1);
   assert.equal(snapshot.chat[1].pending, true);
   assert.equal(snapshot.chat[1].text, "Waiting for Copilot…");
   for (let i = 0; i < 20 && entry.state.chat[1]?.pending; i++) await nextTurn();
@@ -188,6 +189,34 @@ function requestsFixture(t) {
   t.after(() => requests.close());
   return { state, requests, timers, broadcasts: () => broadcasts };
 }
+
+test("chat revisions advance on mutations, not duplicate or rejected updates", (t) => {
+  const { requests, state, timers } = requestsFixture(t);
+  const first = requests.begin("first");
+  assert.equal(state.chatRevision, 1);
+  requests.update(first, { status: "working", text: "Reading pages" });
+  assert.equal(state.chatRevision, 2);
+  requests.update(first, { status: "working", text: "Reading pages" });
+  assert.throws(() => requests.update(first, { status: "answered", text: "" }));
+  assert.equal(state.chatRevision, 2);
+  requests.update(first, { status: "answered", text: "Answer" });
+  requests.update(first, { status: "answered", text: "Answer" });
+  requests.fail(first, new Error("Late failure"));
+  assert.equal(state.chatRevision, 3);
+  const local = requests.begin("local", false);
+  requests.completeLocal(local, { text: "Result", hits: [{ id: "node", title: "Node", kind: "page" }] });
+  assert.equal(state.chatRevision, 5);
+  requests.fail(requests.begin("failure"), new Error("Unavailable"));
+  assert.equal(state.chatRevision, 7);
+  requests.begin("timeout");
+  timers.values().next().value();
+  assert.equal(state.chatRevision, 9);
+  requests.begin("cancel");
+  requests.close();
+  assert.equal(state.chatRevision, 11);
+  requests.close();
+  assert.equal(state.chatRevision, 11);
+});
 
 test("requests stay pending after dispatch and accept only correlated, idempotent replies", (t) => {
   const { requests, state, timers, broadcasts } = requestsFixture(t);

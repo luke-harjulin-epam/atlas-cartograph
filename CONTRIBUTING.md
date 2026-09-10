@@ -137,6 +137,11 @@ foreign owners/instances, timeout and close cleanup with
 `node --test test/session-chat.test.mjs test/native-extension.test.mjs test/frontend-interactions.test.mjs`.
 The native harness exercises callbacks in both canonical and copied deployments;
 also verify an actual host question/read/reply cycle in the canvas drawer.
+Keep chat revision coverage across HTTP/native snapshots, progress, completion,
+failure, expiry and cancellation. Duplicate callbacks and non-chat changes must
+not advance it. Use serialization-count regressions with large answers to prove
+unchanged snapshots and drawer toggles skip full-history work while preserving
+focus and draft state; keep unversioned-server compatibility covered.
 Ship `atlas/cartograph-chat.md` inside the runtime bundle, not as an installed-user
 patch. Keep chat prompts limited to activation-card data; progress, retrieval
 and delivery instructions belong in that file. Cover escaped card values and

@@ -17,6 +17,10 @@ export function createChatRequests(state, {
   const timers = new Map();
   let closed = false;
 
+  function advanceRevision() {
+    state.chatRevision = (state.chatRevision ?? 0) + 1;
+  }
+
   function release(id) {
     if (!timers.has(id)) return;
     unschedule(timers.get(id));
@@ -34,6 +38,7 @@ export function createChatRequests(state, {
     release(message.id);
     delete message.progress;
     Object.assign(message, { status, text, hits, pending: false });
+    advanceRevision();
     onChange();
   }
 
@@ -48,6 +53,7 @@ export function createChatRequests(state, {
         ...(sessionChat ? {} : { progress: "Searching the Atlas…" }),
       };
       state.chat = [...(state.chat ?? []), { role: "user", text }, message].slice(-50);
+      advanceRevision();
       const retained = new Set(state.chat.map((item) => item.id));
       for (const requestId of timers.keys()) {
         if (!retained.has(requestId)) release(requestId);
@@ -85,6 +91,7 @@ export function createChatRequests(state, {
       if (status === "working") {
         if (message.status !== "working" || message.progress !== content) {
           Object.assign(message, { status, text: content, progress: content });
+          advanceRevision();
           onChange();
         }
       } else {
@@ -107,6 +114,7 @@ export function createChatRequests(state, {
 
     close() {
       closed = true;
+      let changed = false;
       for (const id of timers.keys()) release(id);
       for (const message of state.chat ?? []) {
         if (message.pending) {
@@ -114,8 +122,10 @@ export function createChatRequests(state, {
           Object.assign(message, {
             pending: false, status: "cancelled", text: "Chat closed before a reply arrived.",
           });
+          changed = true;
         }
       }
+      if (changed) advanceRevision();
     },
   };
 }
