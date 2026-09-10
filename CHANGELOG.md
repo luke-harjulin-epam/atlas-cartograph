@@ -4,6 +4,7 @@
 
 ### Changed
 
+- Replace the Add atlas text with a compact SVG plus icon and accessible label.
 - Removing the last selected node layer now restores all node layers, including
   schema types and fallback categories, without changing link visibility.
 - Simplify Options into compact sections with shared information popups,

@@ -267,7 +267,9 @@ input, textarea { font: inherit; color: inherit; }
 .options-section + .options-section { border-top: 1px solid var(--color-border); margin-top: 0.85rem; padding-top: 0.85rem; }
 .options-section h3 { margin: 0; font-size: 12px; font-weight: 500; color: var(--color-muted); }
 .options-section-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
-.options-section-head .btn, .options-section-head > .layer { min-height: 32px; padding: 0.3rem 0.65rem; font-size: 12px; font-weight: 400; }
+.options-section-head > .layer { min-height: 32px; padding: 0.3rem 0.65rem; font-size: 12px; font-weight: 400; }
+.options-section-head > .icon-btn { width: 32px; height: 32px; flex-shrink: 0; border-radius: 8px; }
+.options-section-head > .icon-btn svg { opacity: 0.8; }
 .options-fallback { position: relative; margin-top: 0.5rem; }
 .options-fallback > .info-button { position: absolute; right: 0; top: 12px; }
 .options-disclosure > summary { min-height: 36px; align-content: center; padding-right: 1.5rem; cursor: pointer; color: var(--color-muted); }

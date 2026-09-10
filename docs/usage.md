@@ -103,7 +103,7 @@ when the two panels no longer fit.
 Its branded header stays visible while the options scroll; Close or
 Escape dismisses it and returns focus to the menu button.
 The menu separates **Atlases**, **Layout**, **Layers**, **Links** and **Graph**.
-Use **Add** or an Atlas row's cross to manage open stores; removing one never
+Use **+ (Add atlas)** or an Atlas row's cross to manage open stores; removing one never
 deletes its files, and the final Atlas cannot be removed. Short labels keep
 controls compact; the **i** buttons explain each section. Node/edge counts
 stay visible, while format and store details appear in Graph's information popup.

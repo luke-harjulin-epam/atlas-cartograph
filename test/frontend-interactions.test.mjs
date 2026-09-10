@@ -995,6 +995,12 @@ test("options overlay opens accessibly and closes without changing graph or sear
   const panel = document.getElementById("panel");
   const toggle = document.getElementById("toggle-panel");
   const close = document.getElementById("panel-close");
+  const add = document.getElementById("add-atlas");
+  assert.equal(add.textContent.trim(), "");
+  assert.equal(add.getAttribute("aria-label"), "Add atlas");
+  assert.equal(add.getAttribute("title"), "Add atlas");
+  assert.equal(add.querySelector("svg").getAttribute("aria-hidden"), "true");
+  assert.equal(add.querySelector("path").getAttribute("d"), "M12 5v14M5 12h14");
   assert.equal(panel.getAttribute("aria-hidden"), "true");
   assert.equal(panel.querySelector(".panel-brand-atlas").textContent, "Atlas");
   assert.equal(panel.querySelector(".panel-brand-cartograph").textContent, "Cartograph");
