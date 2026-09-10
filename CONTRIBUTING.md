@@ -160,6 +160,10 @@ revisits, unrelated consecutive nodes, and removal of intermediate nodes;
 recorded segments must not be reconstructed from the current active-node order.
 Browser-asset changes need only a page refresh, not an extension reload or
 collector restart.
+Exercise chat full-screen/restore with a real Markdown table, draft and open
+preview. Covered controls must be inert, resizing must keep tables contained,
+and Escape restores the drawer before closing it. Preserve history and graph
+state without server mutations.
 Cover automatic camera framing with fake clocks: default-on/off controls,
 single and widely spread activations, changed relationship endpoints (including
 deletion ghosts), query/layer filtering, five-second manual override, selection,

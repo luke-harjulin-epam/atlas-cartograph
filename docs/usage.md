@@ -165,6 +165,13 @@ authority for authoring and validation.
 
 ## Chat with this Atlas
 
+Use **Full screen** in the chat header when you need more room for tables or
+long answers. It fills the Cartograph canvas, not the host application's window.
+**Restore** or Escape returns to the normal drawer; a second Escape folds it.
+Close folds chat from either size. Drafts and conversation are retained, and
+covered graph controls are unavailable to keyboard/pointer interaction until
+you restore or close chat. This size preference is local to the page.
+
 The map chat button talks to the same Copilot session that opened the canvas.
 Replies are labelled **Copilot**, not a session identifier. Cartograph sends
 only a compact `cartograph-chat` activation card: the bundled activation path,

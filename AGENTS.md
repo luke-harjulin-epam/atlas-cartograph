@@ -80,6 +80,9 @@
   second animation loop or report the capped simulation delta as frame rate.
 - Keep page reads inside their mounted store, including canonical symlink
   targets. Preserve the originating Atlas in navigation and chat references.
+- Chat full-screen mode fills only the canvas, preserving the graph and draft.
+  Keep covered controls inert; Restore or Escape returns to the drawer, and
+  Close folds either size. Do not use host fullscreen APIs or reset chat history.
 - Show HTTP/HTTPS provenance in readable external-source rows, separate from
   internal relationship chips. Prefer explicit source titles, otherwise derive
   labels locally with repository/domain context; never fetch remote metadata.

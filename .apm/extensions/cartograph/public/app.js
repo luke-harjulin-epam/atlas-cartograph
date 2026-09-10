@@ -38,6 +38,8 @@ let state = { phase: "crawl", stores: [], graph: null, root: "", query: "", sele
 let latestStateRevision = null;
 let latestActivityRevision = null;
 let chatOpen = false;
+let chatFullscreen = false;
+const chatBackgroundInert = new Map();
 let chatRenderSignature = null;
 let map = null;
 const activityControls = mountActivityControls($("activity-controls"), applyActivity,
@@ -554,21 +556,34 @@ $("open-path").addEventListener("submit", (e) => {
   if (root) openRoot(root);
 });
 $("chat-toggle").addEventListener("click", () => {
+  if (chatOpen) {
+    closeChat();
+    return;
+  }
   chatOpen = !chatOpen;
   renderChat();
   if (chatOpen) $("chat-input")?.focus();
 });
 function closeChat() {
   chatOpen = false;
+  chatFullscreen = false;
   renderChat();
   $("chat-toggle")?.focus();
 }
 $("chat-close").addEventListener("click", closeChat);
+$("chat-fullscreen").addEventListener("click", () => {
+  chatFullscreen = !chatFullscreen;
+  renderChat();
+});
 $("graph-chat").addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     e.preventDefault();
     e.stopPropagation();
-    closeChat();
+    if (chatFullscreen) {
+      chatFullscreen = false;
+      renderChat();
+      $("chat-fullscreen").focus();
+    } else closeChat();
   }
 });
 function resizeChatInput() {
@@ -677,6 +692,24 @@ function renderChat() {
   drawer.setAttribute("aria-hidden", chatOpen ? "false" : "true");
   drawer.classList.toggle("chat-open", chatOpen);
   mapEl?.classList.toggle("chat-open", chatOpen);
+  const fullscreen = chatOpen && chatFullscreen;
+  drawer.classList.toggle("chat-fullscreen", fullscreen);
+  mapEl?.classList.toggle("chat-fullscreen", fullscreen);
+  for (const child of mapEl?.children ?? []) {
+    if (child === drawer) continue;
+    if (fullscreen) {
+      if (!chatBackgroundInert.has(child)) chatBackgroundInert.set(child, child.inert);
+      child.inert = true;
+    } else if (chatBackgroundInert.has(child)) {
+      child.inert = chatBackgroundInert.get(child);
+      chatBackgroundInert.delete(child);
+    }
+  }
+  const fullscreenButton = $("chat-fullscreen");
+  fullscreenButton.textContent = fullscreen ? "Restore" : "Full screen";
+  fullscreenButton.setAttribute("aria-pressed", String(fullscreen));
+  fullscreenButton.setAttribute("aria-label", fullscreen ? "Restore chat drawer" : "Full screen chat");
+  fullscreenButton.setAttribute("title", fullscreen ? "Restore chat drawer" : "Full screen chat");
   if (chatOpen && !wasOpen) resizeChatInput();
   toggle?.setAttribute("aria-pressed", chatOpen ? "true" : "false");
   toggle?.setAttribute("aria-expanded", chatOpen ? "true" : "false");

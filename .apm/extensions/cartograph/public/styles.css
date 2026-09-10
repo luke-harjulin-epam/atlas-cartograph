@@ -243,6 +243,8 @@ input, textarea { font: inherit; color: inherit; }
   transition: transform 180ms ease-out, visibility 0s linear 180ms;
 }
 .graph-chat.chat-open { transform: translateX(0); visibility: visible; transition-delay: 0s; }
+.graph-chat.chat-fullscreen { width: 100%; z-index: 110; }
+.map.chat-fullscreen > :not(#graph-chat) { visibility: hidden; }
 #chat-toggle[aria-pressed="true"] {
   border-color: var(--color-border-strong); background: var(--color-elevated);
 }
@@ -251,10 +253,11 @@ input, textarea { font: inherit; color: inherit; }
   padding: 0.45rem 0.7rem 0.35rem; border-bottom: 1px solid var(--color-border);
 }
 .chat-head .kicker { margin: 0; }
-#chat-close {
+#chat-close, #chat-fullscreen {
   min-height: 32px; border-radius: 999px; border: 1px solid var(--color-border);
   background: transparent; color: var(--color-fg); padding: 0 0.75rem; font-size: 12px;
 }
+#chat-fullscreen:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 .chat-panel .chat-head { flex-wrap: wrap; }
 .chat-panel .chat-head .kicker { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .chat-panel {

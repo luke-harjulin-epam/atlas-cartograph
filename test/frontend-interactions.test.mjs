@@ -879,6 +879,46 @@ test("chat folds into an inert drawer and preserves graph, history and drafts ac
   assert.equal(calls.length, 0, "folding does not mutate server selection, query or layers");
 });
 
+test("chat fullscreen restores the drawer and preserves draft, history and graph state", () => {
+  const { document, apply, calls } = appFixture();
+  const drawer = document.getElementById("graph-chat");
+  const toggle = document.getElementById("chat-toggle");
+  const full = document.getElementById("chat-fullscreen");
+  const input = document.getElementById("chat-input");
+  const preview = document.getElementById("preview");
+  const originalInert = preview.inert;
+  apply({ chat: [{ role: "graph", text: "| A | B |\n|---|---|\n| One | Two |" }] });
+  toggle.click();
+  input.value = "Keep this draft";
+  const log = document.getElementById("chat-log");
+  const message = log.children[0];
+  full.click();
+  assert.equal(drawer.classList.contains("chat-fullscreen"), true);
+  assert.equal(full.getAttribute("aria-pressed"), "true");
+  assert.equal(full.textContent, "Restore");
+  assert.equal(preview.inert, true);
+  apply({});
+  assert.equal(drawer.classList.contains("chat-fullscreen"), true);
+  assert.equal(log.children[0], message);
+  input.dispatchEvent(new FrontendEvent("keydown", { key: "Escape" }));
+  assert.equal(drawer.classList.contains("chat-fullscreen"), false);
+  assert.equal(drawer.classList.contains("chat-open"), true);
+  assert.equal(document.activeElement, full);
+  assert.equal(preview.inert, originalInert);
+  assert.equal(input.value, "Keep this draft");
+  full.click();
+  full.click();
+  assert.equal(full.getAttribute("aria-pressed"), "false");
+  full.click();
+  document.getElementById("chat-close").click();
+  assert.equal(drawer.inert, true);
+  assert.equal(preview.inert, originalInert);
+  toggle.click();
+  assert.equal(drawer.classList.contains("chat-fullscreen"), false);
+  assert.equal(input.value, "Keep this draft");
+  assert.equal(calls.length, 0);
+});
+
 test("chat sizing reserves a responsive quarter-width beside the graph without a modal backdrop", () => {
   const css = readFileSync(new URL("../.apm/extensions/cartograph/public/styles.css", import.meta.url), "utf8");
   assert.match(css, /\.map \{ --chat-width: min\(90vw, max\(22\.5rem, 25vw\)\); --chat-inset: 0px; \}/);
