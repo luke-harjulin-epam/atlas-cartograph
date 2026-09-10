@@ -844,6 +844,9 @@ test("chat folds into an inert drawer and preserves graph, history and drafts ac
   const message = log.children[0];
   const graphCount = graphs.length;
   assert.equal(drawer.tagName, "ASIDE");
+  assert.equal(toggle.parentElement, map);
+  assert.equal(document.querySelectorAll("#chat-toggle").length, 1);
+  assert.equal(document.getElementById("chat-close"), null);
   assert.equal(drawer.inert, true);
   assert.equal(drawer.getAttribute("aria-hidden"), "true");
   assert.equal(toggle.getAttribute("aria-expanded"), "false");
@@ -866,7 +869,7 @@ test("chat folds into an inert drawer and preserves graph, history and drafts ac
   assert.equal(document.activeElement, toggle);
   assert.equal(toggle.getAttribute("aria-expanded"), "false");
 
-  for (const close of [document.getElementById("chat-close"), toggle]) {
+  for (const close of [toggle]) {
     toggle.click();
     assert.equal(input.value, "A question in progress");
     assert.equal(log.children[0], message);
@@ -900,6 +903,7 @@ test("chat fullscreen restores the drawer and preserves draft, history and graph
   assert.ok(full.querySelector(".chat-expand-icon"));
   assert.ok(full.querySelector(".chat-restore-icon"));
   assert.equal(preview.inert, true);
+  assert.equal(Boolean(toggle.inert), false);
   apply({});
   assert.equal(drawer.classList.contains("chat-fullscreen"), true);
   assert.equal(log.children[0], message);
@@ -908,12 +912,13 @@ test("chat fullscreen restores the drawer and preserves draft, history and graph
   assert.equal(drawer.classList.contains("chat-open"), true);
   assert.equal(document.activeElement, full);
   assert.equal(preview.inert, originalInert);
+  assert.equal(toggle.getAttribute("aria-label"), "Collapse chat");
   assert.equal(input.value, "Keep this draft");
   full.click();
   full.click();
   assert.equal(full.getAttribute("aria-pressed"), "false");
   full.click();
-  document.getElementById("chat-close").click();
+  toggle.click();
   assert.equal(drawer.inert, true);
   assert.equal(preview.inert, originalInert);
   toggle.click();
@@ -952,7 +957,7 @@ test("node previews leave chat available without dismissing the selection", asyn
   assert.equal(preview.classList.contains("hidden"), false);
   assert.equal(state().selectedId, "node");
   assert.equal(document.activeElement, input);
-  document.getElementById("chat-close").click();
+  toggle.click();
   assert.equal(preview.classList.contains("hidden"), false);
   toggle.click();
   assert.equal(document.activeElement, input);
@@ -962,7 +967,7 @@ test("node previews leave chat available without dismissing the selection", asyn
   assert.match(css, /\.preview-backdrop \{[^}]*inset: 0 var\(--chat-inset\) 0 0;/);
   assert.match(css, /\.preview \{[^}]*right: var\(--chat-inset\);[^}]*width: auto;/);
   assert.doesNotMatch(css.match(/\.toolbar \{[^}]*\}/)[0], /z-index/);
-  assert.match(css, /#chat-toggle \{ z-index: 72; \}/);
+  assert.match(css, /#chat-toggle \{[^}]*position: absolute;[^}]*right: 0.7rem;[^}]*z-index: 111;/);
   assert.match(css, /\.graph-chat \{[^}]*z-index: 75;/);
 });
 

@@ -562,7 +562,7 @@ $("chat-toggle").addEventListener("click", () => {
   }
   chatOpen = !chatOpen;
   renderChat();
-  if (chatOpen) $("chat-input")?.focus();
+  if (chatOpen) $("chat-input")?.focus({ preventScroll: true });
 });
 function closeChat() {
   chatOpen = false;
@@ -570,7 +570,6 @@ function closeChat() {
   renderChat();
   $("chat-toggle")?.focus();
 }
-$("chat-close").addEventListener("click", closeChat);
 $("chat-fullscreen").addEventListener("click", () => {
   chatFullscreen = !chatFullscreen;
   renderChat();
@@ -696,7 +695,7 @@ function renderChat() {
   drawer.classList.toggle("chat-fullscreen", fullscreen);
   mapEl?.classList.toggle("chat-fullscreen", fullscreen);
   for (const child of mapEl?.children ?? []) {
-    if (child === drawer) continue;
+    if (child === drawer || child === toggle) continue;
     if (fullscreen) {
       if (!chatBackgroundInert.has(child)) chatBackgroundInert.set(child, child.inert);
       child.inert = true;
@@ -716,8 +715,8 @@ function renderChat() {
   const kicker = $("chat-kicker");
   const label = sessionChat ? "Chat with Copilot" : "Local Atlas search";
   if (kicker) kicker.textContent = label;
-  toggle?.setAttribute("aria-label", label);
-  toggle?.setAttribute("title", label);
+  toggle?.setAttribute("aria-label", chatOpen ? "Collapse chat" : label);
+  toggle?.setAttribute("title", chatOpen ? "Collapse chat" : label);
   const input = $("chat-input");
   input?.setAttribute("placeholder", sessionChat ? "Ask Copilot…" : "Search this Atlas…");
   input?.setAttribute("aria-label", sessionChat ? "Ask Copilot" : "Search this Atlas");

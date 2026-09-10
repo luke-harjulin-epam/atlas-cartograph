@@ -169,8 +169,9 @@ Use the diagonal-arrow **Full screen** icon in the chat header when you need
 more room for tables or long answers. It fills the Cartograph canvas, not the
 host application's window. The arrows point inward when maximised; click
 **Restore** or press Escape to return to the normal drawer. A second Escape
-folds it. The rightmost split-panel icon folds chat from either size; the
-matching toolbar icon reopens it. Drafts and conversation are retained, and
+folds it. A single split-panel icon stays at the top-right whether chat is
+folded, open or full-screen; use it to open or close the panel.
+Drafts and conversation are retained, and
 covered graph controls are unavailable to keyboard/pointer interaction until
 you restore or close chat. This size preference is local to the page.
 

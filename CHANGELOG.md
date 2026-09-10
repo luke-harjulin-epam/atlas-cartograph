@@ -6,6 +6,7 @@
 
 - Add a full-screen chat toggle for reading wide tables. Restore or Escape
   returns to the drawer, preserving the conversation and draft.
+  Use one persistent top-right panel icon to open or close chat in every size.
 - Show external sources as readable, keyboard-accessible preview rows with
   descriptive labels, repository/domain context and an external-link icon.
   Prefer optional frontmatter titles; derive fallback labels locally without

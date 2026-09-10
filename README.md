@@ -116,7 +116,7 @@ mode remains labelled local search.
 While it works, brief labels such as **Searching the Atlas**, **Reading pages**
 and **Preparing answer** explain the current stage beside the animated dots.
 See [chat usage](docs/usage.md#chat-with-this-atlas) for timeouts and delivery.
-Chat starts folded. Its toolbar button opens a right-hand panel at 25% of the
+Chat starts folded. Its fixed top-right button opens a right-hand panel at 25% of the
 window width, with a 360px minimum (capped at 90% on narrow windows). The graph
 and its controls use the remaining space. The rounded composer has an embedded
 send arrow and grows with your draft, scrolling after 45% of the window height
@@ -125,8 +125,8 @@ Close or Escape inside chat restores the full map without clearing the
 conversation or draft.
 Use the diagonal-arrow **Full screen** icon to read wide tables across the canvas.
 Its arrows point inward when expanded: click again or press Escape to restore
-the drawer. The rightmost split-panel icon folds chat from either size; the
-matching toolbar icon reopens it.
+the drawer. One split-panel icon stays at the top-right in every size to open
+or close chat; there is no duplicate toggle in the toolbar.
 Node previews and their backdrop stay within the graph area, so you can keep
 chatting about a selected page or reopen chat without dismissing its preview.
 Page previews show web provenance in a separate **External sources** section:

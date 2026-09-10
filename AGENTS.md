@@ -108,9 +108,10 @@
   width, with a 360px minimum capped at 90vw. Reserve the remaining map area
   for both renderers and graph controls;
   keep resizing proportional and preserve drafts/history when collapsing.
-  Folded chat must be inert; Escape and Close return focus to its toolbar toggle.
+  Folded chat must be inert; Escape returns focus to its single top-right toggle.
 - Constrain node previews and their backdrop to the remaining graph area.
-  Keep the chat drawer and its toolbar toggle accessible while a preview is open.
+  Keep the chat drawer and its top-right toggle accessible while a preview is open.
+  The one panel toggle stays visible and non-inert in full-screen chat too.
 - Use a growing multiline composer with an embedded SVG send arrow. Remeasure
   wrapping on input and width changes without resetting the caret on snapshots.
   Cap growth to retain conversation space; Enter sends, Shift+Enter inserts a
