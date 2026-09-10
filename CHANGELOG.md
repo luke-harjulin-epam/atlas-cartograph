@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.4.0 - 2026-09-10
+
 ### Changed
 
 - Match the search results panel to the input's full width, adapting to window

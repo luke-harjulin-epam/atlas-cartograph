@@ -15,10 +15,10 @@ Unknown and legacy pages remain available without declaring a schema.
 Untyped `index.md` pages appear as **Navigation indexes**, not undeclared types.
 See [schema layers](docs/usage.md#schema-and-type-layers) for behavior and limits.
 
-The v0.3.0 release line adds volumetric galaxies, unified toolbar search,
-two-stage node selection, anchored pulses and smoother camera behavior,
-with version/SHA/FPS visibility and APM 0.30.0 distribution.
-See the [changelog](CHANGELOG.md#030---2026-09-09) for the release changes.
+The upcoming v0.4.0 release adds session-backed chat with cited Atlas reads,
+reliable deployed source identity, readable external sources, and compact,
+responsive navigation and settings. It retains APM 0.30.0 distribution.
+See the [changelog](CHANGELOG.md#040---2026-09-10) for the release changes.
 
 ## Run
 
@@ -93,7 +93,8 @@ apm install sergio-sisternes-epam/atlas-cartograph --target copilot
 ```
 
 Install from a ref containing `apm.yml`. Use `#<tag-or-commit>` on the package
-reference to pin a version; use `#v0.3.0` after that release is published.
+reference to pin a version. `#v0.3.0` is the latest published release;
+use `#v0.4.0` once its release is published.
 
 Reload project extensions and open **Cartograph**. APM deploys the complete
 runtime to `.github/extensions/cartograph/`; it does not deploy the development
