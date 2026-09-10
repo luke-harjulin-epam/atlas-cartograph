@@ -895,7 +895,10 @@ test("chat fullscreen restores the drawer and preserves draft, history and graph
   full.click();
   assert.equal(drawer.classList.contains("chat-fullscreen"), true);
   assert.equal(full.getAttribute("aria-pressed"), "true");
-  assert.equal(full.textContent, "Restore");
+  assert.equal(full.getAttribute("aria-label"), "Restore chat drawer");
+  assert.equal(full.querySelector("svg").getAttribute("aria-hidden"), "true");
+  assert.ok(full.querySelector(".chat-expand-icon"));
+  assert.ok(full.querySelector(".chat-restore-icon"));
   assert.equal(preview.inert, true);
   apply({});
   assert.equal(drawer.classList.contains("chat-fullscreen"), true);

@@ -123,8 +123,10 @@ send arrow and grows with your draft, scrolling after 45% of the window height
 or 384px, whichever is smaller. Enter sends; Shift+Enter adds a line.
 Close or Escape inside chat restores the full map without clearing the
 conversation or draft.
-Use **Full screen** in the chat header to read wide tables across the canvas.
-**Restore** or Escape returns to the drawer; Close folds chat from either size.
+Use the diagonal-arrow **Full screen** icon to read wide tables across the canvas.
+Its arrows point inward when expanded: click again or press Escape to restore
+the drawer. The rightmost split-panel icon folds chat from either size; the
+matching toolbar icon reopens it.
 Node previews and their backdrop stay within the graph area, so you can keep
 chatting about a selected page or reopen chat without dismissing its preview.
 Page previews show web provenance in a separate **External sources** section:

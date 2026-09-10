@@ -62,7 +62,8 @@
           </div>
           <button id="chat-toggle" class="icon-btn" type="button" aria-label="Local Atlas search" aria-pressed="false" aria-expanded="false" aria-controls="graph-chat" title="Local Atlas search">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v7A2.5 2.5 0 0 1 16.5 16H11l-4.2 3.2c-.7.54-1.8.04-1.8-.83V6.5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+              <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="1.7"/>
+              <path d="M15 3v18" stroke="currentColor" stroke-width="1.7"/>
             </svg>
           </button>
         </div>
@@ -127,8 +128,18 @@
           <div id="chat-panel" class="chat-panel">
             <div class="chat-head">
               <p id="chat-kicker" class="kicker">Local Atlas search</p>
-              <button id="chat-fullscreen" type="button" aria-label="Full screen chat" title="Full screen chat" aria-pressed="false" aria-controls="graph-chat">Full screen</button>
-              <button id="chat-close" type="button" aria-label="Collapse chat" title="Collapse chat">Close</button>
+              <button id="chat-fullscreen" type="button" aria-label="Full screen chat" title="Full screen chat" aria-pressed="false" aria-controls="graph-chat">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                  <path class="chat-expand-icon" d="M14 4h6v6M20 4l-6 6M10 20H4v-6M4 20l6-6"/>
+                  <path class="chat-restore-icon" d="M20 4l-6 6M14 4v6h6M4 20l6-6M4 14h6v6"/>
+                </svg>
+              </button>
+              <button id="chat-close" type="button" aria-label="Collapse chat" title="Collapse chat" aria-controls="graph-chat">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" stroke="currentColor" stroke-width="1.7">
+                  <rect x="3" y="3" width="18" height="18" rx="2"/>
+                  <path d="M15 3v18"/>
+                </svg>
+              </button>
             </div>
             <div id="chat-status" class="chat-announcement" role="status" aria-live="polite" aria-atomic="true"></div>
             <div id="chat-log" class="chat-log" role="log" aria-live="polite" aria-busy="false" aria-label="Chat messages"></div>

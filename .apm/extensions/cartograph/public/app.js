@@ -706,7 +706,6 @@ function renderChat() {
     }
   }
   const fullscreenButton = $("chat-fullscreen");
-  fullscreenButton.textContent = fullscreen ? "Restore" : "Full screen";
   fullscreenButton.setAttribute("aria-pressed", String(fullscreen));
   fullscreenButton.setAttribute("aria-label", fullscreen ? "Restore chat drawer" : "Full screen chat");
   fullscreenButton.setAttribute("title", fullscreen ? "Restore chat drawer" : "Full screen chat");
