@@ -46,7 +46,9 @@ Before release, exercise the exact packaged runtime in a session-scoped host
 installation, including default discovery, `get_state`, `set_layers`,
 `select_node` and `reload`, without source edits or preview-only shims.
 
-`apm.yml` declares only the self-contained canvas directory. Keep its version,
+`apm.yml` declares the self-contained canvas directory and an APM dependency on
+`atlas` from marketplace `atlas` (`sergio-sisternes-epam/atlas-marketplace`).
+Keep its version,
 the runtime `package.json` and root `package.json` aligned. Application imports,
 browser assets, collectors and fixtures must resolve within the bundle.
 The build badge reads this runtime's version and source-checkout SHA, marking
@@ -59,8 +61,13 @@ unsubstituted or missing stamps show an unavailable SHA. Cover both paths with
 The repository discovery shim is not distribution source; do not run a
 first-party APM deployment over that locally authored shim.
 
-After dependency changes, run `apm lock --target copilot`. Use
-`npm run pack:apm -- --dry-run` to inspect the bundle or `npm run pack:apm` to
+After dependency changes, run `apm lock --target copilot`. APM 0.30.0 lockfiles
+record git coordinates for marketplace plugins, so `apm install --frozen` and
+`apm audit --ci` look for `_marketplace/atlas/atlas` and fail ref-consistency.
+Replay with a normal install and `apm audit --no-policy --no-fail-fast` when
+checking the Atlas graph; canvas packaging checks lock identity instead of
+fetching private Atlas. Use `npm run pack:apm -- --dry-run` to inspect the
+bundle or `npm run pack:apm` to
 create it under ignored `build/`. APM's plugin format preserves canvas assets;
 the legacy `--format apm` path is not suitable for this canvas-only package
 with APM 0.30.0. Packing may generate `.github/plugin/plugin.json` metadata.

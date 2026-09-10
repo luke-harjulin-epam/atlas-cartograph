@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.4.1 - 2026-09-10
+
+### Changed
+
+- Declare an APM dependency on `atlas` from marketplace `atlas`
+  (`name: atlas` / `marketplace: atlas`, install identifier `atlas@atlas`) so
+  consumers pull Atlas with this canvas. Catalog Atlas is `v0.11.2`
+  (`579e809`). APM 0.30.0 still records git coordinates for marketplace
+  plugins, so `--frozen` / `audit --ci` cannot pass against
+  `_marketplace/atlas/atlas`.
+
 ## 0.4.0 - 2026-09-10
 
 ### Changed

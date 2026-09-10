@@ -51,8 +51,16 @@ try {
   }, null, 2)}\n`);
   writeFileSync(join(stagedRuntime, "cartograph-build.json"), `${JSON.stringify(stamped, null, 2)}\n`);
   run(["experimental", "enable", "canvas"], producer);
-  run(["install", "--frozen", "--dry-run", "--target", "copilot"], producer);
-  run(["audit", "--ci"], producer);
+  // APM 0.30.0 lockfiles record git coordinates for marketplace plugins.
+  // `apm install --frozen` and `apm audit --ci` look for `_marketplace/atlas/atlas`
+  // and fail ref-consistency. Canvas packaging does not fetch private Atlas;
+  // consumers resolve `atlas@atlas` at install. Check lock identity instead.
+  const lock = readFileSync(join(producer, "apm.lock.yaml"), "utf8");
+  assert.match(lock, /^- repo_url: sergio-sisternes-epam\/atlas$/m);
+  assert.match(lock, /^  discovered_via: atlas$/m);
+  assert.match(lock, /^  marketplace_plugin_name: atlas$/m);
+  assert.match(lock, /^  version: 0\.11\.2$/m);
+  assert.match(lock, /^  resolved_commit: 579e8090273ce991ea0717abed0775dc03f28de2$/m);
   // APM 0.30.0 still emits an uninstallable "minimal" target without this flag.
   run(["pack", "--format", "plugin", "--target", "copilot", "--dry-run"], producer);
   run(["pack", "--format", "plugin", "--target", "copilot", "--archive", "--archive-format", "tar.gz"], producer);

@@ -70,6 +70,13 @@ links stay within the named Atlas and work with one or multiple stores open.
 Use an APM version with experimental canvas support (validated with 0.30.0),
 repository access, and Copilot App canvas support. Canvas packages execute code;
 review and trust this package before installing it.
+This package depends on `atlas` from marketplace `atlas`
+(`sergio-sisternes-epam/atlas-marketplace`). Register that marketplace before
+install if it is not already present:
+
+```sh
+apm marketplace add sergio-sisternes-epam/atlas-marketplace --name atlas
+```
 
 In the consuming project's `apm.yml`, merge this canvas-only approval with any
 existing executable settings. Initialize an APM project first if needed.
