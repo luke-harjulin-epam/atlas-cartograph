@@ -27,6 +27,12 @@ export function mountGraphWatchControls(root) {
     statusElement.dataset.status = current.status;
     statusElement.textContent = current.label;
     message.textContent = current.message;
+    root.querySelector("#graph-watch-state").textContent = {
+      live: "Watching", idle: "Idle", error: "Error", disconnected: "Disconnected",
+    }[current.status];
+    const error = root.querySelector("#graph-watch-error");
+    error.textContent = ["error", "disconnected"].includes(current.status) ? current.message : "";
+    error.classList.toggle("hidden", !error.textContent);
   };
   render();
   return {

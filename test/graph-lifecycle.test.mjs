@@ -258,7 +258,10 @@ test("WebGL packs the shared lifecycle points, with ghosts outside node and edge
 test("watcher status is independent of collector state and renders only public text", () => {
   const elements = new Map();
   const root = { querySelector: (id) => {
-    if (!elements.has(id)) elements.set(id, { dataset: {}, textContent: "", set innerHTML(_) { assert.fail("Unsafe HTML"); } });
+    if (!elements.has(id)) elements.set(id, {
+      dataset: {}, textContent: "", classList: { toggle(name, value) { this[name] = value; } },
+      set innerHTML(_) { assert.fail("Unsafe HTML"); },
+    });
     return elements.get(id);
   } };
   const controls = mountGraphWatchControls(root);
@@ -266,8 +269,12 @@ test("watcher status is independent of collector state and renders only public t
   controls.setWatch({ status: "live", message: "Watching <atlas>", token: "secret-connection-token" });
   assert.equal(elements.get("#graph-watch-status").textContent, "Changes live");
   assert.equal(elements.get("#graph-watch-message").textContent, "Watching <atlas>");
+  assert.equal(elements.get("#graph-watch-state").textContent, "Watching");
+  assert.equal(elements.get("#graph-watch-error").classList.hidden, true);
   controls.setWatch({ status: "error", message: "Directory unavailable" });
   assert.equal(elements.get("#graph-watch-status").dataset.status, "error");
+  assert.equal(elements.get("#graph-watch-error").textContent, "Directory unavailable");
+  assert.equal(elements.get("#graph-watch-error").classList.hidden, false);
   controls.setConnected(false);
   assert.equal(elements.get("#graph-watch-status").textContent, "Changes disconnected");
   controls.setConnected(true);

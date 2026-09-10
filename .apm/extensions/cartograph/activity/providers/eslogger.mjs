@@ -191,13 +191,14 @@ export const esloggerProvider = {
     processScopes: ["all", "session"],
     setup: {
       title: "Start the macOS collector",
-      description: "macOS authorization is required. eslogger sees system-wide metadata; the unprivileged collector forwards only graph-file accesses allowed by this canvas's process scope. Session scope follows the selected session's tool tree, excluding the viewer subtree.",
+      description: "macOS authorization is required. eslogger sees system-wide metadata; the unprivileged collector forwards only graph-file accesses allowed by this canvas's process scope. Cartograph never starts or elevates the collector automatically.",
       steps: [
         "Open Terminal on the Mac running this canvas with Node.js 22 or later on its PATH. Grant Terminal Full Disk Access in System Settings > Privacy & Security if required.",
-        "Run the command below manually. It subscribes to open/close events; session scope also subscribes to fork/exec/exit events and seeds existing processes using read-only ps PID/parent/birth-time metadata. Only eslogger runs as root; Node runs as your normal user. Do not sudo the whole pipeline.",
-        "Leave that terminal open. Status becomes Live only after the collector observes a valid file-access event, not a process lifecycle event. Use Control-C to stop it.",
+        "Run the displayed command manually. Only eslogger runs as root; Node runs as your normal user. Do not sudo the whole pipeline.",
+        "Leave Terminal running; use Ctrl-C to stop. Status becomes Live only after an accepted file access, not a process lifecycle event.",
       ],
       notice: "The command contains a private connection token. Do not share it.",
+      diagnostics: "The collector subscribes to open/close events. Session scope also subscribes to fork/exec/exit events and seeds existing processes using read-only ps PID/parent/birth-time metadata. Verified ancestry follows the selected session's tool tree, excludes the viewer subtree, and drops unknown ancestry. Process lifecycle events maintain ancestry but cannot make monitoring Live.",
     },
   },
   availability: (platform) => ({

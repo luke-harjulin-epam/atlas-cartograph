@@ -18,9 +18,11 @@ Cartograph can coexist; choose the project provider to run this source.
 The small bottom-left build badge shows the canvas version and the first eight
 characters of its source commit SHA. Hover for the full SHA. `+ local` means
 the runtime includes uncommitted source changes, so it is not the exact commit.
-Release archives retain their source SHA in the deployed runtime. Unstamped
-copies without source-checkout metadata show `SHA unavailable`; the consumer
-project's commit is never used as the canvas version.
+Release archives retain their source SHA in the deployed runtime via stamped
+`cartograph-build.json` and `package.json` metadata. Source checkouts read Git
+first so `+ local` still reflects uncommitted runtime files. Unsubstituted or
+missing stamps show `SHA unavailable`; the consumer project's commit is never
+used as the canvas version.
 The FPS counter beside it reports rendered frames per second over a one-second
 sample. It works with WebGL and Canvas 2D and resets after a suspended tab.
 `-- FPS` means no current sample is available, including outside the map.
@@ -91,6 +93,26 @@ require SDK context or metadata.
 ## Search and select nodes
 
 Type in the always-visible **Search stars** field in the map toolbar.
+The field fills the available toolbar width, leaving space for the menu and
+chat controls. Search results align with both edges of that field and resize
+with it as the window or chat panel changes. The menu opens a full-height panel
+over the left side of the Atlas without shrinking the graph.
+A logo and **Atlas Cartograph** header sit
+above **Options**. With chat open, the panel stays within the Atlas area.
+If chat leaves less than 220px for Options, opening either panel folds the
+other without clearing the chat draft. Narrowing the window also folds Options
+when the two panels no longer fit.
+Its branded header stays visible while the options scroll; Close or
+Escape dismisses it and returns focus to the menu button.
+The menu separates **Atlases**, **Layout**, **Layers**, **Links** and **Graph**.
+Use **+ (Add atlas)** or an Atlas row's cross to manage open stores; removing one never
+deletes its files, and the final Atlas cannot be removed. Short labels keep
+controls compact; the **i** buttons explain each section. Node/edge counts
+stay visible, while format and store details appear in Graph's information popup.
+Options slides in and out from the left; chat slides in and out from the
+right, including when closing full-screen chat. Both use a 180ms transition
+and become non-interactive immediately on close. Reduced motion disables
+these transitions.
 One field searches by title, ID, Atlas,
 full path, type or kind and uses that same query to highlight matching visible
 nodes on the map. The result list includes hidden layers and supports native
@@ -133,6 +155,79 @@ The map uses WebGL where available, with the same labels, camera and controls
 as its 2D fallback. If WebGL is interrupted, rendering continues in 2D with a
 status notice; graph selection and playback are retained.
 
+## External source links
+
+Open a page's Markdown preview to see its **External sources**. Each HTTP/HTTPS
+source is a full clickable row with a descriptive label, repository/domain
+context and an external-link icon. Tab to a source and press Enter to open it.
+Hover or focus the row to see its full destination. Internal Atlas sources and
+relationships remain navigation chips.
+
+Cartograph recognises strings and source objects with `path`, `url` or `uri`
+in the page's frontmatter:
+
+```yaml
+sources:
+  - https://github.com/example/project/pull/8
+  - uri: https://github.com/example/project/releases/tag/v0.3.0
+    title: Version 0.3.0 release notes
+  - path: decisions/design.md
+```
+
+An optional `title` takes precedence over a derived label. Without a title,
+GitHub links identify pull requests, issues, releases, commits or files; other
+sites show a readable path with their domain. Labels are derived locally:
+opening a preview does not fetch external titles, favicons or page contents.
+External source links keep the complete destination, including `.md` suffixes,
+query strings and fragments. Non-HTTP/HTTPS schemes are not external web links.
+The viewer recognises these metadata forms; your Atlas's schema remains the
+authority for authoring and validation.
+
+## Chat with this Atlas
+
+Use the diagonal-arrow **Full screen** icon in the chat header when you need
+more room for tables or long answers. It fills the Cartograph canvas, not the
+host application's window. The arrows point inward when maximised; click
+**Restore** or press Escape to return to the normal drawer. A second Escape
+folds it. A single split-panel icon stays at the top-right whether chat is
+folded, open or full-screen; use it to open or close the panel.
+Drafts and conversation are retained, and
+covered graph controls are unavailable to keyboard/pointer interaction until
+you restore or close chat. This size preference is local to the page.
+
+The map chat button talks to the same Copilot session that opened the canvas.
+Replies are labelled **Copilot**, not a session identifier. Cartograph sends
+only a compact `cartograph-chat` activation card: the bundled activation path,
+your question, open Atlas identities/roots, selection, query and request routing.
+No page bodies or repeated answering instructions are included.
+The bundled `atlas/cartograph-chat.md` activation directs the
+agent to read mounted Markdown through session file tools, cite sources, and
+send the answer back to this drawer with the `update_chat` canvas action.
+
+**Waiting for Copilot…** means the request is queued. Once the agent starts,
+short stage labels such as **Searching the Atlas**, **Reading pages**, and
+**Preparing answer** appear beside animated dots. Each stage replaces the
+previous pending label, not the conversation history. Older callers without
+a label still show **Working…**. Reduced motion keeps a
+static status. Sending the prompt is not completion: the indicator remains
+until the answer, an error, or a ten-minute timeout. An identical reply retry
+does not duplicate the answer; replies cannot overwrite another completed
+request. The drawer retains the most recent 50 messages. Older pending
+requests are discarded when trimmed, and closing the canvas cancels its
+pending requests. Reopening starts a new chat.
+
+The answer appears in the canvas. The host may also retain the prompt, tool
+calls and a brief acknowledgement in its session transcript. A transcript-only
+answer is not a delivered canvas reply. If a request expires, send it again.
+Chat is unavailable for a canvas owned by a different session from the joined
+extension; it never silently sends that question to another session.
+
+Session page reads can light Knowledge Activation when its collector is
+connected. Canvas scans and previews remain excluded; no collector starts
+automatically. Failures never fall back to keyword search. Standalone
+`npm start` still uses explicitly labelled **Local Atlas search**, because it
+has no host session.
+
 ## Atlas grouping
 
 **Layers** and **Atlases** draw each group as a volumetric galaxy rather than
@@ -174,7 +269,12 @@ pages retain their rendering categories. **Proximity** still uses existing
 folder/relationship neighborhoods and its previous layout, not schema ownership.
 The separation is in
 3D: groups can still line up in projection while
-you orbit the camera. Use an Atlas's island-navigation button to inspect it.
+you orbit the camera. Open **View** in the floating status bar to inspect a
+group, or select **All** to return to the overview. The popup lists the available
+views for the current grouping, with counts and full Atlas/schema labels.
+Large lists use Previous/Next pages. Arrow keys move between options; Enter
+selects, and Escape closes the popup. Selecting a view closes the popup and
+updates the status-bar label without changing search or layer filters.
 
 ## Schema and type layers
 
@@ -187,14 +287,21 @@ its originating Atlas and relative source file; duplicate names in different
 stores are independent controls.
 
 Choose a schema or individual type while **All** is active to isolate it, then
-toggle other types or schemas to combine them. A dashed schema button means
+select other types or schemas to add them. Click a selected layer to remove it;
+removing the last selection automatically selects all node layers again,
+including empty declared types and fallback categories. Link visibility stays
+unchanged. A dashed schema button means
 only some of its types are enabled. Counts show total nodes in each layer,
 independent of search and visibility. **All** restores every type and legacy
-category without changing **Relates** or **Provenance**. **Pages without schema
-declarations** separates **Navigation indexes** (untyped `index.md` files),
+category without changing **Relates** or **Provenance** in the separate **Links**
+section. Expand **Other pages** to reach categories outside schema declarations:
+**Navigation indexes** (untyped `index.md` files),
 **Undeclared types** (explicit types without a matching declaration), and
 **Untyped pages** (ordinary untyped pages). Neutral Experiences, Decisions and
 Work categories retain filename-derived navigation for older store layouts.
+Other pages starts collapsed; opening it does not change filters, and its open
+state survives live updates and closing the menu. Schema diagnostics and layer
+save errors remain outside that disclosure.
 An explicit undeclared `type: index` belongs to Undeclared types, not Navigation
 indexes; a declared index type belongs to its schema. These labels do not imply
 that content is outdated or invalid. The node browser and previews
@@ -284,12 +391,44 @@ that command nor subsequent refreshes.
 
 ## Activity controls
 
-Open **Knowledge Activation** in the map to see collector status, change the
-highlight duration in seconds, pause highlighting, and get the collector
-command. Settings belong to the current canvas; a new canvas defaults to five
-seconds. Valid durations are 0.1 to 300 seconds.
+The floating bottom bar keeps **Knowledge Activation** status on the left,
+the **View** selector beside it, and zoom controls on the right. Activation's
+title sits above the collector/change statuses and playback timing.
+Both selectors use the same expand/collapse chevron.
+Click the activation section to open settings above
+the bar. Zoom buttons do not open or close settings. Escape or the cross closes
+settings and returns focus to the status section.
 
-**Automatically frame changing nodes** is on by default. The camera smoothly
+Menus show short labels and status values. Select a round **i** button for
+the full explanation, collector instructions or diagnostic details. Information
+opens above the interface, stays up to date, and does not change settings.
+Escape or the cross returns focus to its button; clicking outside dismisses
+it. Search and layer controls use the same information popup.
+
+Use **Follow activity**, **Highlight file access**, and **Highlight duration**
+for everyday controls. Read collector and file-change status appear first and
+remain separate, even when highlighting is off. **Set up collector** opens the
+setup instructions when the collector is waiting, disconnected or reporting an
+error. This shortcut is hidden while the canvas connection itself is lost.
+Expand **Collector setup** for the private connection
+command; opening settings alone does not fetch connection details or start a
+collector. Read the setup **i** popup for the provider's instructions before
+running a command. Closing setup clears the command. **Diagnostics** shows
+scope and merged/cancelled counts; its **i** buttons explain process mechanics,
+timing and capture limitations. Permissions and private-token warnings remain
+visible beside setup, and errors remain visible rather than hidden in help.
+Settings belong to the current canvas; a new canvas defaults to five seconds.
+Valid durations are 0.1 to 300 seconds.
+
+Checkboxes apply immediately. Duration edits show **Unsaved changes** until you
+choose **Save** or **Cancel**. A draft survives live updates, moving focus,
+checkbox changes and closing/reopening settings; a failed save keeps it for
+retry. Cancel restores the latest confirmed duration without sending a request.
+Drafts are local to the current page and do not survive a browser reload.
+The inline **ms** value is playback pace between displayed activations, not
+collection latency; its tooltip and accessible description explain the difference.
+
+**Follow activity** is on by default. The camera smoothly
 pans and zooms to currently displayed read highlights, new/deleted nodes, and
 both ends of new/deleted relationships. It fits the whole changing set, rather
 than chasing individual events under load. Search matches and visible layers
@@ -318,7 +457,9 @@ angle replaces the original angle for that restoration.
 During the return, pan follows zoom progress so the Atlas stays in view instead
 of drifting away while zoom unwinds. The zoom-out duration is unchanged.
 Uncheck the option to stop following without restoring the old zoom.
-Reduced-motion preferences suppress automatic camera movement.
+Reduced-motion preferences suppress automatic camera movement. When following
+is enabled, **Paused by reduced motion** explains the suppression without
+clearing your preference.
 This checkbox belongs to the current browser page and resets to on after a
 page reload. It remains independent of read highlighting: filesystem changes
 can frame themselves even without a running read collector.

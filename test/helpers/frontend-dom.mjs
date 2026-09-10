@@ -20,6 +20,7 @@ class Element {
     this.parentElement = null;
     this.children = [];
     this.attributes = new Map();
+    this.style = {};
     this.listeners = new Map();
     this.value = "";
     this.disabled = false;

@@ -47,7 +47,31 @@ test("bootstrap and UI snapshots retain the runtime build identity", async (t) =
   const action = await fetch(new URL("/api/ui", entry.url), {
     method: "POST", headers, body: JSON.stringify({ action: "query", query: "shared" }),
   });
+
   assert.deepEqual((await action.json()).build, state.build);
+});
+
+test("preview actions and bootstrap carry exact external sources with optional titles", async (t) => {
+  const { state, roots, start } = fixture(t);
+  const url = "https://github.com/team/project/blob/main/README.md?raw=1&view=full#section.md";
+  writeFileSync(join(roots[0], "work", "unique.md"), [
+    "---", "sources:", "  - path: work/shared", `  - uri: ${url}`,
+    "    title: Project guide", "---", "Preview body.",
+  ].join("\n"));
+  refreshAtlases(state);
+  const entry = await start();
+  const headers = { "X-Cartograph-Client": "canvas", "Content-Type": "application/json" };
+  const response = await fetch(new URL("/api/ui", entry.url), {
+    method: "POST", headers, body: JSON.stringify({ action: "select", nodeId: "one::work/unique" }),
+  });
+  assert.equal(response.status, 200);
+  const action = await response.json();
+  assert.deepEqual(action.page.sources, ["work/shared", url]);
+  assert.deepEqual(action.page.sourceDetails, [{ path: "work/shared" }, { path: url, title: "Project guide" }]);
+  const bootstrap = await fetch(new URL("/api/bootstrap", entry.url), { headers });
+  assert.deepEqual((await bootstrap.json()).state.page.sourceDetails, action.page.sourceDetails);
+  const asset = await fetch(new URL("/source-links.js", entry.url));
+  assert.equal(asset.status, 200, "the new dependency is served from the self-contained public bundle");
 });
 
 test("node activation focuses first and opens Markdown only on repeated activation of the resolved node", (t) => {
@@ -693,6 +717,6 @@ test("chunked requests receive 413 as soon as the byte limit is crossed, without
 test("browser forwards link targets to the server and marks canvas requests", () => {
   const app = readFileSync(new URL("../.apm/extensions/cartograph/public/app.js", import.meta.url), "utf8");
   assert.match(app, /"X-Cartograph-Client": "canvas"/);
-  assert.match(app, /function navigateWiki\(target\) \{\s*return post\("select", \{ nodeId: target \}\);/);
+  assert.match(app, /function navigateWiki\(target\) \{[\s\S]*?\n  return post\("select", \{ nodeId: target \}\);\n\}/);
   assert.match(app, /fetch\("\/api\/bootstrap", \{ headers: \{ "X-Cartograph-Client": "canvas" \} \}\)/);
 });

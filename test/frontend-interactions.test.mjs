@@ -5,6 +5,7 @@ import vm from "node:vm";
 import { allNodeLayersOn, applyLayerClick, createLayerControls } from "../.apm/extensions/cartograph/public/layer-controls.js";
 import { createStateControls } from "../.apm/extensions/cartograph/public/state-controls.js";
 import { handleContentClick } from "../.apm/extensions/cartograph/public/content-navigation.js";
+import { renderExternalSources, sourceKind } from "../.apm/extensions/cartograph/public/source-links.js";
 import { mountNodeBrowser } from "../.apm/extensions/cartograph/public/node-browser.js";
 import { fallbackLayerLabel, nodeCategory, nodeLayer, layerCounts } from "../.apm/extensions/cartograph/public/node-layers.js";
 import { mountSchemaLayers } from "../.apm/extensions/cartograph/public/schema-layers.js";
@@ -16,6 +17,126 @@ const html = readFileSync(new URL("../.apm/extensions/cartograph/public/index.ht
 const app = readFileSync(new URL("../.apm/extensions/cartograph/public/app.js", import.meta.url), "utf8");
 const all = Object.fromEntries(["experiences", "decisions", "work", "indexes", "other", "relations", "sources"].map((key) => [key, true]));
 const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+test("floating status bar groups activation and independent zoom outside the graph pointer surface", () => {
+  const { document, renderers } = appFixture();
+  const bar = document.getElementById("status-bar");
+  const activation = document.getElementById("activity-controls");
+  const zoom = document.getElementById("status-zoom");
+  assert.equal(activation.parentElement, bar);
+  assert.equal(zoom.parentElement, bar);
+  assert.equal(renderers[0].zoomControls, zoom);
+  assert.equal(document.getElementById("graph-wrap").querySelector("[data-zoom-in]"), null);
+  assert.equal(document.querySelector(".hint"), null);
+  assert.equal(document.querySelectorAll("[data-zoom-in]").length, 1);
+  assert.equal(document.getElementById("activity-setup").tagName, "DETAILS");
+  assert.equal(document.getElementById("activity-setup").getAttribute("open"), null);
+  assert.equal(document.getElementById("activity-summary").getAttribute("aria-controls"), "activity-settings");
+  const summary = document.getElementById("activity-summary");
+  assert.equal(summary.querySelector(".status-caption").textContent, "Knowledge Activation");
+  const row = summary.querySelector(".activity-status-row");
+  for (const id of ["activity-status", "graph-watch-status", "activity-playback-status"]) {
+    assert.equal(document.getElementById(id).parentElement, row);
+  }
+  assert.equal(summary.querySelector("path").getAttribute("d"), document.getElementById("view-summary").querySelector("path").getAttribute("d"));
+  const body = document.getElementById("activity-settings");
+  assert.ok(body.children.indexOf(body.querySelector(".activity-health")) < body.children.indexOf(body.querySelector(".activity-toggle").parentElement));
+  assert.equal(document.getElementById("activity-connect").getAttribute("aria-controls"), "activity-setup");
+  renderers[0].onReducedMotion(true);
+  assert.equal(document.getElementById("activity-camera-status").textContent, "true");
+});
+
+test("View popup replaces the island row, selects keyed views and returns to All", () => {
+  const { document, flights, calls } = appFixture({ clusters: [
+    { key: "store-a/work", label: "Work", count: 3 }, { key: "store-b/work", label: "Work", count: 2 },
+  ] });
+  const menu = document.getElementById("view-controls");
+  const nav = document.getElementById("islands");
+  assert.equal(menu.parentElement, document.getElementById("status-bar"));
+  assert.equal(nav.parentElement, menu);
+  assert.equal(document.querySelector(".islands"), null);
+  assert.equal(document.querySelectorAll("[data-island-shift]").length, 0);
+  menu.open = true;
+  document.querySelector('[data-island="store-b/work"]').click();
+  assert.deepEqual(flights, ["store-b/work"]);
+  assert.equal(document.getElementById("view-label").textContent, "Work");
+  assert.equal(document.querySelector('[data-island="store-b/work"]').getAttribute("aria-pressed"), "true");
+  assert.equal(menu.open, false);
+  assert.equal(document.activeElement, document.getElementById("view-summary"));
+  document.querySelector('[data-island=""]').click();
+  assert.deepEqual(flights, ["store-b/work", null]);
+  assert.equal(document.getElementById("view-label").textContent, "All");
+  assert.equal(calls.length, 0, "Changing views remains local camera navigation");
+});
+
+test("View popup bounds large lists and can page away from a selected view", () => {
+  const clusters = Array.from({ length: 20 }, (_, i) => ({ key: `view-${i}`, label: `View ${i}`, count: 100 - i }));
+  const { document, apply } = appFixture({ clusters });
+  const menu = document.getElementById("view-controls");
+  document.querySelector('[data-island="view-0"]').click();
+  menu.open = true;
+  document.querySelector('[data-island-shift="1"]').click();
+  assert.equal(document.querySelectorAll("[data-island]").length, 7);
+  assert.ok(document.querySelector('[data-island="view-6"]'));
+  apply({ query: "new", queryRevision: 1 });
+  assert.ok(document.querySelector('[data-island="view-6"]'), "Live snapshots must not snap pagination back to the selected view");
+  document.querySelector('[data-island-shift="1"]').click();
+  document.querySelector('[data-island-shift="1"]').click();
+  assert.ok(document.querySelector('[data-island="view-19"]'));
+  assert.equal(document.querySelector('[data-island-shift="1"]').disabled, true);
+  assert.notEqual(document.activeElement, document.body);
+  document.querySelector('[data-island="view-19"]').click();
+  assert.equal(document.getElementById("view-label").textContent, "View 19");
+});
+
+test("View popup preserves focused options across live updates and falls back when removed", () => {
+  const clusters = [{ key: "stable", label: "A", count: 4 }, { key: "removed", label: "B", count: 3 }];
+  const { document, apply } = appFixture({ clusters });
+  const option = document.querySelector('[data-island="stable"]');
+  option.focus();
+  apply({ query: "new", queryRevision: 1 });
+  assert.equal(document.activeElement, option);
+  clusters[0].label = "Renamed";
+  apply({ query: "", queryRevision: 2 });
+  assert.equal(document.activeElement.getAttribute("data-island"), "stable");
+  document.querySelector('[data-island="removed"]').focus();
+  clusters.pop();
+  apply({ query: "", queryRevision: 3 });
+  assert.equal(document.activeElement.getAttribute("data-island"), "");
+});
+
+test("View popup supports arrow keys, Escape, outside dismissal and exclusive status popups", () => {
+  const { document } = appFixture({ clusters: [{ key: "work", label: "Work", count: 1 }] });
+  const menu = document.getElementById("view-controls");
+  const summary = document.getElementById("view-summary");
+  summary.focus();
+  summary.dispatchEvent(new FrontendEvent("keydown", { key: "ArrowDown" }));
+  assert.equal(menu.open, true);
+  assert.equal(document.activeElement.getAttribute("data-island"), "");
+  document.activeElement.dispatchEvent(new FrontendEvent("keydown", { key: "End" }));
+  assert.equal(document.activeElement.getAttribute("data-island"), "work");
+  document.activeElement.dispatchEvent(new FrontendEvent("keydown", { key: "Escape" }));
+  assert.equal(menu.open, false);
+  assert.equal(document.activeElement, summary);
+  const activity = document.getElementById("activity-controls");
+  activity.open = true;
+  menu.open = true;
+  menu.dispatchEvent(new FrontendEvent("toggle"));
+  assert.equal(activity.open, false);
+  activity.open = true;
+  activity.dispatchEvent(new FrontendEvent("toggle"));
+  assert.equal(menu.open, false);
+  menu.open = true;
+  document.getElementById("search").dispatchEvent(new FrontendEvent("pointerdown"));
+  assert.equal(menu.open, false);
+});
+
+test("build badge stays below the Options panel", () => {
+  const css = readFileSync(new URL("../.apm/extensions/cartograph/public/styles.css", import.meta.url), "utf8");
+  const badgeZ = Number(css.match(/\.build-info \{[^}]*z-index: (\d+)/)[1]);
+  const panelZ = Number(css.match(/\.panel \{[^}]*z-index: (\d+)/)[1]);
+  assert.ok(badgeZ > 0 && badgeZ < panelZ);
+});
 
 test("build badge shows version and short SHA, exposes full provenance, and rejects stale state", () => {
   const { document, apply } = appFixture();
@@ -99,13 +220,15 @@ function controlsFixture(layersRevision = 0) {
   return { controls, calls, changes };
 }
 
-function appFixture({ reducedMotion = false, phase = "map" } = {}) {
+function appFixture({ reducedMotion = false, phase = "map", clusters = [], onChatSerialize = () => {} } = {}) {
   const document = frontendDocument(html);
   const calls = [];
   const opened = [];
   const queries = [];
   const graphs = [];
   const renderers = [];
+  const flights = [];
+  let focusedCluster = null;
   const streams = [];
   const timers = [];
   const activities = [];
@@ -113,6 +236,9 @@ function appFixture({ reducedMotion = false, phase = "map" } = {}) {
   const frames = new Map();
   const drawings = new Map();
   const motionListeners = new Set();
+  const windowListeners = new Map();
+  const resizeObservers = [];
+  document.getElementById("chat-input").scrollHeight = 56;
   const motion = {
     matches: reducedMotion,
     addEventListener(type, listener) { if (type === "change") motionListeners.add(listener); },
@@ -136,18 +262,43 @@ function appFixture({ reducedMotion = false, phase = "map" } = {}) {
   }
   const bootstrap = deferred();
   const context = vm.createContext({
+    JSON: {
+      parse: JSON.parse,
+      stringify(value, ...args) {
+        if (Array.isArray(value) && typeof value[0] === "boolean" && Array.isArray(value[1])) onChatSerialize();
+        return JSON.stringify(value, ...args);
+      },
+    },
     document, allNodeLayersOn, createLayerControls, createStateControls, handleContentClick, mountNodeBrowser, escapeHtml, renderMarkdown,
+    renderExternalSources, sourceKind,
     fallbackLayerLabel, nodeCategory, nodeLayer, layerCounts, mountSchemaLayers, nodeSearchText,
-    window: { matchMedia: () => motion, open: (...args) => opened.push(args) },
+    window: {
+      matchMedia: () => motion, open: (...args) => opened.push(args),
+      addEventListener(type, listener) { windowListeners.set(type, listener); },
+    },
+    ResizeObserver: class {
+      constructor(callback) { this.callback = callback; resizeObservers.push(this); }
+      observe(target) { this.target = target; }
+      disconnect() { this.target = null; }
+    },
     performance: { now: () => clock },
     requestAnimationFrame(callback) { frames.set(++frameId, callback); return frameId; },
     cancelAnimationFrame(id) { frames.delete(id); },
     setTimeout(callback) { timers.push(callback); return timers.length; }, clearTimeout() {},
-    mountActivityControls: () => ({ setActivity(activity) { activityStatuses.push(activity); }, autoFocusEnabled: () => true, setPlayback() {} }),
+    mountActivityControls: () => ({
+      setActivity(activity) { activityStatuses.push(activity); }, autoFocusEnabled: () => true, setPlayback() {},
+      setReducedMotion(reduced) { document.getElementById("activity-camera-status").textContent = String(reduced); },
+    }),
     mountGraphWatchControls: () => ({ setWatch() {} }),
+    mountMenuInfo: () => ({ close() {}, closeWithin() {} }),
     mountGraphCanvas: (_wrap, options) => {
       renderers.push(options);
-      return { setGraph(nodes) { graphs.push(nodes); }, setSelected() {}, setQuery(query) { queries.push(query); }, setActivity(activity) { activities.push(activity); }, clusters: () => [] };
+      return {
+        setGraph(nodes) { graphs.push(nodes); }, setSelected() {}, setQuery(query) { queries.push(query); },
+        setActivity(activity) { activities.push(activity); }, clusters: () => clusters,
+        focusCluster: () => focusedCluster,
+        flyTo(key) { focusedCluster = key; flights.push(key); options.onCluster?.(); },
+      };
     },
     EventSource: class {
       constructor() { streams.push(this); this.listeners = new Map(); }
@@ -173,8 +324,8 @@ function appFixture({ reducedMotion = false, phase = "map" } = {}) {
   function apply(next) { return vm.runInContext(`applyState(${JSON.stringify(next)})`, context); }
   apply(initial);
   return {
-    document, calls, opened, queries, graphs, renderers, timers, bootstrap, apply, activities, activityStatuses,
-    frames, drawings, motionListeners,
+    document, calls, opened, queries, graphs, renderers, flights, timers, bootstrap, apply, activities, activityStatuses,
+    frames, drawings, motionListeners, resizeObservers, windowListeners,
     frame() {
       clock += 16;
       const queued = [...frames.values()];
@@ -501,14 +652,47 @@ test("failed bootstrap HTTP responses surface errors without bypassing snapshot 
 test("layer solo, additive, all and relationship semantics are preserved", () => {
   const solo = applyLayerClick(all, "experiences");
   assert.deepEqual(solo, { ...all, decisions: false, work: false, indexes: false, other: false });
-  assert.deepEqual(applyLayerClick(solo, "experiences"), solo, "last visible category stays on");
+  assert.deepEqual(applyLayerClick(solo, "experiences"), all, "removing the last category restores all");
   const added = applyLayerClick(solo, "decisions");
   assert.equal(added.decisions, true);
   assert.equal(added.experiences, true);
   assert.equal(allNodeLayersOn(added), false);
+  assert.deepEqual(applyLayerClick(added, "decisions"), solo, "a selected category is removed");
   const noRelations = applyLayerClick(added, "relations");
   assert.equal(noRelations.relations, false);
   assert.deepEqual(applyLayerClick(noRelations, "all"), { ...all, relations: false });
+  assert.deepEqual(applyLayerClick({ ...solo, relations: false, sources: false }, "experiences"),
+    { ...all, relations: false, sources: false }, "automatic All preserves link visibility");
+});
+
+test("type selection cycles through solo, add, remove and automatic All during pending saves", async () => {
+  const { document, apply, calls, graphs, state } = appFixture();
+  apply({ graph: schemaGraph(), layers: { ...all, sources: false }, layersRevision: 1,
+    query: "retain", queryRevision: 1, grouping: "atlases" });
+  const click = key => document.querySelector(`[data-layer="${key}"]`).click();
+  const visible = () => Array.from(graphs.at(-1), node => node.id);
+  click("document-type");
+  assert.deepEqual(visible(), ["guide"]);
+  click("instrument-type");
+  assert.deepEqual(visible(), ["guide", "telescope"]);
+  click("document-type");
+  assert.deepEqual(visible(), ["telescope"]);
+  click("instrument-type");
+  assert.deepEqual(visible(), ["guide", "telescope", "note"]);
+  assert.equal(document.querySelector('[data-layer="all"]').getAttribute("aria-pressed"), "true");
+  assert.equal(document.querySelector('[data-layer="calibration-type"]').getAttribute("aria-pressed"), "true");
+  assert.equal(state().layers.sources, false);
+  assert.equal(state().query, "retain");
+  assert.equal(state().grouping, "atlases");
+  assert.equal(calls.length, 1, "later intent waits for the first request");
+  calls[0].resolve({ ok: true, json: async () => ({ layers: calls[0].layers, layersRevision: 2 }) });
+  await settle();
+  assert.equal(calls.length, 2);
+  assert.equal(allNodeLayersOn(calls[1].layers), true, "the queued request saves automatic All");
+  assert.equal(calls[1].layers.sources, false);
+  calls[1].resolve({ ok: true, json: async () => ({ layers: calls[1].layers, layersRevision: 3 }) });
+  await settle();
+  assert.equal(allNodeLayersOn(state().layers), true);
 });
 
 test("All remains inactive until the other node layer is restored", () => {
@@ -820,6 +1004,609 @@ test("versionless legacy snapshots protect pending clicks without taking lifelon
   assert.equal(controls.layersRevision, null);
 });
 
+test("options overlay opens accessibly and closes without changing graph or search state", () => {
+  const { document, apply, calls } = appFixture();
+  const panel = document.getElementById("panel");
+  const toggle = document.getElementById("toggle-panel");
+  const close = document.getElementById("panel-close");
+  const add = document.getElementById("add-atlas");
+  assert.equal(add.textContent.trim(), "");
+  assert.equal(add.getAttribute("aria-label"), "Add atlas");
+  assert.equal(add.getAttribute("title"), "Add atlas");
+  assert.equal(add.querySelector("svg").getAttribute("aria-hidden"), "true");
+  assert.equal(add.querySelector("path").getAttribute("d"), "M12 5v14M5 12h14");
+  assert.equal(panel.getAttribute("aria-hidden"), "true");
+  assert.equal(panel.querySelector(".panel-brand-atlas").textContent, "Atlas");
+  assert.equal(panel.querySelector(".panel-brand-cartograph").textContent, "Cartograph");
+  assert.equal(panel.querySelector(".panel-brand").querySelector("svg").getAttribute("aria-hidden"), "true");
+  assert.equal(document.getElementById("panel-title").textContent, "Options");
+  toggle.click();
+  assert.equal(panel.classList.contains("options-open"), true);
+  assert.equal(panel.inert, false);
+  assert.equal(panel.getAttribute("aria-hidden"), "false");
+  assert.equal(toggle.getAttribute("aria-expanded"), "true");
+  assert.equal(document.activeElement, close);
+  apply({});
+  assert.equal(panel.classList.contains("options-open"), true);
+  close.dispatchEvent(new FrontendEvent("keydown", { key: "Escape" }));
+  assert.equal(panel.inert, true);
+  assert.equal(document.activeElement, toggle);
+  assert.equal(toggle.getAttribute("aria-expanded"), "false");
+  toggle.click();
+  close.click();
+  toggle.click();
+  toggle.click();
+  assert.equal(panel.classList.contains("options-open"), false);
+  assert.equal(calls.length, 0);
+  toggle.click();
+  document.getElementById("add-atlas").click();
+  assert.equal(panel.inert, true);
+  assert.equal(toggle.getAttribute("aria-expanded"), "false");
+  assert.equal(document.activeElement, document.getElementById("atlas-add-close"));
+});
+
+test("Options separates layout, node layers and links while preserving disclosure state", () => {
+  const { document, apply, calls } = appFixture();
+  const panel = document.getElementById("panel");
+  assert.deepEqual(panel.querySelectorAll("h3").map(heading => heading.textContent),
+    ["Atlases", "Layout", "Layers", "Links", "Graph"]);
+  const layerSection = document.getElementById("options-layers-title").closest("section");
+  const linkSection = document.getElementById("options-links-title").closest("section");
+  assert.equal(layerSection.querySelector('[data-layer="all"]').textContent, "All");
+  assert.equal(layerSection.querySelector('[data-layer="relations"]'), null);
+  assert.equal(linkSection.querySelectorAll("[data-layer]").length, 2);
+  assert.equal(document.getElementById("stat-nodes").tagName, "DD");
+  assert.equal(document.getElementById("stat-format").closest("[hidden]").id, "graph-info");
+  const fallback = document.getElementById("fallback-layers");
+  assert.equal(fallback.getAttribute("open"), null);
+  assert.equal(fallback.querySelectorAll("[data-legacy-layer]").length, 6);
+  fallback.open = true;
+  apply({ graph: schemaGraph(), query: "updated", queryRevision: 1 });
+  assert.equal(fallback.open, true);
+  document.getElementById("toggle-panel").click();
+  document.getElementById("panel-close").click();
+  document.getElementById("toggle-panel").click();
+  assert.equal(fallback.open, true);
+  for (const id of ["schema-diagnostics", "layer-status", "layer-error"]) {
+    assert.equal(document.getElementById(id).closest("details"), null, `${id} must not be inside a collapsed disclosure`);
+  }
+  assert.equal(calls.length, 0);
+});
+
+test("Atlas remove controls retain focus across updates and keep the last store open", async () => {
+  const { document, apply, calls } = appFixture();
+  const roots = ["/atlas", "/second"];
+  const stores = [{ root: "/atlas", label: "Primary" }, { root: "/second", label: "Second <Atlas>" }];
+  apply({ roots, stores });
+  const remove = document.querySelector('[data-drop="/second"]');
+  assert.equal(remove.getAttribute("aria-label"), "Remove Second <Atlas>");
+  assert.equal(remove.querySelector("svg").getAttribute("aria-hidden"), "true");
+  remove.focus();
+  apply({ query: "update", queryRevision: 1 });
+  assert.equal(document.activeElement, remove);
+  stores[1].label = "Renamed";
+  apply({ stores });
+  assert.equal(document.activeElement.getAttribute("data-drop"), "/second");
+  assert.equal(document.activeElement.getAttribute("aria-label"), "Remove Renamed");
+  document.activeElement.click();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].action, "drop");
+  assert.equal(calls[0].root, "/second");
+  calls[0].resolve({ ok: true, json: async () => ({ roots: ["/atlas"], stores }) });
+  await settle();
+  apply({ roots: ["/atlas"], stores });
+  assert.equal(document.activeElement.id, "add-atlas");
+  assert.equal(document.querySelector('[data-drop="/atlas"]').disabled, true);
+});
+
+test("narrow Options and chat take turns without clearing the chat draft", () => {
+  const { document, windowListeners, calls } = appFixture();
+  const map = document.getElementById("phase-map");
+  const panel = document.getElementById("panel");
+  const chat = document.getElementById("graph-chat");
+  const input = document.getElementById("chat-input");
+  map.clientWidth = 400;
+  chat.offsetWidth = 360;
+  input.value = "Keep this draft";
+  document.getElementById("toggle-panel").click();
+  document.getElementById("chat-toggle").click();
+  assert.equal(panel.inert, true);
+  assert.equal(chat.inert, false);
+  document.getElementById("toggle-panel").click();
+  assert.equal(panel.inert, false);
+  assert.equal(chat.inert, true);
+  assert.equal(input.value, "Keep this draft");
+  map.clientWidth = 800;
+  document.getElementById("chat-toggle").click();
+  assert.equal(panel.inert, false);
+  assert.equal(chat.inert, false);
+  document.getElementById("panel-close").focus();
+  map.clientWidth = 400;
+  windowListeners.get("resize")();
+  assert.equal(panel.inert, true);
+  assert.equal(document.activeElement.id, "chat-input");
+  assert.equal(input.value, "Keep this draft");
+  map.clientWidth = 800;
+  document.getElementById("toggle-panel").click();
+  const info = document.querySelector('[data-info="layout-info"]');
+  info.setAttribute("aria-expanded", "true");
+  document.getElementById("menu-info-close").focus();
+  map.clientWidth = 400;
+  windowListeners.get("resize")();
+  assert.equal(document.activeElement.id, "chat-input");
+  info.setAttribute("aria-expanded", "false");
+  map.clientWidth = 800;
+  document.getElementById("toggle-panel").click();
+  document.getElementById("chat-fullscreen").click();
+  map.clientWidth = 400;
+  windowListeners.get("resize")();
+  assert.equal(panel.classList.contains("options-open"), true, "full-screen chat retains covered Options state");
+  document.getElementById("chat-fullscreen").click();
+  assert.equal(panel.classList.contains("options-open"), false, "restoring a narrow drawer reconciles Options after removing full-screen inertness");
+  assert.equal(panel.inert, true);
+  assert.equal(input.value, "Keep this draft");
+  assert.equal(calls.length, 0);
+});
+
+test("search results share the search field's responsive horizontal bounds", () => {
+  const css = readFileSync(new URL("../.apm/extensions/cartograph/public/styles.css", import.meta.url), "utf8");
+  const results = css.match(/\.node-browser \{[^}]*\}/)[0];
+  const toolbar = css.match(/\.toolbar \{[^}]*\}/)[0];
+  assert.match(results, /left: calc\(var\(--toolbar-padding\) \+ var\(--toolbar-button-size\) \+ var\(--toolbar-gap\)\)/);
+  assert.match(results, /right: calc\(var\(--chat-inset\) \+ var\(--search-end\)\); width: auto/);
+  assert.doesNotMatch(results, /translateX|28rem/);
+  assert.match(toolbar, /gap: var\(--toolbar-gap\)/);
+  assert.match(toolbar, /padding: var\(--toolbar-padding\); padding-right: var\(--search-end\)/);
+  assert.match(css, /\.map\.chat-open \{[^}]*--search-end: var\(--toolbar-padding\)/);
+});
+
+test("search fills its toolbar and options overlay the full-height left side", () => {
+  const css = readFileSync(new URL("../.apm/extensions/cartograph/public/styles.css", import.meta.url), "utf8");
+  assert.doesNotMatch(css.match(/\.search-field \{[^}]*\}/)[0], /max-width/);
+  assert.match(css, /\.panel \{[^}]*top: 0; bottom: 0; left: 0;[^}]*width: min\(22\.5rem, calc\(100% - var\(--chat-inset\)\)\)/);
+  assert.match(css, /\.panel \{[^}]*transform: translateX\(-100%\); visibility: hidden;[^}]*transition: transform 180ms ease-out, visibility 0s linear 180ms;/);
+  assert.match(css, /\.panel\.options-open \{ transform: translateX\(0\); visibility: visible; transition-delay: 0s; \}/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{\s*\.panel \{ transition: none; \}/);
+  assert.match(css, /\.panel-body \{[^}]*min-height: 0; overflow: auto/);
+  assert.match(css, /\.panel-head \{[^}]*flex-shrink: 0/);
+  assert.match(css, /@media \(max-width: 26rem\) \{\s*\.panel-head \{ padding-right: 4rem; \}/);
+});
+
+test("chat folds into an inert drawer and preserves graph, history and drafts across toggles", () => {
+  const { document, apply, calls, graphs } = appFixture();
+  apply({ previewOpen: false, chat: [{ role: "graph", text: "Existing reply" }] });
+  const drawer = document.getElementById("graph-chat");
+  const map = document.getElementById("phase-map");
+  const toggle = document.getElementById("chat-toggle");
+  const input = document.getElementById("chat-input");
+  const log = document.getElementById("chat-log");
+  const message = log.children[0];
+  const graphCount = graphs.length;
+  assert.equal(drawer.tagName, "ASIDE");
+  assert.equal(toggle.parentElement, map);
+  assert.equal(document.querySelectorAll("#chat-toggle").length, 1);
+  assert.equal(document.getElementById("chat-close"), null);
+  assert.equal(drawer.inert, true);
+  assert.equal(drawer.getAttribute("aria-hidden"), "true");
+  assert.equal(toggle.getAttribute("aria-expanded"), "false");
+  assert.equal(toggle.getAttribute("aria-controls"), drawer.id);
+  assert.equal(map.classList.contains("chat-open"), false);
+
+  toggle.click();
+  assert.equal(drawer.inert, false);
+  assert.equal(drawer.getAttribute("aria-hidden"), "false");
+  assert.equal(drawer.classList.contains("chat-open"), true);
+  assert.equal(map.classList.contains("chat-open"), true);
+  assert.equal(toggle.getAttribute("aria-expanded"), "true");
+  assert.equal(document.activeElement, input);
+  input.value = "A question in progress";
+  log.scrollTop = 12;
+  input.dispatchEvent(new FrontendEvent("keydown", { key: "Escape" }));
+  assert.equal(drawer.inert, true);
+  assert.equal(drawer.classList.contains("chat-open"), false);
+  assert.equal(map.classList.contains("chat-open"), false);
+  assert.equal(document.activeElement, toggle);
+  assert.equal(toggle.getAttribute("aria-expanded"), "false");
+
+  for (const close of [toggle]) {
+    toggle.click();
+    assert.equal(input.value, "A question in progress");
+    assert.equal(log.children[0], message);
+    assert.equal(log.scrollTop, 12);
+    close.click();
+    assert.equal(drawer.inert, true);
+    assert.equal(map.classList.contains("chat-open"), false);
+  }
+  assert.equal(graphs.length, graphCount, "folding never remounts or rebuilds the graph");
+  assert.equal(calls.length, 0, "folding does not mutate server selection, query or layers");
+});
+
+test("chat fullscreen restores the drawer and preserves draft, history and graph state", () => {
+  const { document, apply, calls } = appFixture();
+  const drawer = document.getElementById("graph-chat");
+  const toggle = document.getElementById("chat-toggle");
+  const full = document.getElementById("chat-fullscreen");
+  const input = document.getElementById("chat-input");
+  const preview = document.getElementById("preview");
+  const originalInert = preview.inert;
+  apply({ chat: [{ role: "graph", text: "| A | B |\n|---|---|\n| One | Two |" }] });
+  toggle.click();
+  input.value = "Keep this draft";
+  const log = document.getElementById("chat-log");
+  const message = log.children[0];
+  full.click();
+  assert.equal(drawer.classList.contains("chat-fullscreen"), true);
+  assert.equal(full.getAttribute("aria-pressed"), "true");
+  assert.equal(full.getAttribute("aria-label"), "Restore chat drawer");
+  assert.equal(full.querySelector("svg").getAttribute("aria-hidden"), "true");
+  assert.ok(full.querySelector(".chat-expand-icon"));
+  assert.ok(full.querySelector(".chat-restore-icon"));
+  assert.equal(preview.inert, true);
+  assert.equal(Boolean(toggle.inert), false);
+  apply({});
+  assert.equal(drawer.classList.contains("chat-fullscreen"), true);
+  assert.equal(log.children[0], message);
+  input.dispatchEvent(new FrontendEvent("keydown", { key: "Escape" }));
+  assert.equal(drawer.classList.contains("chat-fullscreen"), false);
+  assert.equal(drawer.classList.contains("chat-open"), true);
+  assert.equal(document.activeElement, full);
+  assert.equal(preview.inert, originalInert);
+  assert.equal(toggle.getAttribute("aria-label"), "Collapse chat");
+  assert.equal(input.value, "Keep this draft");
+  full.click();
+  full.click();
+  assert.equal(full.getAttribute("aria-pressed"), "false");
+  full.click();
+  toggle.click();
+  assert.equal(drawer.inert, true);
+  assert.equal(drawer.classList.contains("chat-fullscreen"), true, "full-screen close retains its width during slide-out");
+  assert.equal(preview.inert, originalInert);
+  toggle.click();
+  assert.equal(drawer.classList.contains("chat-fullscreen"), false);
+  assert.equal(input.value, "Keep this draft");
+  assert.equal(calls.length, 0);
+});
+
+test("fullscreen chat restores the drawer for citations and local hits so previews remain readable", () => {
+  for (const [text, hits, selector, target] of [
+    ["[Evidence](atlas://synthetic/node)", [], ".wikilink", "atlas://synthetic/node"],
+    ["[[node]]", [], ".wikilink", "node"],
+    ["Found a page", [{ id: "node", title: "Node", kind: "page" }], ".hit", "node"],
+  ]) {
+    const { document, apply, calls } = appFixture();
+    apply({ previewOpen: false, chat: [{ role: "graph", text, hits }] });
+    const input = document.getElementById("chat-input");
+    const drawer = document.getElementById("graph-chat");
+    const preview = document.getElementById("preview");
+    const log = document.getElementById("chat-log");
+    const message = log.children[0];
+    document.getElementById("chat-toggle").click();
+    input.value = "Keep my follow-up";
+    document.getElementById("chat-fullscreen").click();
+    assert.equal(preview.inert, true);
+
+    log.querySelector(selector).click();
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].action, "select");
+    assert.equal(calls[0].nodeId, target);
+    assert.equal(drawer.classList.contains("chat-fullscreen"), false);
+    assert.equal(document.getElementById("phase-map").classList.contains("chat-fullscreen"), false);
+    assert.equal(Boolean(preview.inert), false);
+    apply({ selectedId: "node", previewOpen: true });
+    assert.equal(preview.classList.contains("hidden"), false);
+    assert.equal(drawer.classList.contains("chat-open"), true);
+    assert.equal(log.children[0], message);
+    assert.equal(input.value, "Keep my follow-up");
+  }
+});
+
+test("chat sizing reserves a responsive quarter-width beside the graph without a modal backdrop", () => {
+  const css = readFileSync(new URL("../.apm/extensions/cartograph/public/styles.css", import.meta.url), "utf8");
+  assert.match(css, /\.map \{[^}]*--chat-width: min\(90vw, max\(22\.5rem, 25vw\)\); --chat-inset: 0px;/);
+  assert.match(css, /\.map\.chat-open \{[^}]*--chat-inset: var\(--chat-width\);/);
+  assert.match(css, /#graph-wrap \{[^}]*inset: 0 var\(--chat-inset\) 0 0;/);
+  assert.match(css, /\.graph-chat \{[^}]*right: 0;[^}]*width: var\(--chat-width\);[^}]*transform: translateX\(100%\); visibility: hidden;/);
+  assert.match(css, /\.graph-chat\.chat-open \{ transform: translateX\(0\); visibility: visible;/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*\}[^}]*\.graph-chat \{ transition: none; \}/);
+  assert.match(html, /<form id="chat-form"[\s\S]*?<\/form>\s*<\/div>\s*<\/aside>/);
+  assert.doesNotMatch(html, /id="chat-backdrop"/);
+});
+
+test("node previews leave chat available without dismissing the selection", async () => {
+  const { document, calls, state } = appFixture();
+  const preview = document.getElementById("preview");
+  const toggle = document.getElementById("chat-toggle");
+  assert.equal(preview.classList.contains("hidden"), false);
+  toggle.click();
+  const input = document.getElementById("chat-input");
+  input.value = "Explain this selected node";
+  input.dispatchEvent(new FrontendEvent("input"));
+  input.dispatchEvent(new FrontendEvent("keydown", { key: "Enter" }));
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].action, "chat");
+  assert.equal(calls[0].text, "Explain this selected node");
+  calls[0].resolve({ ok: true, json: async () => ({ selectedId: "node", previewOpen: true, chat: [] }) });
+  await settle();
+  assert.equal(preview.classList.contains("hidden"), false);
+  assert.equal(state().selectedId, "node");
+  assert.equal(document.activeElement, input);
+  toggle.click();
+  assert.equal(preview.classList.contains("hidden"), false);
+  toggle.click();
+  assert.equal(document.activeElement, input);
+  assert.equal(calls.length, 1, "chat folding does not dismiss the selected page");
+
+  const css = readFileSync(new URL("../.apm/extensions/cartograph/public/styles.css", import.meta.url), "utf8");
+  assert.match(css, /\.preview-backdrop \{[^}]*inset: 0 var\(--chat-inset\) 0 0;/);
+  assert.match(css, /\.preview \{[^}]*right: var\(--chat-inset\);[^}]*width: auto;/);
+  assert.doesNotMatch(css.match(/\.toolbar \{[^}]*\}/)[0], /z-index/);
+  assert.match(css, /#chat-toggle \{[^}]*position: absolute;[^}]*top: 0.75rem; right: 0.75rem;[^}]*z-index: 111;/);
+  assert.doesNotMatch(css.match(/#chat-toggle \{[^}]*\}/)[0], /width:|height:|border-radius:/);
+  assert.match(css, /\.graph-chat \{[^}]*z-index: 75;/);
+});
+
+test("multiline composer grows and shrinks, rewraps on width changes and cleans up its observer", () => {
+  const { document, apply, resizeObservers, windowListeners } = appFixture();
+  const input = document.getElementById("chat-input");
+  const send = document.getElementById("chat-send");
+  assert.equal(input.tagName, "TEXTAREA");
+  assert.equal(send.getAttribute("aria-label"), "Send message");
+  assert.ok(send.querySelector("svg"));
+  assert.equal(send.disabled, true);
+  document.getElementById("chat-toggle").click();
+  input.value = "First line\nSecond line\nThird line";
+  input.scrollHeight = 180;
+  input.selectionStart = 4;
+  input.selectionEnd = 9;
+  input.scrollTop = 12;
+  input.dispatchEvent(new FrontendEvent("input"));
+  assert.equal(input.style.height, "180px");
+  assert.equal(input.scrollTop, 12);
+  assert.equal(send.disabled, false);
+  apply({ chat: [{ role: "graph", text: "Concurrent reply" }] });
+  assert.equal(input.style.height, "180px");
+  assert.equal(input.selectionStart, 4);
+  assert.equal(input.selectionEnd, 9);
+  assert.equal(document.activeElement, input);
+  const observer = resizeObservers[0];
+  assert.equal(observer.target, input);
+  observer.callback([{ contentRect: { width: 300 } }]);
+  input.scrollHeight = 120;
+  observer.callback([{ contentRect: { width: 400 } }]);
+  assert.equal(input.style.height, "120px");
+  input.scrollHeight = 130;
+  observer.callback([{ contentRect: { width: 400 } }]);
+  assert.equal(input.style.height, "120px", "height-only callbacks never trigger a resize loop");
+  input.selectionStart = input.value.length;
+  input.selectionEnd = input.value.length;
+  observer.callback([{ contentRect: { width: 250 } }]);
+  assert.equal(input.scrollTop, 130, "keep the active trailing caret visible when wrapping changes");
+  input.value = "";
+  input.scrollHeight = 56;
+  input.dispatchEvent(new FrontendEvent("input"));
+  assert.equal(input.style.height, "56px");
+  assert.equal(send.disabled, true);
+  windowListeners.get("pagehide")();
+  assert.equal(observer.target, null);
+  windowListeners.get("pageshow")();
+  assert.equal(observer.target, input);
+});
+
+test("composer submits via Enter or its form, preserves newlines and never sends during IME composition", () => {
+  const { document, calls } = appFixture();
+  const input = document.getElementById("chat-input");
+  document.getElementById("chat-toggle").click();
+  input.value = "First line\nSecond line";
+  for (const options of [{ shiftKey: true }, { isComposing: true }, { keyCode: 229 }]) {
+    const event = new FrontendEvent("keydown", { key: "Enter", ...options });
+    input.dispatchEvent(event);
+    assert.equal(event.defaultPrevented, false);
+    assert.equal(calls.length, 0);
+  }
+  const enter = new FrontendEvent("keydown", { key: "Enter" });
+  input.dispatchEvent(enter);
+  assert.equal(enter.defaultPrevented, true);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].action, "chat");
+  assert.equal(calls[0].text, "First line\nSecond line");
+  assert.equal(input.value, "");
+  assert.equal(input.style.height, "56px");
+  assert.equal(document.getElementById("chat-send").disabled, true);
+  assert.equal(document.activeElement, input);
+  input.value = " \n ";
+  input.dispatchEvent(new FrontendEvent("keydown", { key: "Enter" }));
+  assert.equal(calls.length, 1);
+  input.value = "Button submission";
+  input.dispatchEvent(new FrontendEvent("input"));
+  document.getElementById("chat-form").dispatchEvent(new FrontendEvent("submit"));
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1].text, "Button submission");
+  assert.equal(input.value, "");
+});
+
+test("chat labels distinguish Copilot from local search and preserve legacy messages", () => {
+  const { document, apply } = appFixture();
+  const log = document.getElementById("chat-log");
+  const chat = [{ role: "user", text: "Question" }, { role: "graph", text: "**Answer**" }];
+  for (const chatMode of [undefined, "local", "session", "local"]) {
+    apply({ chatMode, chat });
+    const native = chatMode === "session";
+    const label = native ? "Chat with Copilot" : "Local Atlas search";
+    assert.equal(document.getElementById("chat-kicker").textContent, label);
+    assert.equal(document.getElementById("chat-toggle").getAttribute("aria-label"), label);
+    assert.equal(document.getElementById("chat-toggle").getAttribute("title"), label);
+    assert.equal(document.getElementById("chat-input").getAttribute("aria-label"), native ? "Ask Copilot" : "Search this Atlas");
+    assert.deepEqual(log.querySelectorAll(".who").map((node) => node.textContent), ["You", native ? "Copilot" : "Search"]);
+    assert.equal(log.querySelector("strong").textContent, "Answer");
+    assert.equal(log.getAttribute("aria-busy"), "false");
+    assert.equal(log.querySelector(".chat-pending"), null);
+  }
+});
+
+test("chat moves from queued to working to final answers or errors without exposing request IDs", () => {
+  const { document, apply, calls, opened } = appFixture();
+  const log = document.getElementById("chat-log");
+  const status = document.getElementById("chat-status");
+  const message = { role: "graph", id: "internal-request-secret", hits: [{ id: "node", title: "Node", kind: "page" }] };
+  assert.equal(log.getAttribute("role"), "log");
+  assert.equal(status.getAttribute("role"), "status");
+  assert.equal(status.getAttribute("aria-live"), "polite");
+  assert.equal(log.contains(status), false, "pending announcements are outside the busy log");
+  for (const phase of ["queued", "working"]) {
+    apply({ chatMode: "session", chat: [{ ...message, pending: true, status: phase, text: "Not a finalized answer" }] });
+    assert.equal(log.getAttribute("aria-busy"), "true");
+    assert.match(status.textContent, phase === "queued" ? /Waiting for Copilot/ : /Working…/);
+    assert.equal(log.querySelector(".chat-pending").classList.contains("working"), phase === "working");
+    assert.equal(log.querySelector(".chat-dots").getAttribute("aria-hidden"), "true");
+    assert.equal(log.querySelector(".hit"), null);
+    assert.doesNotMatch(log.textContent, /Not a finalized answer|internal-request-secret/);
+    if (phase === "queued") assert.doesNotMatch(log.textContent, /Working|writing/i);
+  }
+  apply({ chat: [{ ...message, pending: false, status: "answered", text: "[[other]] [External](https://example.com)" }] });
+  assert.equal(log.getAttribute("aria-busy"), "false");
+  assert.equal(status.textContent, "");
+  assert.equal(log.querySelector(".chat-pending"), null);
+  log.querySelector(".wikilink").click();
+  log.querySelector(".hit").click();
+  log.querySelector("a").click();
+  assert.deepEqual(calls.map(({ action, nodeId }) => ({ action, nodeId })), [
+    { action: "select", nodeId: "other" }, { action: "select", nodeId: "node" },
+  ]);
+  assert.equal(opened.length, 1);
+  for (const outcome of ["failed", "expired", "cancelled"]) {
+    apply({ chat: [{ ...message, pending: true, status: "working", text: "" }] });
+    apply({ chat: [{ ...message, pending: false, status: outcome, text: "", hits: [] }] });
+    assert.equal(log.getAttribute("aria-busy"), "false");
+    assert.equal(log.querySelector(".chat-pending"), null);
+    assert.match(log.textContent, new RegExp(outcome));
+    assert.doesNotMatch(log.textContent, /internal-request-secret/);
+  }
+  apply({ chat: [{ ...message, pending: false, status: "failed", text: "Please retry.", hits: [] }] });
+  assert.match(log.textContent, /Please retry/);
+});
+
+test("working stage labels replace in place, stay plain text and preserve drafts across snapshots", () => {
+  const { document, apply } = appFixture();
+  const input = document.getElementById("chat-input");
+  const log = document.getElementById("chat-log");
+  const status = document.getElementById("chat-status");
+  const message = { role: "graph", id: "private-request-id", pending: true, status: "working", text: "Never display unfinished answer" };
+  document.getElementById("chat-toggle").click();
+  input.value = "Another question";
+  input.selectionStart = 3;
+  input.selectionEnd = 5;
+  for (const [index, progress] of ["Searching the Atlas", "Reading pages", "<img src=x> Preparing answer"].entries()) {
+    apply({ stateRevision: index + 1, chatMode: "session", chat: [
+      { role: "user", text: "Question" }, { ...message, progress },
+    ] });
+    assert.equal(log.children.length, 2);
+    assert.match(log.querySelector(".chat-pending").textContent, new RegExp(progress));
+    assert.equal(status.textContent, progress);
+    assert.equal(log.querySelector("img"), null);
+    assert.equal(log.querySelector(".chat-pending").classList.contains("working"), true);
+    assert.doesNotMatch(log.textContent, /private-request-id|Never display unfinished answer/);
+    assert.equal(input.value, "Another question");
+    assert.equal(input.selectionStart, 3);
+    assert.equal(input.selectionEnd, 5);
+    assert.equal(document.activeElement, input);
+    const pending = log.querySelector(".chat-pending");
+    apply({ stateRevision: index + 1 });
+    assert.equal(log.querySelector(".chat-pending"), pending);
+  }
+  apply({ stateRevision: 1, chat: [{ ...message, progress: "Old stage" }] });
+  assert.equal(status.textContent, "<img src=x> Preparing answer");
+  apply({ stateRevision: 4, chat: [{ ...message, pending: false, status: "answered", text: "Final answer" }] });
+  assert.equal(log.querySelector(".chat-pending"), null);
+  assert.equal(status.textContent, "");
+  assert.match(log.textContent, /Final answer/);
+});
+
+test("unchanged chat snapshots preserve pending animation, focused links and draft caret", () => {
+  const { document, apply } = appFixture();
+  const log = document.getElementById("chat-log");
+  const input = document.getElementById("chat-input");
+  const chat = [{ role: "graph", id: "private-id", pending: true, status: "working", text: "", hits: [] }];
+  apply({ chatMode: "session", chat });
+  document.getElementById("chat-toggle").click();
+  input.value = "unfinished question";
+  input.selectionStart = 3;
+  input.selectionEnd = 7;
+  const pending = log.querySelector(".chat-pending");
+  log.scrollTop = 12;
+  apply({ query: "unrelated snapshot", queryRevision: 1, chat });
+  assert.equal(log.querySelector(".chat-pending"), pending);
+  assert.equal(log.scrollTop, 12);
+  assert.equal(document.activeElement, input);
+  assert.equal(input.value, "unfinished question");
+  assert.equal(input.selectionStart, 3);
+  assert.equal(input.selectionEnd, 7);
+  apply({ chat: [{ ...chat[0], pending: false, status: "answered", text: "[[other]]" }] });
+  assert.equal(log.querySelector(".chat-pending"), null);
+  assert.equal(document.activeElement, input);
+  assert.equal(input.selectionStart, 3);
+  const link = log.querySelector(".wikilink");
+  link.focus();
+  apply({});
+  assert.equal(document.activeElement, link);
+  assert.equal(log.querySelector(".wikilink"), link);
+  apply({ chat: [{ role: "graph", text: "Revised", hits: [] }] });
+  assert.match(log.textContent, /Revised/);
+  apply({ chat: [{ role: "graph", text: "Revised", hits: [{ id: "node", title: "New hit", kind: "page" }] }] });
+  assert.match(log.querySelector(".hit").textContent, /New hit/);
+});
+
+test("chat revisions avoid history serialization on unchanged snapshots and drawer toggles", () => {
+  let serializations = 0;
+  const { document, apply } = appFixture({ onChatSerialize: () => serializations++ });
+  serializations = 0;
+  const chat = Array.from({ length: 50 }, (_, id) => ({ id, role: "graph", text: "x".repeat(128 * 1024) }));
+  apply({ stateRevision: 1, chatRevision: 1, chatMode: "session", chat });
+  const log = document.getElementById("chat-log");
+  const message = log.children[0];
+  const input = document.getElementById("chat-input");
+  input.value = "Preserve my draft";
+  for (let revision = 2; revision <= 4; revision++) {
+    apply({ stateRevision: revision, chatRevision: 1, chat });
+    document.getElementById("chat-toggle").click();
+    assert.equal(log.children[0], message);
+  }
+  assert.equal(serializations, 0, "Revisioned snapshots never stringify chat history");
+  assert.equal(input.value, "Preserve my draft");
+  input.selectionStart = 3;
+  input.selectionEnd = 8;
+  apply({ stateRevision: 5, chatRevision: 2, chat: [{ role: "graph", status: "working", progress: "Reading pages" }] });
+  assert.match(log.textContent, /Reading pages/);
+  assert.equal(input.selectionStart, 3);
+  assert.equal(input.selectionEnd, 8);
+  assert.equal(document.activeElement, input);
+  apply({ stateRevision: 4, chatRevision: 1, chat });
+  assert.match(log.textContent, /Reading pages/, "Older emissions cannot restore the prior history");
+  apply({ stateRevision: 6, chatRevision: 3, chat: [{ role: "graph", status: "answered", text: "Final answer" }] });
+  assert.match(log.textContent, /Final answer/);
+  apply({ stateRevision: 7, chatRevision: 3, chatMode: "local" });
+  assert.equal(log.querySelector(".who").textContent, "Search", "Mode changes invalidate the render key");
+  assert.equal(serializations, 0);
+  apply({ stateRevision: 8, chat: [{ role: "graph", text: "Legacy snapshot" }] });
+  assert.match(log.textContent, /Legacy snapshot/);
+  assert.equal(serializations, 1, "Unversioned snapshots retain compatibility with older running servers");
+});
+
+test("legacy pending chat waits honestly and working dots use reduced-motion-safe CSS only", () => {
+  const { document, apply, frames } = appFixture({ reducedMotion: true });
+  const log = document.getElementById("chat-log");
+  apply({ chat: [{ role: "graph", pending: true, text: "Unfinished" }] });
+  assert.match(log.textContent, /Waiting for search/);
+  assert.doesNotMatch(log.textContent, /Unfinished|Working/);
+  assert.equal(log.getAttribute("aria-busy"), "true");
+  apply({ chat: [{ role: "graph", status: "working", text: "" }] });
+  assert.match(log.textContent, /Working…/);
+  assert.equal(frames.size, 0);
+  const css = readFileSync(new URL("../.apm/extensions/cartograph/public/styles.css", import.meta.url), "utf8");
+  assert.match(css, /\.chat-pending\.working \.chat-dots span\s*\{\s*animation: chat-working/);
+  assert.match(css, /@keyframes chat-working/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)\s*\{\s*\.chat-pending\.working \.chat-dots span\s*\{\s*animation: none; opacity: 1; transform: none;/);
+});
+
 test("actual preview and chat clicks each navigate once, including after snapshot rerenders", () => {
   const { document, calls, opened, apply } = appFixture();
   apply({});
@@ -860,6 +1647,81 @@ test("unhandled controls still bubble and internal anchors use the single naviga
   assert.equal(unrelated.defaultPrevented, false);
   assert.equal(unrelated.propagationStopped, false);
   assert.equal(calls.length, 1);
+});
+
+test("preview separates readable external source rows from internal source and relationship chips", () => {
+  const { document, apply, calls, opened } = appFixture();
+  const sourceDetails = [
+    { path: "https://github.com/team/project/pull/8" },
+    { path: "https://github.com/team/project/releases/tag/v0.3.0" },
+    { path: "https://github.com/team/project/issues/10", title: "Fix source readability" },
+    { path: "atlas://one/guide", title: "Internal title" },
+    { path: "javascript:alert(1)", title: "Unsafe" },
+  ];
+  apply({ page: { body: "# Body", relatesTo: [{ path: "related", kind: "implements" }],
+    sources: sourceDetails.map((s) => s.path), sourceDetails } });
+  const section = document.getElementById("preview-sources");
+  assert.equal(section.classList.contains("hidden"), false);
+  assert.equal(section.getAttribute("aria-labelledby"), "preview-sources-title");
+  assert.equal(section.querySelector("h3").textContent, "External sources");
+  const chips = document.getElementById("preview-relates").querySelectorAll("button");
+  assert.deepEqual(chips.map((c) => c.getAttribute("data-target")), ["related", "atlas://one/guide"]);
+  const rows = section.querySelectorAll("a");
+  assert.equal(rows.length, 3);
+  assert.deepEqual(rows.map((r) => r.querySelector(".external-source-label").textContent),
+    ["Pull request #8", "Release v0.3.0", "Fix source readability"]);
+  for (const [index, row] of rows.entries()) {
+    assert.equal(row.getAttribute("href"), sourceDetails[index].path);
+    assert.equal(row.getAttribute("target"), "_blank");
+    assert.equal(row.getAttribute("rel"), "noopener noreferrer");
+    assert.equal(row.getAttribute("title"), sourceDetails[index].path);
+    assert.equal(row.querySelector(".external-source-context").textContent, "team/project · github.com");
+    assert.equal(document.getElementById(row.getAttribute("aria-describedby")).textContent, sourceDetails[index].path);
+    const icon = row.querySelector("svg");
+    assert.equal(icon.getAttribute("aria-hidden"), "true");
+    assert.equal(icon.getAttribute("focusable"), "false");
+    row.focus();
+    assert.equal(document.activeElement, row);
+    // The harness cannot open tabs or synthesize native Enter activation. Dispatch
+    // its resulting click from nested text and SVG, including modifier variants.
+    for (const target of [row, row.querySelector(".external-source-label"), icon.querySelector("path")]) {
+      for (const options of [{ detail: 0 }, { ctrlKey: true }, { metaKey: true }, { shiftKey: true }, { button: 1 }]) {
+        const event = new FrontendEvent("click", options);
+        target.dispatchEvent(event);
+        assert.equal(event.defaultPrevented, false);
+        assert.equal(event.propagationStopped, false);
+      }
+    }
+  }
+  assert.equal(calls.length, 0, "native source links never select an Atlas page");
+  assert.equal(opened.length, 0, "no scripted window.open duplicates native navigation");
+  rows[0].focus();
+  apply({});
+  assert.equal(document.activeElement, rows[0], "unchanged snapshots preserve source focus and URL disclosure");
+  assert.equal(section.querySelector("a"), rows[0]);
+  document.getElementById("preview-relates").querySelectorAll("button")[1].click();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].nodeId, "atlas://one/guide");
+  apply({ page: { body: "No external sources", sources: ["internal"] } });
+  assert.equal(section.classList.contains("hidden"), true);
+  assert.equal(section.querySelectorAll("a").length, 0);
+  apply({ page: { sources: ["https://example.com/guide.md?q=1#intro"] } });
+  assert.equal(section.querySelector("a").getAttribute("href"), "https://example.com/guide.md?q=1#intro",
+    "older string-only payloads still render source rows");
+});
+
+test("external source focus and hover expose the full URL with generous high-contrast targets", () => {
+  const css = readFileSync(new URL("../.apm/extensions/cartograph/public/styles.css", import.meta.url), "utf8");
+  assert.match(css, /\.external-source:focus-visible\s*\{[^}]*outline:\s*2px/);
+  const hidden = css.match(/\.search-help,\s*\.external-source:not\(:hover\):not\(:focus\) \.external-source-url\s*\{([^}]+)\}/)?.[1];
+  assert.ok(hidden, "Source URLs reuse the visually-hidden helper only while neither hovered nor focused");
+  assert.match(hidden, /position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset\(50%\)/);
+  assert.doesNotMatch(hidden, /display:\s*none|visibility:\s*hidden/);
+  assert.match(css, /\.external-source-url\s*\{\s*display: block/);
+  assert.match(css, /\.external-source\s*\{[^}]*min-height: 56px;[^}]*color: var\(--color-fg\)/);
+  assert.match(css, /\.external-source-label\s*\{[^}]*font-size: 12px/);
+  assert.match(css, /\.external-source-context\s*\{[^}]*font-size: 12px/);
+  assert.match(css, /\.external-source-url\s*\{[^}]*font-size: 11px/);
 });
 
 test("actual layer wiring updates buttons immediately, keeps grouping/SSE data, and handles non-2xx JSON", async () => {

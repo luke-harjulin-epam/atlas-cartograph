@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-export const registration = { calls: 0, metadataCalls: 0, canvas: null };
+export const registration = { calls: 0, metadataCalls: 0, canvas: null, sent: [] };
 let metadata;
 
 export function setMetadata(value) {
@@ -27,6 +27,14 @@ export async function joinSession(config) {
   assert.deepEqual(config.canvases, [registration.canvas]);
   return {
     sessionId: "observatory-session",
+    send: async ({ prompt }) => {
+      assert.equal(typeof prompt, "string");
+      assert.match(prompt, /^```text\nactivation: "cartograph-chat"\nactivation_path: /);
+      assert.ok(prompt.endsWith("\n```"));
+      assert.doesNotMatch(prompt, /First report status|A transcript answer or task_complete/);
+      registration.sent.push(prompt);
+      return "11111111-2222-4333-8444-555555555555";
+    },
     rpc: {
       metadata: {
         snapshot: async () => {

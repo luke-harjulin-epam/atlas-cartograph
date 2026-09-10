@@ -5,6 +5,11 @@ export function handleContentClick(event, navigate, openExternal) {
   const target = link.tagName === "A"
     ? link.getAttribute("href") || ""
     : link.getAttribute("data-target") || "";
+  // Source rows are native anchors: let the browser handle Enter, modifiers,
+  // context menus and the new tab rather than opening a second window here.
+  if (link.tagName === "A" && link.classList.contains("external-source") && /^https?:\/\//i.test(target)) {
+    return false;
+  }
   event.preventDefault();
   event.stopPropagation();
   if (/^https?:\/\//i.test(target) || target.startsWith("mailto:")) {

@@ -1,4 +1,7 @@
 import { loadPageFromRoots } from "./scan.mjs";
+import { fileURLToPath } from "node:url";
+
+export const CHAT_ACTIVATION_PATH = fileURLToPath(new URL("./cartograph-chat.md", import.meta.url));
 
 function queryPage(state, id) {
   const roots = state.roots?.length ? state.roots : state.root ? [state.root] : [];
@@ -60,22 +63,47 @@ export function searchAtlas(state, query) {
   }));
 }
 
-export function asText(value) {
-  if (value == null) return "";
-  if (typeof value === "string") return value.trim();
-  if (Array.isArray(value)) return value.map(asText).filter(Boolean).join("\n\n").trim();
-  if (typeof value === "object") {
-    if (typeof value.content === "string") return value.content.trim();
-    if (typeof value.summary === "string") return value.summary.trim();
-    if (typeof value.text === "string") return value.text.trim();
-    if (value.data != null) return asText(value.data);
+function chatStores(state) {
+  const stores = state.graph?.stores || [];
+  if (stores.length) {
+    return stores.map((store) => ({
+      id: store.atlasId || store.label || null,
+      root: store.root || null,
+    }));
   }
-  return "";
+  const roots = state.roots?.length ? state.roots : state.root ? [state.root] : [];
+  return roots.map((root) => ({ id: null, root }));
 }
 
-export function pickGraphReply({ messages = [], response, summary } = {}) {
-  const lastMessage = [...messages].reverse().map(asText).find(Boolean);
-  return lastMessage || asText(response) || asText(summary) || "";
+function chatSelection(state) {
+  const id = state.selectedId;
+  if (!id) return null;
+  const node = state.graph?.nodes?.find((item) => item.id === id);
+  return { id, path: node?.path || null };
+}
+
+export function graphChatPrompt(text, state = {}, context = {}) {
+  const card = {
+    activation: "cartograph-chat",
+    activation_path: CHAT_ACTIVATION_PATH,
+    routing: { instanceId: context.instanceId, requestId: context.requestId },
+    question: String(text || "").trim(),
+    atlases: chatStores(state),
+    selection: chatSelection(state),
+    query: String(state.query || "").trim(),
+  };
+  return ["```text", ...Object.entries(card).map(([key, value]) => `${key}: ${JSON.stringify(value)}`), "```"].join("\n");
+}
+
+export async function askHostSession(host, text, state, context) {
+  if (typeof host?.send !== "function") {
+    throw new Error("Host session cannot accept chat.");
+  }
+  if (!context?.requestId || !context?.instanceId) throw new Error("Chat reply routing is required.");
+  // send resolves with a message ID, not assistant content. Only the correlated
+  // update_chat action can complete this request, independently of other turns.
+  await host.send({ prompt: graphChatPrompt(text, state, context) });
+  return { accepted: true };
 }
 
 function firstSentence(text) {

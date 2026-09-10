@@ -12,6 +12,11 @@
   Reuse the same validation and package workflows for tag releases. Publication
   requires a matching SemVer tag in main history, completed checks and verified
   artifacts; never publish from PR events or replace an existing release.
+- Marketplace publication is a separate reviewed change in
+  `sergio-sisternes-epam/apm-marketplace`. Its catalog pins a released version
+  and commit; publish the source release before updating that pin. Regenerate
+  its catalog from its authoritative manifest rather than editing generated
+  output. Neither publication automatically updates existing consumer installs.
 - Keep CI actions commit-pinned and the APM download checksum-pinned. Use
   `scripts/package-apm.mjs` for isolated release packaging and producer/consumer
   lockfile audits; do not edit generated plugin manifests or install over the
@@ -66,12 +71,17 @@
   Resolve both stages atomically on the server. Explicit page navigation and
   native `select_node` retain their direct-preview contract.
 - Keep one always-visible toolbar search field for both accessible results and
-  map highlighting. Share title/ID/Atlas/path/type/kind matching with both
+  map highlighting. Align results to the field's full width using shared
+  responsive bounds, including when chat opens or the viewport changes.
+  Share title/ID/Atlas/path/type/kind matching with both
   renderers and activation framing; pre-index render nodes rather than building
   descriptions per frame. Keep hidden-layer results, bounded keyboard pages,
   pending text/caret protection and visible query text when results close.
   Down opens results/all-node browsing; Escape returns focus to the field.
   Do not replace the field with a search-button popup.
+- Let search fill the toolbar's available width. Options overlays the left
+  side of the Atlas at full height without resizing the graph or covering chat.
+  Keep its expanded state, inert contents and Escape/Close focus return aligned.
 - Show the runtime version and source SHA in the small build badge. Only source
   checkouts may inspect Git; deployments use stamped runtime metadata, never
   the consumer repository's SHA. Mark uncommitted runtime changes explicitly.
@@ -80,9 +90,45 @@
   second animation loop or report the capped simulation delta as frame rate.
 - Keep page reads inside their mounted store, including canonical symlink
   targets. Preserve the originating Atlas in navigation and chat references.
+- Chat full-screen mode fills only the canvas, preserving the graph and draft.
+  Keep covered controls inert; Restore or Escape returns to the drawer, and
+  Close folds either size. Do not use host fullscreen APIs or reset chat history.
+- Show HTTP/HTTPS provenance in readable external-source rows, separate from
+  internal relationship chips. Prefer explicit source titles, otherwise derive
+  labels locally with repository/domain context; never fetch remote metadata.
+  Preserve exact web destinations instead of normalizing them as page slugs.
+  Keep source metadata inert, native link semantics, visible keyboard focus
+  and full URLs on hover/focus, using the shared delegated navigation path.
 - Reject duplicate mount keys before changing the mounted graph or selection.
   Explicit Atlas links must not fall back to another store; generate each mesh
   relationship once. Chat completions must update their own request placeholder.
+- Advance chat revisions for history/progress mutations, not unrelated snapshots
+  or duplicate callbacks. Use that revision and chat mode to cache browser
+  rendering without serializing message bodies; retain older-server compatibility.
+- Treat SDK `send()` results as message IDs, never answer text. Native
+  `cartograph-chat` activation must deliver via `update_chat` with the originating
+  instance/request and check acknowledgement. Enforce owner-session matching,
+  idempotent retries, bounded replies and timeout/close cleanup. Keep queued
+  and working indicators distinct, honour reduced motion, and keep standalone
+  local search explicitly labelled. Do not capture unrelated session replies.
+- Send only a compact activation card with routing and Atlas context. Keep
+  progress, retrieval and delivery rules in bundled `atlas/cartograph-chat.md`,
+  not repeated in prompts. JSON-escape each card value, including questions.
+- Report short, truthful task stages through working `update_chat` text.
+  Validate progress separately from answers, render it as plain text, and
+  replace labels in place without extending deadlines or adding chat entries.
+- Keep chat folded by default in a right-hand drawer at 25% of the viewport
+  width, with a 360px minimum capped at 90vw. Reserve the remaining map area
+  for both renderers and graph controls;
+  keep resizing proportional and preserve drafts/history when collapsing.
+  Folded chat must be inert; Escape returns focus to its single top-right toggle.
+- Constrain node previews and their backdrop to the remaining graph area.
+  Keep the chat drawer and its top-right toggle accessible while a preview is open.
+  The one panel toggle stays visible and non-inert in full-screen chat too.
+- Use a growing multiline composer with an embedded SVG send arrow. Remeasure
+  wrapping on input and width changes without resetting the caret on snapshots.
+  Cap growth to retain conversation space; Enter sends, Shift+Enter inserts a
+  newline, and IME composition must never submit prematurely.
 - Exclude fenced and inline code before extracting graph links from Markdown
   bodies. Preserve frontmatter relationship kinds and the original preview text.
 - Resolve source-relative page links consistently in graph edges and preview
@@ -145,6 +191,31 @@
 - Activity must remain scoped to open Atlas files, exclude viewer reads, expire
   independently per node, and preserve selection/search/layer state.
 - Keep the Knowledge Activation camera option client-side and default-on.
+  Put its status in the floating bottom bar with independent zoom controls.
+  Keep view navigation in that bar's popup, with bounded pages, store-qualified
+  labels, stable focus across snapshots and local-only camera selection.
+  Keep everyday settings concise, setup and diagnostics in disclosures, and
+  private connection fetching scoped to the open Collector setup disclosure.
+  Move long menu explanations into shared information popups. Keep errors,
+  permissions, private-token warnings and key counters visible; render popup
+  text literally and release its observer when dismissed or its menu closes.
+  Use 12px info buttons with an 8px glyph and visible keyboard focus. Consult
+  the mounted project Atlas's `decisions/cartograph-ux-principles-protostar.md`
+  for the forming UX principles and proposed review-skill scope; do not treat
+  that protostar as an accepted cross-project standard.
+  Keep Options grouped into Atlases, Layout, Layers, Links and Graph, with a
+  fixed branded header and scrolling body, above the version/FPS badge. Keep
+  full store/schema identities and errors visible; collapse fallback categories under Other pages without
+  changing filters. Retain disclosure state and Atlas-control focus on updates.
+  Layer clicks isolate from All, then add/remove selections; removing the last
+  selection restores all node layers, never changing relationship visibility.
+  When chat leaves less than 220px for Options, show one panel at a time without
+  clearing the chat draft; opening Options folds chat, opening chat or narrowing
+  the viewport folds Options and preserves keyboard access.
+  Show collector health separately from the highlight toggle; keep dirty
+  duration input through snapshots and failed saves until Save or Cancel.
+  Report reduced-motion suppression without changing the follow preference,
+  using the renderer's existing media listener.
   Fit displayed activations and lifecycle endpoints/ghosts, never raw queued
   reads. Use padded, capped zoom and at most one bounds fit per 200 ms.
   Keep pan/zoom following during manual orbit; yield only automatic orientation

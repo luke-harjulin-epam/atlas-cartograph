@@ -82,7 +82,20 @@ function parseFrontmatter(text) {
     if (currentObj && objectList && currentObj.path) objectList.push(currentObj);
     currentObj = null;
   };
-  for (const line of block.split("\n")) {
+  const lines = block.split("\n");
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const sourceField = line.match(/^sources:\s*(.*)$/);
+    if (sourceField) {
+      flushObj();
+      listKey = objectList = null;
+      const sourceLines = [sourceField[1]];
+      while (index + 1 < lines.length && !/^[A-Za-z0-9_-]+:/.test(lines[index + 1])) {
+        sourceLines.push(lines[++index]);
+      }
+      meta.sources = parseSources(sourceLines);
+      continue;
+    }
     const objField = line.match(/^\s{2,}([A-Za-z0-9_-]+):\s*(.*)$/);
     const listObj = line.match(/^\s+-\s+([A-Za-z0-9_-]+):(?:\s+(.*))?$/);
     const listScalar = line.match(/^\s+-\s+(.*)$/);
@@ -136,6 +149,76 @@ function parseFrontmatter(text) {
 function stripQuotes(s) {
   return s.replace(/^["']|["']$/g, "").trim();
 }
+
+// Only sources get this small scalar/list/record grammar, not general YAML.
+function sourceScalar(value) {
+  const text = value.trim();
+  if (text.startsWith('"') && text.endsWith('"')) {
+    try { return JSON.parse(text); } catch { return text.slice(1, -1); }
+  }
+  if (text.startsWith("'") && text.endsWith("'")) return text.slice(1, -1).replace(/''/g, "'");
+  return text.replace(/\s+#.*$/, "").trim();
+}
+function splitSourceFlow(text) {
+  const parts = [];
+  let start = 0, depth = 0, quote = "";
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i];
+    if (quote) {
+      if (quote === '"' && char === "\\") { i += 1; continue; }
+      if (char === quote) {
+        if (quote === "'" && text[i + 1] === "'") i += 1;
+        else quote = "";
+      }
+    } else if (char === '"' || char === "'") quote = char;
+    else if (char === "{" || char === "[") depth += 1;
+    else if (char === "}" || char === "]") depth -= 1;
+    else if (char === "," && depth === 0) { parts.push(text.slice(start, i)); start = i + 1; }
+  }
+  parts.push(text.slice(start));
+  return parts;
+}
+function sourceRecordField(text, record) {
+  const field = text.match(/^(?:"(path|url|uri|title)"|'(path|url|uri|title)'|(path|url|uri|title)):\s*(.*)$/);
+  if (!field) return false;
+  const key = field[1] || field[2] || field[3];
+  record[key] = sourceScalar(field[4]);
+  return true;
+}
+function sourceValue(text) {
+  const value = text.trim();
+  if (value.startsWith("{") && value.endsWith("}")) {
+    const record = {};
+    for (const field of splitSourceFlow(value.slice(1, -1))) sourceRecordField(field.trim(), record);
+    return record;
+  }
+  return sourceScalar(value);
+}
+function parseSources(lines) {
+  const first = lines[0].trim();
+  if (first.startsWith("[") && first.endsWith("]")) {
+    return splitSourceFlow(first.slice(1, -1)).filter((s) => s.trim()).map(sourceValue);
+  }
+  if (first && !first.startsWith("#")) return sourceValue(first);
+  const result = [];
+  let record = null;
+  for (const line of lines.slice(1)) {
+    const text = line.trim();
+    if (!text || text.startsWith("#")) continue;
+    const item = text.match(/^-\s+(.+)$/);
+    if (item) {
+      record = {};
+      if (sourceRecordField(item[1], record)) result.push(record);
+      else { result.push(sourceValue(item[1])); record = null; }
+    } else if (record) sourceRecordField(text, record);
+    else if (!result.length) {
+      record = {};
+      if (sourceRecordField(text, record)) result.push(record);
+      else record = null;
+    }
+  }
+  return result;
+}
 function extractWikilinks(text) {
   const out = [];
   WIKILINK_RE.lastIndex = 0;
@@ -183,13 +266,24 @@ function relatesToOf(meta) {
   return out;
 }
 function sourcesOf(meta) {
-  const raw = meta.sources;
-  if (!Array.isArray(raw)) return [];
-  return raw.map((s) => {
-    if (typeof s === "string") return s;
-    if (s && typeof s === "object" && "path" in s) return String(s.path);
-    return "";
-  }).filter(Boolean).map(normalizeLink);
+  return sourceDetailsOf(meta).map((source) => source.path);
+}
+function sourceDetailsOf(meta) {
+  const raw = Array.isArray(meta.sources) ? meta.sources : [meta.sources];
+  const out = [];
+  for (const source of raw) {
+    const record = source && typeof source === "object" && !Array.isArray(source) ? source : null;
+    const path = typeof source === "string" ? source :
+      ["path", "url", "uri"].map((key) => record?.[key]).find((value) => typeof value === "string" && value.trim());
+    if (!path?.trim()) continue;
+    const destination = path.trim();
+    const remote = /^[a-z][a-z0-9+.-]*:(?!:)/i.test(destination) && !destination.startsWith("atlas://");
+    const normalized = remote || destination.startsWith("//")
+      ? destination : normalizeLink(destination);
+    const title = typeof record?.title === "string" ? record.title.trim() : "";
+    out.push({ path: normalized, ...(title ? { title } : {}) });
+  }
+  return out;
 }
 function normalizeLink(raw) {
   return raw.replace(/\\/g, "/").replace(/^\.\//, "").replace(/\.md$/i, "").replace(/^\/+/, "").trim();
@@ -265,6 +359,7 @@ export {
   pageSlug,
   parseFrontmatter,
   relatesToOf,
+  sourceDetailsOf,
   sourcesOf,
   stripMarkdownCode
 };

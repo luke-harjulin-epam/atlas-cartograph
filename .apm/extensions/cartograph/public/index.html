@@ -46,32 +46,33 @@
       </section>
 
       <section id="phase-map" class="phase hidden map">
-        <div id="graph-wrap">
-          <p class="hint">Click once: focus · again: read</p>
-          <div class="zoom-bar">
-            <button type="button" data-zoom-out aria-label="Zoom out">−</button>
-            <span data-zoom>100%</span>
-            <button type="button" data-zoom-in aria-label="Zoom in">+</button>
-            <button type="button" data-zoom-reset aria-label="Reset view">⌂</button>
-          </div>
-        </div>
+        <div id="graph-wrap"></div>
         <div class="toolbar">
-          <button id="toggle-panel" class="icon-btn" type="button" aria-label="Show options">☰</button>
+          <button id="toggle-panel" class="icon-btn" type="button" aria-label="Show options" title="Atlas options" aria-expanded="false" aria-controls="panel">
+            <svg width="24" height="24" viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false">
+              <path d="m7 23 9-17 9 17M10 18h12M7 23h18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="16" cy="6" r="3" fill="currentColor"/>
+              <circle cx="7" cy="23" r="3" fill="currentColor"/>
+              <circle cx="25" cy="23" r="3" fill="currentColor"/>
+            </svg>
+          </button>
           <div class="search-field">
             <input id="search" type="search" autocomplete="off" placeholder="Search stars" aria-label="Search nodes" aria-controls="node-browser" aria-describedby="node-browser-help search-error" />
           </div>
-          <button id="chat-toggle" class="icon-btn" type="button" aria-label="Chat with the graph" aria-pressed="false" title="Chat with the graph">
+        </div>
+          <button id="chat-toggle" class="icon-btn" type="button" aria-label="Local Atlas search" aria-pressed="false" aria-expanded="false" aria-controls="graph-chat" title="Local Atlas search">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v7A2.5 2.5 0 0 1 16.5 16H11l-4.2 3.2c-.7.54-1.8.04-1.8-.83V6.5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+              <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="1.7"/>
+              <path d="M15 3v18" stroke="currentColor" stroke-width="1.7"/>
             </svg>
           </button>
-        </div>
         <section id="node-browser" class="node-browser hidden" aria-labelledby="node-browser-title">
           <div class="node-browser-head">
             <h2 id="node-browser-title">Search results</h2>
+            <button class="info-button" type="button" data-info="search-info" data-info-title="Search" aria-label="About search" aria-controls="menu-info" aria-haspopup="dialog" aria-expanded="false">i</button>
             <button id="node-browser-close" class="btn btn-ghost" type="button">Close results</button>
           </div>
-          <p id="node-browser-help" class="search-help">Search by title, ID, Atlas, path, type or kind, including hidden layers. Press Down to browse results or all nodes when empty. Select once to focus its relationships; select again to open Markdown. Escape closes results and returns to the search field. Clear the field to restore the full map.</p>
+          <div id="search-info" hidden><p id="node-browser-help">Search by title, ID, Atlas, path, type or kind, including hidden layers. Press Down to browse results or all nodes when empty. Select once to focus its relationships; select again to open Markdown. Escape closes results and returns to the search field. Clear the field to restore the full map.</p></div>
           <p id="search-error" class="danger hidden" role="alert"></p>
           <p id="node-count" class="muted" role="status" aria-live="polite" aria-atomic="true"></p>
           <ul id="node-list" class="node-list" aria-label="Graph nodes"></ul>
@@ -86,93 +87,205 @@
           </div>
           <p id="node-error" class="danger hidden" role="alert"></p>
         </section>
+        <div class="status-dock">
+          <div id="status-bar" class="status-bar" role="group" aria-label="Map status, view and zoom">
         <details id="activity-controls" class="activity-controls">
-          <summary>Knowledge Activation <span id="activity-status" role="status" aria-live="polite">Waiting</span> · <span id="graph-watch-status" role="status" aria-live="polite">Changes idle</span> <span id="activity-playback-status" aria-label="Knowledge activation playback queue">400 ms</span></summary>
-          <div class="activity-body">
-            <label class="activity-toggle"><input id="activity-auto-focus" type="checkbox" checked aria-describedby="activity-camera-help" /> Automatically frame changing nodes</label>
-            <p id="activity-camera-help" class="subtle">Gently frame active reads and node/relationship changes, turning their surface toward you. Drag to rotate while automatic framing continues; your angle takes priority for 5 seconds after release. Manual zoom, reset and island navigation pause following for 5 seconds. Selected nodes keep focus. Returns to the previous framing after activity, preserving your manual angle. Disabled by reduced-motion preferences. Resets to on when this page reloads.</p>
-            <h3>Filesystem changes</h3>
-            <p id="graph-watch-message" class="muted"></p>
-            <p id="graph-watch-help" class="subtle"></p>
-            <h3>Read activity</h3>
-            <p id="activity-message" class="muted"></p>
-            <p id="activity-scope" class="subtle"></p>
-            <p id="activity-spacing" class="subtle"></p>
-            <p id="activity-playback-detail" class="subtle"></p>
-            <ul id="activity-repeat-counts" class="subtle"></ul>
-            <p id="activity-repeat-more" class="subtle"></p>
-            <label class="activity-toggle"><input id="activity-enabled" type="checkbox" checked /> Highlight external file access</label>
-            <form id="activity-form">
-              <label for="activity-duration">Highlight duration (seconds)</label>
-              <div class="activity-duration-row">
-                <input id="activity-duration" type="number" min="0.1" max="300" step="any" value="5" required aria-describedby="activity-duration-help" />
-                <button id="activity-save" class="btn btn-ghost" type="submit">Save</button>
+          <summary id="activity-summary" aria-controls="activity-settings">
+            <span class="status-caption">Knowledge Activation</span>
+            <span class="activity-status-row">
+              <span id="activity-status" role="status" aria-live="polite">Waiting</span>
+              <span id="graph-watch-status" role="status" aria-live="polite">Changes idle</span>
+              <span id="activity-playback-status" title="Playback pace: time between displayed activations, not collection latency." aria-label="Playback pace: 400 milliseconds between displayed activations">400 ms</span>
+            </span>
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><path d="m4 10 4-4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </summary>
+          <div id="activity-settings" class="activity-body">
+            <div class="activity-settings-head">
+              <h2>Knowledge Activation</h2>
+              <button id="activity-close" class="icon-btn" type="button" aria-label="Close activation settings" title="Close activation settings">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+              </button>
+            </div>
+            <div class="activity-health">
+              <div class="activity-connection-head">
+                <div class="info-label"><h3>Read collector</h3><button class="info-button" type="button" data-info="collector-info" data-info-title="Read collector" aria-label="About the read collector" aria-controls="menu-info" aria-haspopup="dialog" aria-expanded="false">i</button></div>
+                <button id="activity-connect" class="btn btn-ghost" type="button" aria-controls="activity-setup">Set up collector</button>
               </div>
-              <p id="activity-duration-help" class="subtle">0.1–300 seconds. Each file has its own expiry.</p>
+              <p id="activity-collector-state" class="muted">Waiting</p>
+              <p id="activity-collector-error" class="danger hidden" role="alert"></p>
+              <div id="collector-info" hidden><p id="activity-message"></p></div>
+              <div class="info-label"><h3>File changes</h3><button class="info-button" type="button" data-info="watch-info" data-info-title="File changes" aria-label="About file changes" aria-controls="menu-info" aria-haspopup="dialog" aria-expanded="false">i</button></div>
+              <p id="graph-watch-state" class="muted">Idle</p>
+              <p id="graph-watch-error" class="danger hidden" role="alert"></p>
+              <div id="watch-info" hidden><p id="graph-watch-message"></p><p id="graph-watch-help"></p></div>
+            </div>
+            <div class="info-label"><label class="activity-toggle"><input id="activity-auto-focus" type="checkbox" checked aria-describedby="activity-camera-help activity-camera-status" /> Follow activity</label><button class="info-button" type="button" data-info="follow-info" data-info-title="Follow activity" aria-label="About following activity" aria-controls="menu-info" aria-haspopup="dialog" aria-expanded="false">i</button></div>
+            <div id="follow-info" hidden><p id="activity-camera-help">Keep active nodes in view. Manual navigation temporarily pauses following. Reduced motion suppresses automatic movement without clearing your preference.</p></div>
+            <p id="activity-camera-status" class="subtle hidden" role="status"></p>
+            <label class="activity-toggle"><input id="activity-enabled" type="checkbox" checked /> Highlight file access</label>
+            <form id="activity-form">
+              <div class="info-label"><label for="activity-duration">Highlight duration</label><button class="info-button" type="button" data-info="duration-info" data-info-title="Highlight duration" aria-label="About highlight duration" aria-controls="menu-info" aria-haspopup="dialog" aria-expanded="false">i</button></div>
+              <div class="activity-duration-row">
+                <input id="activity-duration" type="number" min="0.1" max="300" step="any" value="5" required aria-describedby="activity-duration-help activity-duration-status" />
+                <span>seconds</span>
+                <button id="activity-save" class="btn btn-ghost" type="submit" disabled>Save</button>
+                <button id="activity-cancel" class="btn btn-ghost" type="button" disabled>Cancel</button>
+              </div>
+              <div id="duration-info" hidden><p id="activity-duration-help">0.1–300 seconds per node. Use Save to apply the duration, or Cancel to restore the latest saved value. Unsaved edits survive live updates and closing this panel, but not a page reload.</p></div>
+              <p id="activity-duration-status" class="subtle" role="status">Saved</p>
             </form>
             <p id="activity-config-error" class="danger hidden" role="alert"></p>
-            <h3 id="activity-setup-title">Activity provider setup</h3>
+            <details id="activity-setup" class="activity-disclosure">
+              <summary id="activity-setup-summary">Collector setup</summary>
+            <div class="info-label"><h3 id="activity-setup-title">Activity provider setup</h3><button class="info-button" type="button" data-info="setup-info" data-info-title="Collector instructions" aria-label="Collector instructions and permissions" aria-controls="menu-info" aria-haspopup="dialog" aria-expanded="false">i</button></div>
             <p id="activity-provider-label" class="subtle hidden"></p>
-            <p id="activity-setup-description" class="muted">Waiting for provider setup information.</p>
-            <ol id="activity-setup-steps" class="muted"></ol>
+            <p id="activity-permissions" class="subtle hidden"></p>
+            <div id="setup-info" hidden>
+              <p id="activity-setup-description">Waiting for provider setup information.</p>
+              <ol id="activity-setup-steps"></ol>
+            </div>
             <p id="activity-setup-notice" class="subtle">Connection details are private. Do not share them.</p>
             <pre id="activity-command-wrap" class="hidden"><code id="activity-command"></code></pre>
             <p id="activity-connection-status" class="muted hidden" role="status"></p>
             <button id="activity-retry" class="btn btn-ghost" type="button">Load connection</button>
             <p id="activity-connection-error" class="danger hidden" role="alert"></p>
+            </details>
+            <details class="activity-disclosure">
+              <summary>Diagnostics</summary>
+              <div class="info-label"><h3>Scope</h3><button class="info-button" type="button" data-info="scope-info" data-info-title="Process scope" aria-label="About process scope" aria-controls="menu-info" aria-haspopup="dialog" aria-expanded="false">i</button></div>
+              <p id="activity-scope-label" class="muted"></p>
+              <div id="scope-info" hidden><p id="activity-scope"></p><p id="activity-provider-diagnostics"></p></div>
+              <div class="info-label"><h3>Playback</h3><button class="info-button" type="button" data-info="playback-info" data-info-title="Playback" aria-label="About playback and counters" aria-controls="menu-info" aria-haspopup="dialog" aria-expanded="false">i</button></div>
+              <p id="activity-playback-counts" class="muted"></p>
+              <div id="playback-info" hidden><p id="activity-playback-detail"></p><p id="activity-spacing"></p></div>
+              <ul id="activity-repeat-counts" class="subtle"></ul>
+              <p id="activity-repeat-more" class="subtle"></p>
+            </details>
           </div>
         </details>
-        <nav id="islands" class="islands" aria-label="Island navigation"></nav>
-        <div id="graph-chat" class="graph-chat hidden">
-          <div id="chat-panel" class="chat-panel">
-            <div class="chat-head">
-              <p class="kicker">Chat with the graph</p>
-              <button id="chat-close" type="button">Close</button>
+            <details id="view-controls" class="view-controls">
+              <summary id="view-summary" aria-controls="islands">
+                <span class="status-caption">View</span>
+                <span id="view-label">All</span>
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><path d="m4 10 4-4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </summary>
+              <nav id="islands" class="view-menu" aria-label="Available views"></nav>
+            </details>
+            <div id="status-zoom" class="zoom-bar" role="group" aria-label="Zoom controls">
+              <button type="button" data-zoom-out aria-label="Zoom out">−</button>
+              <span data-zoom>100%</span>
+              <button type="button" data-zoom-in aria-label="Zoom in">+</button>
+              <button type="button" data-zoom-reset aria-label="Reset view">⌂</button>
             </div>
-            <div id="chat-log" class="chat-log"></div>
-            <form id="chat-form" class="chat-form">
-              <input id="chat-input" autocomplete="off" placeholder="Ask this Atlas…" aria-label="Chat with the graph" />
-              <button type="submit">Send</button>
-            </form>
           </div>
         </div>
-        <aside id="panel" class="panel hidden">
-          <p class="kicker">Options</p>
-          <p class="muted" style="margin:0.5rem 0 0">Atlases</p>
-          <div id="open-atlases" class="open-atlases"></div>
-          <button id="add-atlas" class="btn-ghost btn" type="button" style="margin:0.5rem 0 0.75rem;width:100%">Add atlas</button>
-          <p class="muted" style="margin:0.5rem 0 0">Grouping</p>
-          <div class="layers" style="margin-bottom:0.75rem">
-            <button class="layer active" data-grouping="layers" type="button">Layers</button>
-            <button class="layer" data-grouping="atlases" type="button">Atlases</button>
-            <button class="layer" data-grouping="proximity" type="button">Proximity</button>
+        <aside id="graph-chat" class="graph-chat" aria-labelledby="chat-kicker" aria-hidden="true" inert>
+          <div id="chat-panel" class="chat-panel">
+            <div class="chat-head">
+              <p id="chat-kicker" class="kicker">Local Atlas search</p>
+              <button id="chat-fullscreen" type="button" aria-label="Full screen chat" title="Full screen chat" aria-pressed="false" aria-controls="graph-chat">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                  <path class="chat-expand-icon" d="M14 4h6v6M20 4l-6 6M10 20H4v-6M4 20l6-6"/>
+                  <path class="chat-restore-icon" d="M20 4l-6 6M14 4v6h6M4 20l6-6M4 14h6v6"/>
+                </svg>
+              </button>
+            </div>
+            <div id="chat-status" class="chat-announcement" role="status" aria-live="polite" aria-atomic="true"></div>
+            <div id="chat-log" class="chat-log" role="log" aria-live="polite" aria-busy="false" aria-label="Chat messages"></div>
+            <form id="chat-form" class="chat-form">
+              <textarea id="chat-input" rows="1" autocomplete="off" placeholder="Search this Atlas…" aria-label="Search this Atlas" aria-describedby="chat-input-help"></textarea>
+              <span id="chat-input-help" class="chat-announcement">Enter sends your message. Shift+Enter adds a new line.</span>
+              <div class="chat-compose-actions">
+                <button id="chat-send" type="submit" aria-label="Send message" title="Send message" disabled>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M12 20V4m-7 7 7-7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+              </div>
+            </form>
           </div>
-          <p class="muted" style="margin:0.5rem 0 0">Layers</p>
-          <div class="layers">
-            <button class="layer active" data-layer="all" type="button">All</button>
-            <button class="layer active" data-layer="relations" type="button">Relates</button>
-            <button class="layer active" data-layer="sources" type="button">Provenance</button>
+        </aside>
+        <aside id="panel" class="panel" aria-labelledby="panel-title" aria-hidden="true" inert>
+          <div class="panel-head">
+            <div class="panel-brand">
+              <svg width="28" height="28" viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false">
+                <path d="m7 23 9-17 9 17M10 18h12M7 23h18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="16" cy="6" r="3" fill="currentColor"/>
+                <circle cx="7" cy="23" r="3" fill="currentColor"/>
+                <circle cx="25" cy="23" r="3" fill="currentColor"/>
+              </svg>
+              <span class="panel-brand-name"><span class="panel-brand-atlas">Atlas</span> <span class="panel-brand-cartograph">Cartograph</span></span>
+            </div>
+            <button id="panel-close" class="icon-btn" type="button" aria-label="Close options" title="Close options">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+                <path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+              </svg>
+            </button>
           </div>
-          <p class="subtle">Choose a schema or type to isolate it from All; then toggle to combine layers. Newly discovered types start visible.</p>
-          <div id="schema-layers" aria-label="Schema and type layers"></div>
-          <p class="muted">Pages without schema declarations</p>
-          <div class="layers">
-            <button class="layer active" data-layer="experiences" data-legacy-layer="experience" type="button">Experiences</button>
-            <button class="layer active" data-layer="decisions" data-legacy-layer="decision" type="button">Decisions</button>
-            <button class="layer active" data-layer="work" data-legacy-layer="work" type="button">Work</button>
-            <button class="layer active" data-layer="indexes" data-legacy-layer="index" type="button">Navigation indexes</button>
-            <button class="layer active" data-layer="other" data-legacy-layer="page" type="button">Untyped pages</button>
-            <button class="layer active hidden" data-layer="undeclared" data-legacy-layer="undeclared" type="button">Undeclared types</button>
+          <div class="panel-body">
+            <h2 id="panel-title" class="panel-options-title">Options</h2>
+            <section class="options-section" aria-labelledby="options-atlases-title">
+              <div class="options-section-head">
+                <div class="info-label"><h3 id="options-atlases-title">Atlases</h3><button class="info-button" type="button" data-info="atlases-info" data-info-title="Atlases" aria-label="About open Atlases" aria-controls="menu-info" aria-haspopup="dialog" aria-expanded="false">i</button></div>
+                <button id="add-atlas" class="icon-btn" type="button" aria-label="Add atlas" title="Add atlas">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+                </button>
+              </div>
+              <div id="open-atlases" class="open-atlases"></div>
+              <div id="atlases-info" hidden><p>Open Atlases share one graph. Add another store, or remove one from this view without deleting its files. At least one Atlas stays open.</p></div>
+            </section>
+            <section class="options-section" aria-labelledby="options-layout-title">
+              <div class="info-label"><h3 id="options-layout-title">Layout</h3><button class="info-button" type="button" data-info="layout-info" data-info-title="Layout" aria-label="About graph layout" aria-controls="menu-info" aria-haspopup="dialog" aria-expanded="false">i</button></div>
+              <div class="layers layout-options" role="group" aria-label="Graph layout">
+                <button class="layer active" data-grouping="layers" type="button">Layers</button>
+                <button class="layer" data-grouping="atlases" type="button">Atlases</button>
+                <button class="layer" data-grouping="proximity" type="button">Proximity</button>
+              </div>
+              <div id="layout-info" hidden><p>Layers groups pages by type and schema. Atlases groups by store. Proximity uses folder and relationship neighborhoods.</p><p>Layout changes placement, not relationships or schema membership. Use View in the status bar to focus a group.</p></div>
+            </section>
+            <section class="options-section" aria-labelledby="options-layers-title">
+              <div class="options-section-head">
+                <div class="info-label"><h3 id="options-layers-title">Layers</h3><button class="info-button" type="button" data-info="layers-info" data-info-title="Layers" aria-label="About layers" aria-controls="menu-info" aria-haspopup="dialog" aria-expanded="false">i</button></div>
+                <button class="layer active" data-layer="all" type="button">All</button>
+              </div>
+              <div id="layers-info" hidden><p>When all layers are selected, choose a schema or type to select only it. Then select more layers to add them, or select an enabled layer to remove it. Removing the last selection restores all layers.</p><p>All restores node layers without changing link visibility. Newly discovered types start visible. Core comes from SCHEMA.json; contributions come from schema.d. A dashed schema button means some of its types are visible. Counts include every declared type, even when empty.</p></div>
+              <div id="schema-layers" aria-label="Schema and type layers"></div>
+              <div class="options-fallback">
+                <details id="fallback-layers" class="options-disclosure">
+                  <summary>Other pages</summary>
+                  <div class="layers">
+                    <button class="layer active" data-layer="experiences" data-legacy-layer="experience" type="button">Experiences</button>
+                    <button class="layer active" data-layer="decisions" data-legacy-layer="decision" type="button">Decisions</button>
+                    <button class="layer active" data-layer="work" data-legacy-layer="work" type="button">Work</button>
+                    <button class="layer active" data-layer="indexes" data-legacy-layer="index" type="button">Navigation indexes</button>
+                    <button class="layer active" data-layer="other" data-legacy-layer="page" type="button">Untyped pages</button>
+                    <button class="layer active hidden" data-layer="undeclared" data-legacy-layer="undeclared" type="button">Undeclared types</button>
+                  </div>
+                </details>
+                <button class="info-button" type="button" data-info="fallback-info" data-info-title="Other pages" aria-label="About other page categories" aria-controls="menu-info" aria-haspopup="dialog" aria-expanded="false">i</button>
+              </div>
+              <div id="fallback-info" hidden><p>Pages outside declared schema types remain available here, including legacy categories, navigation indexes and untyped pages. Undeclared types have an explicit type that no loaded schema declares.</p><p>These categories describe page metadata, not folder ownership. Expanding Other pages does not change visibility.</p></div>
+              <p id="schema-diagnostics" class="danger hidden" role="status"></p>
+              <p id="layer-status" class="muted" role="status" aria-live="polite"></p>
+              <p id="layer-error" class="danger hidden" role="alert"></p>
+            </section>
+            <section class="options-section" aria-labelledby="options-links-title">
+              <div class="info-label"><h3 id="options-links-title">Links</h3><button class="info-button" type="button" data-info="links-info" data-info-title="Links" aria-label="About graph links" aria-controls="menu-info" aria-haspopup="dialog" aria-expanded="false">i</button></div>
+              <div class="layers" role="group" aria-label="Link visibility">
+                <button class="layer active" data-layer="relations" type="button">Relates</button>
+                <button class="layer active" data-layer="sources" type="button">Provenance</button>
+              </div>
+              <div id="links-info" hidden><p>Relates shows relationships between pages. Provenance shows source links within the graph. Both controls change edge visibility without hiding nodes or creating relationships.</p></div>
+            </section>
+            <section class="options-section" aria-labelledby="options-graph-title">
+              <div class="info-label"><h3 id="options-graph-title">Graph</h3><button class="info-button" type="button" data-info="graph-info" data-info-title="Graph details" aria-label="About this graph" aria-controls="menu-info" aria-haspopup="dialog" aria-expanded="false">i</button></div>
+              <dl class="stats">
+                <div><dt>Nodes</dt><dd id="stat-nodes">0</dd></div>
+                <div><dt>Edges</dt><dd id="stat-edges">0</dd></div>
+              </dl>
+              <div id="graph-info" hidden><p>Counts reflect the visible node and link layers.</p><p>Format: <span id="stat-format">—</span></p><p id="stat-root"></p></div>
+            </section>
           </div>
-          <p id="schema-diagnostics" class="danger hidden" role="status"></p>
-          <p id="layer-status" class="muted" role="status" aria-live="polite"></p>
-          <p id="layer-error" class="danger hidden" role="alert"></p>
-          <dl class="stats">
-            <div>Nodes <span id="stat-nodes">0</span></div>
-            <div>Edges <span id="stat-edges">0</span></div>
-            <div>Format <span id="stat-format">—</span></div>
-            <div id="stat-root" class="subtle"></div>
-          </dl>
         </aside>
         <p id="map-error" class="danger hidden" style="position:absolute;top:4.5rem;left:1rem;right:1rem;z-index:30"></p>
         <div id="atlas-add" class="atlas-add hidden">
@@ -197,10 +310,23 @@
           <div class="preview-scroll">
             <p id="preview-link-error" class="danger hidden" style="margin:0 0 0.75rem"></p>
             <ul id="preview-relates" class="relates hidden"></ul>
+            <section id="preview-sources" class="external-sources hidden" aria-labelledby="preview-sources-title">
+              <h3 id="preview-sources-title">External sources</h3>
+              <ul id="preview-source-list"></ul>
+            </section>
             <div id="preview-body" class="wiki-md"></div>
           </div>
         </article>
       </section>
+      <div id="menu-info" popover="auto" role="dialog" aria-labelledby="menu-info-title" aria-describedby="menu-info-body">
+        <div class="info-popup-head">
+          <h2 id="menu-info-title"></h2>
+          <button id="menu-info-close" class="icon-btn" type="button" aria-label="Close information">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <div id="menu-info-body"></div>
+      </div>
       <small class="build-info">
         <span id="build-info" class="hidden" aria-label="Cartograph build"></span>
         <span id="frame-rate" aria-label="Rendering frame rate" title="Rendered frames per second, sampled over one second; not GPU timing."> | -- FPS</span>

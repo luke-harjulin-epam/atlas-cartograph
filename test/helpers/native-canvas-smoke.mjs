@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -11,6 +11,7 @@ const runtime = resolve(process.argv[2]);
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), "cartograph-native-")));
 const previousCwd = process.cwd();
 const opened = new Map();
+const sourceUrl = "https://github.com/team/project/blob/main/README.md?raw=1#section.md";
 let canvas;
 
 function workspace(name) {
@@ -26,7 +27,10 @@ function store(cwd, name, id) {
     atlas_id: id, templates: { by_type: { observation: {}, instrument: {} } },
   }));
   writeFileSync(join(root, "index.md"), "# Observatory\n");
-  writeFileSync(join(root, "signal.md"), "---\ntitle: Signal\ntype: observation\n---\n\n[[index]]\n");
+  writeFileSync(join(root, "signal.md"), [
+    "---", "title: Signal", "type: observation", "sources:", `  - url: ${sourceUrl}`,
+    "    title: Project guide", "---", "", "[[index]]", "",
+  ].join("\n"));
   return root;
 }
 
@@ -55,6 +59,19 @@ async function rejected(ctx, expected) {
   await assert.rejects(action(ctx, "get_state"), { code: "not_open" });
 }
 
+async function ask(url, text) {
+  const response = await fetch(new URL("/api/ui", url), {
+    method: "POST",
+    headers: { "X-Cartograph-Client": "canvas", "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "chat", text }),
+  });
+  assert.equal(response.status, 200);
+  const state = await response.json();
+  assert.equal(state.chat.at(-1).pending, true);
+  assert.equal(state.chat.at(-1).status, "queued");
+  return state.chat.at(-1).id;
+}
+
 try {
   for (const name of ["ATLAS_ROOT", "ATLAS_VIEWER_ROOT", "OKF_WIKI_ROOT", "ATLAS_PRESETS"]) delete process.env[name];
   process.chdir(runtime);
@@ -79,6 +96,7 @@ try {
   assert.equal(registration.metadataCalls, 0);
   let state = await action(ctx, "get_state");
   assert.equal(state.error, null);
+  assert.equal(state.chatRevision, 0);
   assert.equal(state.nodeCount, 4);
   assert.equal(new Set(state.nodes.map((node) => node.id)).size, 4);
   assert.equal(state.schemas.length, 2);
@@ -93,6 +111,7 @@ try {
   assert.equal(response.status, 200);
   const bootstrap = await response.json();
   assert.deepEqual(bootstrap.state.roots, [first, second]);
+  assert.equal(bootstrap.state.chatRevision, 0);
   assert.ok(!bootstrap.state.roots.some((root) => root.startsWith(runtime)));
 
   const signal = state.nodes.find((node) => node.title === "Signal");
@@ -105,21 +124,88 @@ try {
   assert.equal(state.selectedId, signal.id);
   assert.equal(state.layers[signal.typeKey], false);
   assert.equal(state.page.title, "Signal");
+  assert.deepEqual(state.page.sources, [sourceUrl]);
+  assert.deepEqual(state.page.sourceDetails, [{ path: sourceUrl, title: "Project guide" }]);
   assert.equal(state.layersRevision, layerResult.layersRevision);
+  assert.equal(state.chatRevision, 0, "Query, selection, layers and reload do not invalidate chat");
+
+  const firstChat = await ask(initial.url, "What is Signal?");
+  const secondChat = await ask(initial.url, "What is Observatory?");
+  assert.equal(registration.sent.length, 2);
+  const prompt = registration.sent[0];
+  assert.ok(prompt.includes(JSON.stringify({ instanceId: ctx.instanceId, requestId: firstChat })));
+  assert.ok(prompt.includes(JSON.stringify(join(runtime, "atlas", "cartograph-chat.md"))),
+    "Activation must point inside the canonical or deployed bundle");
+  assert.match(readFileSync(join(runtime, "atlas", "cartograph-chat.md"), "utf8"), /update_chat/);
+  state = await action(ctx, "get_state");
+  assert.ok(state.chat.filter((m) => m.role === "graph").every((m) => m.pending));
+  assert.equal(state.chatRevision, 2);
+  assert.ok(!JSON.stringify(state.chat).includes("11111111-2222-4333-8444-555555555555"),
+    "SDK message ID must not become an answer");
+  await action(ctx, "update_chat", { requestId: firstChat, status: "working" });
+  for (const text of ["Searching the Atlas", "Reading pages"]) {
+    await action(ctx, "update_chat", { requestId: firstChat, status: "working", text });
+    const progressSnapshot = await fetch(new URL("/api/bootstrap", initial.url), {
+      headers: { "X-Cartograph-Client": "canvas" },
+    }).then((response) => response.json());
+    assert.equal(progressSnapshot.state.chat[1].progress, text);
+    assert.equal(progressSnapshot.state.chat[1].pending, true);
+    assert.equal(progressSnapshot.state.chat[3].status, "queued");
+    assert.equal(progressSnapshot.state.chatRevision, (await action(ctx, "get_state")).chatRevision);
+  }
+  await assert.rejects(action(ctx, "update_chat", {
+    requestId: firstChat, status: "working", text: "x".repeat(161),
+  }), { code: "invalid_chat_reply" });
+  const otherOwner = { ...ctx, sessionId: "foreign-session" };
+  await assert.rejects(action(otherOwner, "update_chat", {
+    requestId: firstChat, status: "working", text: "Wrong session",
+  }), { code: "chat_session_mismatch" });
+  assert.deepEqual((await action(otherOwner, "get_state")).chat, [], "Another caller cannot read chat history");
+  assert.equal((await action(otherOwner, "get_state")).chatRevision, 0);
+  await assert.rejects(action(otherOwner, "update_chat", {
+    requestId: firstChat, status: "answered", text: "Wrong session",
+  }), { code: "chat_session_mismatch" });
+  const completed = { requestId: secondChat, status: "answered", text: "**Observatory** is the mounted Atlas." };
+  assert.equal((await action(ctx, "update_chat", completed)).ok, true);
+  assert.equal((await action(ctx, "update_chat", completed)).duplicate, true);
+  await assert.rejects(action(ctx, "update_chat", { ...completed, text: "Overwrite" }), { code: "chat_request_finished" });
+  state = await action(ctx, "get_state");
+  assert.equal(state.chat[1].status, "working");
+  assert.equal(state.chat[3].text, completed.text);
+  assert.equal(state.chat[3].pending, false);
+  assert.equal(state.chatRevision, 6, "Duplicate and rejected completions do not advance chat");
+  await action(ctx, "update_chat", { requestId: firstChat, status: "answered", text: "Signal is an observation." });
+  const replySnapshot = await fetch(new URL("/api/bootstrap", initial.url), {
+    headers: { "X-Cartograph-Client": "canvas" },
+  }).then((response) => response.json());
+  assert.equal(replySnapshot.state.chat[1].text, "Signal is an observation.",
+    "The HTTP canvas, not only native get_state, receives the actual answer");
+  assert.equal(replySnapshot.state.chatRevision, 7);
 
   // A different caller context cannot inherit a previous open's workspace.
   const westCtx = context("west-map", west, {}, "infrared-session");
-  await open(westCtx);
+  const westCanvas = await open(westCtx);
   assert.equal((await action(westCtx, "get_state")).root, western);
   assert.equal(registration.metadataCalls, 0);
   assert.equal((await open(context("east-map", west))).url, initial.url, "Focus preserves the existing instance");
   assert.equal((await action(ctx, "get_state")).nodeCount, 4);
   assert.equal((await action(ctx, "get_state")).selectedId, signal.id);
+  const sendsBeforeForeign = registration.sent.length;
+  await ask(westCanvas.url, "Do not dispatch to east session");
+  assert.equal(registration.sent.length, sendsBeforeForeign);
+  const foreignState = await action(westCtx, "get_state");
+  assert.equal(foreignState.chat.at(-1).status, "failed");
+  await assert.rejects(action(westCtx, "update_chat", {
+    requestId: firstChat, status: "answered", text: "Wrong owner",
+  }), { code: "chat_session_mismatch" });
 
   setMetadata({ sessionId: ctx.sessionId, workingDirectory: west });
   const metadataCtx = context("metadata-map");
   await open(metadataCtx);
   assert.equal((await action(metadataCtx, "get_state")).root, western);
+  await assert.rejects(action(metadataCtx, "update_chat", {
+    requestId: firstChat, status: "answered", text: "Wrong instance",
+  }), { code: "chat_request_missing" });
   setMetadata({ sessionId: ctx.sessionId, workingDirectory: east });
   const refreshedCtx = context("fresh-metadata-map");
   await open(refreshedCtx);
@@ -190,6 +276,9 @@ try {
     await canvas.onClose(activeCtx);
     opened.delete(id);
     await assert.rejects(action(activeCtx, "get_state"), { code: "not_open" });
+    await assert.rejects(action(activeCtx, "update_chat", {
+      requestId: firstChat, status: "working",
+    }), { code: "not_open" });
   }
   console.log("Native entrypoint contract passed (synthetic SDK transport; real-host acceptance remains separate).");
 } finally {

@@ -8,8 +8,11 @@ hand-authored; there is no generated marketplace site or documentation generator
 | --- | --- |
 | `extension.mjs` | Copilot canvas lifecycle, actions, session working directory |
 | `server.mjs` | Per-canvas loopback HTTP server, Atlas state, full-state SSE |
-| `build-info.mjs` | Runtime version/source SHA, release stamp and source-checkout dirty marker |
+| `build-info.mjs` | Runtime version/source SHA; Git on source checkouts, then package/file stamps |
 | `atlas/` | Store discovery, Markdown parsing, node linking and multi-Atlas merge |
+| `atlas/chat.mjs` | Compact host-session activation card and local-search fallback for HTTP/dev |
+| `atlas/cartograph-chat.md` | Bundled answering activation: read evidence, cite, report progress and acknowledge delivery |
+| `atlas/chat-requests.mjs` | Bounded per-instance requests, idempotent replies, timeout and close cleanup |
 | `atlas/schema.mjs` | Confined metadata-only schema catalog and deterministic ownership diagnostics |
 | `atlas/watch.mjs` | Replaceable, unprivileged open-root filesystem change source |
 | `atlas/live.mjs` | Debounced rescans, watcher status and explicit creation/deletion deltas |
@@ -20,6 +23,7 @@ hand-authored; there is no generated marketplace site or documentation generator
 | `public/node-layers.js` | Shared type-key membership, counts and accepted layer-key normalization |
 | `public/schema-layers.js` | Store-qualified schema/type controls with stable focus and diagnostics |
 | `public/content-navigation.js` | Single delegated preview/wiki/external click handling |
+| `public/source-links.js` | Safe source classification, local destination labels and accessible external-source rows |
 | `public/node-browser.js` | Filtered, paginated native node controls and live focus preservation |
 | `public/node-search.js` | Shared node descriptions and title/ID/Atlas/path/type/kind query matching |
 | `http.mjs` | Shared request authorisation and bounded JSON object parsing |
@@ -59,6 +63,63 @@ transport, then exercises its real handlers and server. The harness stays outsid
 the distributed runtime. It validates registration shape and data flow, not the
 host's actual `session.resume` implementation or renderer; exact-artifact native
 acceptance remains external to the local packaging check.
+
+## Source provenance in previews
+
+Frontmatter sources serve two different purposes: internal page references
+participate in graph linking, while HTTP/HTTPS provenance opens an external
+destination. External URLs retain their exact text; they must not pass through
+internal slug normalization, which removes `.md` suffixes.
+
+Preview metadata adds ordered `sourceDetails: [{ path, title? }]` while
+retaining the existing `sources: string[]` graph contract. The browser
+separates external-source rows from
+internal relationship chips and derives fallback labels locally, including
+GitHub destination types and repository/domain context. It escapes all source
+metadata and does not fetch remote titles or favicons.
+
+External rows use native links with an external-link indicator, keyboard focus
+and full-URL disclosure on hover/focus. The shared delegated navigation handler
+leaves external-source anchors to native browser activation, including Enter,
+modified clicks and context menus, rather than also calling `window.open`.
+External provenance does not introduce new graph nodes
+or inferred relationships.
+
+## Chat delivery
+
+The SDK's `session.send()` resolves with a message ID, not answer text.
+Cartograph ignores that ID as display content. Each submitted question creates
+a UUID-correlated pending message. The prompt is only a fenced `text` activation
+card with `activation: "cartograph-chat"`, `activation_path`, `routing`,
+`question`, `atlases`, `selection` and `query`. Each field uses a JSON value;
+embedded newlines and quotes cannot introduce card fields. The absolute
+`activation_path` resolves to `atlas/cartograph-chat.md` in the runtime bundle.
+The card contains no page bodies or duplicated answering/delivery instructions;
+the agent loads that bundled file for the complete workflow. Atlas remains the
+retrieval substrate, not the owner of the chat transport.
+
+The agent calls `update_chat` with `status: working` when it begins and at
+meaningful task-stage changes. Optional `text` is a nonempty, single-line
+label capped at 160 UTF-8 bytes; omitted text retains the current label or
+defaults to `Working…`. The server exposes validated labels as `progress`,
+which the browser escapes as plain text rather than rendering pending Markdown.
+Changed labels broadcast without resetting the request deadline; duplicate
+labels do not broadcast. Completion removes progress and uses `status: answered`
+with the full Markdown answer (or `failed` plus an explanation).
+The action checks both instance ownership and the joined session, validates a
+nonempty reply capped at 128 KiB, updates only that request, broadcasts the
+revisioned snapshot and returns a delivery acknowledgement. Identical terminal
+retries are idempotent; conflicting, foreign, missing and late replies fail.
+No session-wide “latest assistant message” listener can misattribute unrelated
+turns. Failure to report completion expires the request after ten minutes.
+Timers are bounded by the 50-message history and released on trimming/close.
+Closing cancels pending requests, not the host's whole session.
+
+The browser distinguishes queued from working and shows reduced-motion-aware
+pending dots. Only the request's progress changes its indicator: unrelated
+session work does not make it appear active. The host transcript remains
+host-owned, while answer delivery is explicitly to the canvas. Local HTTP/dev
+search remains synchronous and does not activate the agent.
 
 ## Schema metadata flow
 
@@ -357,8 +418,10 @@ metadata when supplied. Their POST bodies must be `application/json`.
 The collector continues to use its separate bearer authentication.
 
 Page loading confines lexical and canonical file paths to a mounted root.
-Qualified node IDs retain their Atlas during page lookup and chat excerpts;
-unqualified links prefer the selected page's Atlas. Full-graph loading consumes
+Qualified node IDs retain their Atlas during page lookup and local chat excerpts;
+unqualified links prefer the selected page's Atlas. Native canvas chat sends a
+compact store/selection envelope to `session.send` on the joined host session
+and does not load page bodies in the canvas process. Full-graph loading consumes
 all available batches instead of treating a partial scan as complete.
 
 Without an explicit root, initialization discovers the consumer workspace's

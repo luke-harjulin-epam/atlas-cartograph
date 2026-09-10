@@ -1,10 +1,12 @@
 import { mountGraphCanvas } from "./graph-canvas.js";
 import { escapeHtml, renderMarkdown } from "./markdown.js";
 import { mountActivityControls } from "./activity-controls.js";
+import { mountMenuInfo } from "./menu-info.js";
 import { mountGraphWatchControls } from "./graph-watch-controls.js";
 import { allNodeLayersOn, createLayerControls } from "./layer-controls.js";
 import { createStateControls } from "./state-controls.js";
 import { handleContentClick } from "./content-navigation.js";
+import { renderExternalSources, sourceKind } from "./source-links.js";
 import { mountNodeBrowser } from "./node-browser.js";
 import { fallbackLayerLabel, nodeCategory, nodeLayer, layerCounts } from "./node-layers.js";
 import { mountSchemaLayers } from "./schema-layers.js";
@@ -25,6 +27,7 @@ The map remembers so you don't
 have to grep the dark.`;
 
 const $ = (id) => document.getElementById(id);
+const menuInfo = mountMenuInfo(document);
 const phases = {
   crawl: $("phase-crawl"),
   welcome: $("phase-welcome"),
@@ -37,6 +40,9 @@ let state = { phase: "crawl", stores: [], graph: null, root: "", query: "", sele
 let latestStateRevision = null;
 let latestActivityRevision = null;
 let chatOpen = false;
+let chatFullscreen = false;
+const chatBackgroundInert = new Map();
+let chatRenderSignature = null;
 let map = null;
 const activityControls = mountActivityControls($("activity-controls"), applyActivity,
   (enabled) => map?.setAutoFocus(enabled));
@@ -114,6 +120,7 @@ function applyActivity(activity) {
 }
 
 function showPhase(name) {
+  if (name !== "map") menuInfo.close();
   if (name !== "map") $("frame-rate").textContent = " | -- FPS";
   for (const [key, el] of Object.entries(phases)) {
     el.classList.toggle("hidden", key !== name);
@@ -185,18 +192,30 @@ function renderStores() {
   grid.innerHTML = atlas.map(storeCard).join("");
 }
 
+let openAtlasesMarkup = "";
 function renderOpenAtlases() {
   const box = $("open-atlases");
   if (!box) return;
   const roots = openRoots();
   const byRoot = new Map((state.stores || []).map((s) => [s.root, s]));
-  box.innerHTML = roots
+  const markup = roots
     .map((root) => {
       const s = byRoot.get(root);
       const label = s?.label || root.split("/").pop();
-      return `<div class="open-atlas"><span>${escapeHtml(label)}</span><button type="button" data-drop="${escapeHtml(root)}" ${roots.length < 2 ? "disabled" : ""}>Remove</button></div>`;
+      return `<div class="open-atlas"><span>${escapeHtml(label)}</span><button type="button" data-drop="${escapeHtml(root)}" aria-label="Remove ${escapeHtml(label)}" title="${roots.length < 2 ? "Keep at least one Atlas open" : `Remove ${escapeHtml(label)}`}" ${roots.length < 2 ? "disabled" : ""}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+      </button></div>`;
     })
     .join("");
+  if (markup === openAtlasesMarkup) return;
+  openAtlasesMarkup = markup;
+  const focusedRoot = box.contains(document.activeElement) ? document.activeElement.getAttribute("data-drop") : null;
+  box.innerHTML = markup;
+  if (focusedRoot) {
+    const replacement = [...box.querySelectorAll("[data-drop]")]
+      .find(button => button.getAttribute("data-drop") === focusedRoot && !button.disabled);
+    (replacement || $("add-atlas")).focus({ preventScroll: true });
+  }
   box.querySelectorAll("[data-drop]").forEach((btn) => {
     btn.addEventListener("click", () => post("drop", { root: btn.getAttribute("data-drop") }));
   });
@@ -220,6 +239,8 @@ function renderAtlasAdd() {
 function ensureMap() {
   if (map) return map;
   map = mountGraphCanvas($("graph-wrap"), {
+    zoomControls: $("status-zoom"),
+    onReducedMotion: (reduced) => activityControls.setReducedMotion(reduced),
     autoFocus: activityControls.autoFocusEnabled(),
     onPlayback: (playback) => activityControls.setPlayback(playback),
     onFrameRate: (fps) => {
@@ -243,9 +264,14 @@ function chipLabel(path) {
 }
 
 function navigateWiki(target) {
+  if (chatOpen && chatFullscreen) {
+    chatFullscreen = false;
+    renderChat();
+  }
   return post("select", { nodeId: target });
 }
 
+let previewSourcesMarkup = "";
 function renderPreview() {
   const box = $("preview");
   const back = $("preview-backdrop");
@@ -262,9 +288,10 @@ function renderPreview() {
     err.textContent = state.linkError || "";
     err.classList.toggle("hidden", !state.linkError);
   }
+  const sources = page?.sourceDetails ?? (page?.sources ?? []).map((path) => ({ path }));
   const chips = [
     ...(page?.relatesTo ?? []).map((r) => ({ kind: r.kind || "relates", path: r.path })),
-    ...(page?.sources ?? []).map((s) => ({ kind: "source", path: s })),
+    ...sources.filter((s) => sourceKind(s.path) === "internal").map((s) => ({ kind: "source", path: s.path })),
   ];
   const rel = $("preview-relates");
   rel.classList.toggle("hidden", chips.length === 0);
@@ -274,6 +301,13 @@ function renderPreview() {
         `<li><button type="button" class="kind-${escapeHtml(c.kind)}" data-target="${escapeHtml(c.path)}">${escapeHtml(c.kind)} · ${escapeHtml(chipLabel(c.path))}</button></li>`,
     )
     .join("");
+  const external = sources.filter((s) => sourceKind(s.path) === "external");
+  $("preview-sources").classList.toggle("hidden", external.length === 0);
+  const sourceMarkup = renderExternalSources(external);
+  if (sourceMarkup !== previewSourcesMarkup) {
+    $("preview-source-list").innerHTML = sourceMarkup;
+    previewSourcesMarkup = sourceMarkup;
+  }
   $("preview-body").innerHTML = renderMarkdown(page?.body || "_No page body._");
 }
 
@@ -308,19 +342,63 @@ function renderMapChrome() {
 }
 
 let islandStart = 0;
+let islandFocus;
+let islandGrouping;
+let islandMarkup;
 const ISLAND_PAGE = 6;
+const viewControls = $("view-controls");
+
+function closeViews(restoreFocus = false) {
+  viewControls.open = false;
+  if (restoreFocus) $("view-summary").focus({ preventScroll: true });
+}
+
+viewControls.addEventListener("toggle", (event) => {
+  if (event.target === viewControls && viewControls.open) $("activity-controls").open = false;
+});
+$("activity-controls").addEventListener("toggle", (event) => {
+  if (event.target === $("activity-controls") && event.target.open) closeViews();
+});
+document.addEventListener("pointerdown", (event) => {
+  if (!viewControls.contains(event.target)) closeViews();
+});
+viewControls.addEventListener("focusout", (event) => {
+  if (event.relatedTarget && !viewControls.contains(event.relatedTarget)) closeViews();
+});
+viewControls.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    event.stopPropagation();
+    closeViews(true);
+    return;
+  }
+  if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+  event.preventDefault();
+  viewControls.open = true;
+  const buttons = [...$("islands").querySelectorAll("button")].filter(button => !button.disabled);
+  const current = buttons.indexOf(document.activeElement);
+  const index = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1
+    : event.key === "ArrowDown" ? (current + 1) % buttons.length
+    : current <= 0 ? buttons.length - 1 : current - 1;
+  buttons[index]?.focus();
+});
 
 function renderIslands() {
   const nav = $("islands");
   if (!nav || !map) return;
   const items = [...(map.clusters?.() ?? [])].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
-  const focus = map.focusCluster?.();
-  if (focus) {
+  const focus = map.focusCluster?.() || null;
+  if (focus && (focus !== islandFocus || state.grouping !== islandGrouping)) {
     const idx = items.findIndex((c) => (c.key || c.label) === focus);
     if (idx >= 0 && (idx < islandStart || idx >= islandStart + ISLAND_PAGE)) {
       islandStart = Math.max(0, Math.min(idx, Math.max(0, items.length - ISLAND_PAGE)));
     }
   }
+  islandFocus = focus;
+  islandGrouping = state.grouping;
+  const selected = items.find(c => (c.key || c.label) === focus);
+  $("view-label").textContent = selected?.label || "All";
+  $("view-summary").title = `View: ${selected?.label || "All"}`;
   const maxStart = Math.max(0, items.length - ISLAND_PAGE);
   islandStart = Math.max(0, Math.min(islandStart, maxStart));
   const slice = items.slice(islandStart, islandStart + ISLAND_PAGE);
@@ -330,32 +408,42 @@ function renderIslands() {
     items.length <= ISLAND_PAGE
       ? ""
       : `<span class="island-range">${islandStart + 1}–${islandStart + slice.length} / ${items.length}</span>`;
-  nav.innerHTML =
-    `<button type="button" data-island="" class="${focus ? "" : "active"}">All</button>` +
-    `<button type="button" data-island-shift="-1" ${canPrev ? "" : "disabled"}>‹</button>` +
+  const markup =
+    `<button type="button" data-island="" aria-pressed="${!selected}" class="${selected ? "" : "active"}">All</button>` +
     slice
       .map(
         (c) =>
-          `<button type="button" data-island="${escapeHtml(c.key || c.label)}" class="${focus === (c.key || c.label) ? "active" : ""}">${escapeHtml(c.label)} · ${c.count}</button>`,
+          `<button type="button" data-island="${escapeHtml(c.key || c.label)}" aria-pressed="${focus === (c.key || c.label)}" class="${focus === (c.key || c.label) ? "active" : ""}">${escapeHtml(c.label)} · ${c.count}</button>`,
       )
       .join("") +
-    `<button type="button" data-island-shift="1" ${canNext ? "" : "disabled"}>›</button>` +
-    range;
+    (items.length > ISLAND_PAGE ? `<div class="view-pagination"><button type="button" data-island-shift="-1" ${canPrev ? "" : "disabled"}>Previous</button>${range}<button type="button" data-island-shift="1" ${canNext ? "" : "disabled"}>Next</button></div>` : "");
   map.setFeatured?.(slice.map((c) => c.key || c.label));
-  nav.querySelectorAll("[data-island-shift]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      islandStart += Number(btn.getAttribute("data-island-shift")) * ISLAND_PAGE;
-      renderIslands();
-    });
-  });
-  nav.querySelectorAll("[data-island]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const label = btn.getAttribute("data-island") || null;
-      map.flyTo(label || null);
-      renderIslands();
-    });
-  });
+  if (markup === islandMarkup) return;
+  islandMarkup = markup;
+  const active = nav.contains(document.activeElement) ? document.activeElement : null;
+  const key = active?.getAttribute("data-island");
+  const shift = active?.getAttribute("data-island-shift");
+  nav.innerHTML = markup;
+  if (active) {
+    const buttons = [...nav.querySelectorAll("button")].filter(button => !button.disabled);
+    (buttons.find(button => key !== null ? button.getAttribute("data-island") === key
+      : button.getAttribute("data-island-shift") === shift) || buttons[0])?.focus({ preventScroll: true });
+  }
 }
+
+$("islands").addEventListener("click", (event) => {
+  const shift = event.target.closest("[data-island-shift]");
+  if (shift && !shift.disabled) {
+    islandStart += Number(shift.getAttribute("data-island-shift")) * ISLAND_PAGE;
+    renderIslands();
+    return;
+  }
+  const button = event.target.closest("[data-island]");
+  if (!button) return;
+  map.flyTo(button.getAttribute("data-island") || null);
+  renderIslands();
+  closeViews(true);
+});
 
 function renderStateError() {
   const error = state.error || (state.phase === "map" && !state.previewOpen ? state.linkError : null);
@@ -383,7 +471,8 @@ function applyState(next) {
   const query = queryControls.snapshot(next.query, next.queryRevision);
   const activity = Object.hasOwn(next, "activity") && acceptActivity(next.activity) ? next.activity : state.activity;
   state = { ...state, ...next, grouping, layers, layersRevision: layerControls.layersRevision,
-    query, queryRevision: queryControls.revision, activity };
+    query, queryRevision: queryControls.revision, activity,
+    chatRevision: Object.hasOwn(next, "chat") ? next.chatRevision : state.chatRevision };
   if (state.build) {
     const { version, commit, dirty } = state.build;
     $("build-info").textContent = `v${version} / ${commit ? commit.slice(0, 8) : "SHA unavailable"}${dirty ? " + local" : ""}`;
@@ -543,30 +632,118 @@ $("open-path").addEventListener("submit", (e) => {
   if (root) openRoot(root);
 });
 $("chat-toggle").addEventListener("click", () => {
+  if (chatOpen) {
+    closeChat();
+    return;
+  }
+  chatFullscreen = false;
   chatOpen = !chatOpen;
   renderChat();
-  if (chatOpen) $("chat-input")?.focus();
+  if (chatOpen) $("chat-input")?.focus({ preventScroll: true });
 });
-$("chat-close").addEventListener("click", () => {
+function closeChat() {
   chatOpen = false;
   renderChat();
+  $("chat-toggle")?.focus();
+}
+$("chat-fullscreen").addEventListener("click", () => {
+  chatFullscreen = !chatFullscreen;
+  renderChat();
 });
-$("chat-form").addEventListener("submit", (e) => {
-  e.preventDefault();
+$("graph-chat").addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    e.preventDefault();
+    e.stopPropagation();
+    if (chatFullscreen) {
+      chatFullscreen = false;
+      renderChat();
+      $("chat-fullscreen").focus();
+    } else closeChat();
+  }
+});
+function resizeChatInput() {
+  const input = $("chat-input");
+  $("chat-send").disabled = !input.value.trim();
+  if (!chatOpen) return;
+  const scrollTop = input.scrollTop;
+  input.style.height = "auto";
+  input.style.height = `${input.scrollHeight}px`;
+  const caretAtEnd = document.activeElement === input
+    && input.selectionStart === input.value.length && input.selectionEnd === input.value.length;
+  input.scrollTop = caretAtEnd ? input.scrollHeight : scrollTop;
+}
+$("chat-input").addEventListener("input", resizeChatInput);
+let chatInputWidth = null;
+const chatInputResize = new ResizeObserver(([entry]) => {
+  // Height changes are our own; only remeasure when wrapping width changes.
+  if (entry.contentRect.width === chatInputWidth) return;
+  chatInputWidth = entry.contentRect.width;
+  resizeChatInput();
+});
+chatInputResize.observe($("chat-input"));
+window.addEventListener("pagehide", () => { chatInputResize.disconnect(); menuInfo.close(); });
+window.addEventListener("pageshow", () => chatInputResize.observe($("chat-input")));
+function sendChat() {
   const input = $("chat-input");
   const text = input.value.trim();
   if (!text) return;
   input.value = "";
   chatOpen = true;
+  resizeChatInput();
+  input.focus();
   post("chat", { text }).then((next) => {
     if (next) applyState(next);
   });
+}
+$("chat-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
+    e.preventDefault();
+    sendChat();
+  }
 });
-$("toggle-panel").addEventListener("click", () => $("panel").classList.toggle("hidden"));
+$("chat-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  sendChat();
+});
+function setOptionsOpen(open, restoreFocus = true) {
+  if (open && optionsNeedsRoom()) closeChat();
+  const panel = $("panel");
+  if (!open) menuInfo.closeWithin(panel);
+  panel.classList.toggle("options-open", open);
+  panel.inert = !open;
+  panel.setAttribute("aria-hidden", String(!open));
+  $("toggle-panel").setAttribute("aria-expanded", String(open));
+  $("toggle-panel").setAttribute("aria-label", open ? "Hide options" : "Show options");
+  if (open) $("panel-close").focus({ preventScroll: true });
+  else if (restoreFocus) $("toggle-panel").focus({ preventScroll: true });
+}
+function optionsNeedsRoom() {
+  return chatOpen && !chatFullscreen && $("phase-map").clientWidth - $("graph-chat").offsetWidth < 220;
+}
+function fitOptionsBesideChat() {
+  const panel = $("panel");
+  if (!panel.classList.contains("options-open") || !optionsNeedsRoom()) return;
+  const restoreFocus = panel.contains(document.activeElement)
+    || ($("menu-info").contains(document.activeElement)
+      && [...panel.querySelectorAll("[data-info]")].some(button => button.getAttribute("aria-expanded") === "true"));
+  setOptionsOpen(false, false);
+  if (restoreFocus) $("chat-input").focus({ preventScroll: true });
+}
+window.addEventListener("resize", fitOptionsBesideChat);
+$("toggle-panel").addEventListener("click", () => setOptionsOpen(!$("panel").classList.contains("options-open")));
+$("panel-close").addEventListener("click", () => setOptionsOpen(false));
+$("panel").addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    e.preventDefault();
+    e.stopPropagation();
+    setOptionsOpen(false);
+  }
+});
 $("add-atlas")?.addEventListener("click", () => {
   renderAtlasAdd();
   $("atlas-add")?.classList.remove("hidden");
-  $("panel")?.classList.add("hidden");
+  setOptionsOpen(false, false);
+  $("atlas-add-close")?.focus({ preventScroll: true });
 });
 $("atlas-add-close")?.addEventListener("click", () => $("atlas-add")?.classList.add("hidden"));
 $("atlas-add-grid")?.addEventListener("click", (e) => {
@@ -614,33 +791,90 @@ $("panel").addEventListener("click", (e) => {
 });
 
 function renderChat() {
+  if (chatOpen && chatFullscreen) menuInfo.close();
   const log = $("chat-log");
   const drawer = $("graph-chat");
   const mapEl = $("phase-map");
   const toggle = $("chat-toggle");
   if (!log || !drawer) return;
-  drawer.classList.toggle("hidden", !chatOpen);
+  const wasOpen = drawer.classList.contains("chat-open");
+  const wasFullscreen = mapEl?.classList.contains("chat-fullscreen");
+  drawer.inert = !chatOpen;
+  drawer.setAttribute("aria-hidden", chatOpen ? "false" : "true");
   drawer.classList.toggle("chat-open", chatOpen);
   mapEl?.classList.toggle("chat-open", chatOpen);
+  const fullscreen = chatOpen && chatFullscreen;
+  // Retain the closing width until the next open so full-screen chat slides
+  // offscreen instead of snapping back to drawer width before leaving.
+  drawer.classList.toggle("chat-fullscreen", chatFullscreen);
+  mapEl?.classList.toggle("chat-fullscreen", fullscreen);
+  for (const child of mapEl?.children ?? []) {
+    if (child === drawer || child === toggle) continue;
+    if (fullscreen) {
+      if (!chatBackgroundInert.has(child)) chatBackgroundInert.set(child, child.inert);
+      child.inert = true;
+    } else if (chatBackgroundInert.has(child)) {
+      child.inert = chatBackgroundInert.get(child);
+      chatBackgroundInert.delete(child);
+    }
+  }
+  if (chatOpen && (!wasOpen || (wasFullscreen && !fullscreen))) fitOptionsBesideChat();
+  const fullscreenButton = $("chat-fullscreen");
+  fullscreenButton.setAttribute("aria-pressed", String(fullscreen));
+  fullscreenButton.setAttribute("aria-label", fullscreen ? "Restore chat drawer" : "Full screen chat");
+  fullscreenButton.setAttribute("title", fullscreen ? "Restore chat drawer" : "Full screen chat");
+  if (chatOpen && !wasOpen) resizeChatInput();
   toggle?.setAttribute("aria-pressed", chatOpen ? "true" : "false");
+  toggle?.setAttribute("aria-expanded", chatOpen ? "true" : "false");
+  const sessionChat = state.chatMode === "session";
+  const kicker = $("chat-kicker");
+  const label = sessionChat ? "Chat with Copilot" : "Local Atlas search";
+  if (kicker) kicker.textContent = label;
+  toggle?.setAttribute("aria-label", chatOpen ? "Collapse chat" : label);
+  toggle?.setAttribute("title", chatOpen ? "Collapse chat" : label);
+  const input = $("chat-input");
+  input?.setAttribute("placeholder", sessionChat ? "Ask Copilot…" : "Search this Atlas…");
+  input?.setAttribute("aria-label", sessionChat ? "Ask Copilot" : "Search this Atlas");
   const msgs = state.chat || [];
+  // Older running servers can still serve refreshed browser assets without revisions.
+  const signature = Number.isSafeInteger(state.chatRevision) && state.chatRevision >= 0
+    ? `${sessionChat}:${state.chatRevision}`
+    : JSON.stringify([sessionChat, msgs.map(({ role, pending, status, progress, text, hits }) =>
+      ({ role, pending, status, progress, text, hits }))]);
+  if (signature === chatRenderSignature) return;
+  chatRenderSignature = signature;
+  const isPending = (m) => m.role === "graph" && (m.pending === true || m.status === "queued" || m.status === "working");
+  const pendingMessages = msgs.filter(isPending);
+  const workingMessages = pendingMessages.filter((m) => m.status === "working");
+  const progressText = (m) => typeof m.progress === "string" && m.progress.trim() ? m.progress : "Working…";
+  log.setAttribute("aria-busy", String(pendingMessages.length > 0));
+  const announcement = $("chat-status");
+  const pendingText = workingMessages.length ? progressText(workingMessages.at(-1))
+    : pendingMessages.length ? sessionChat ? "Waiting for Copilot…" : "Waiting for search…" : "";
+  if (announcement && announcement.textContent !== pendingText) announcement.textContent = pendingText;
   log.innerHTML = msgs
     .map((m) => {
-      const who = m.role === "user" ? "You" : "Graph";
+      const who = m.role === "user" ? "You" : sessionChat ? "Copilot" : "Search";
       const isGraph = m.role === "graph";
-      const body = isGraph ? renderMarkdown(m.text || "") : escapeHtml(m.text || "");
-      const hits = (m.hits || [])
+      const pending = isPending(m);
+      const working = pending && m.status === "working";
+      const statusText = working ? progressText(m) : sessionChat ? "Waiting for Copilot…" : "Waiting for search…";
+      const fallback = { failed: "The request failed.", expired: "The request expired.", cancelled: "The request was cancelled." };
+      const body = pending
+        ? `<span class="chat-pending${working ? " working" : ""}"><span>${escapeHtml(statusText)}</span><span class="chat-dots" aria-hidden="true"><span>•</span><span>•</span><span>•</span></span></span>`
+        : isGraph ? renderMarkdown(m.text || fallback[m.status] || "") : escapeHtml(m.text || "");
+      const hits = (pending ? [] : m.hits || [])
         .map(
           (h) =>
             `<button type="button" class="hit" data-node="${escapeHtml(h.id)}">${escapeHtml(h.title)} · ${escapeHtml(h.kind)}</button>`,
         )
         .join("");
-      const bubbleClass = isGraph ? "bubble wiki-md" : "bubble";
+      const bubbleClass = isGraph && !pending ? "bubble wiki-md" : "bubble";
       return `<div class="chat-msg ${escapeHtml(m.role)}"><span class="who">${who}</span><div class="${bubbleClass}">${body}${hits}</div></div>`;
     })
     .join("");
   log.querySelectorAll("[data-node]").forEach((btn) => {
-    btn.addEventListener("click", () => post("select", { nodeId: btn.getAttribute("data-node") }));
+    btn.addEventListener("click", () => navigateWiki(btn.getAttribute("data-node")));
   });
   log.scrollTop = log.scrollHeight;
 }

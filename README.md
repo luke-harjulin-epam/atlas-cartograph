@@ -15,10 +15,10 @@ Unknown and legacy pages remain available without declaring a schema.
 Untyped `index.md` pages appear as **Navigation indexes**, not undeclared types.
 See [schema layers](docs/usage.md#schema-and-type-layers) for behavior and limits.
 
-The v0.3.0 release line adds volumetric galaxies, unified toolbar search,
-two-stage node selection, anchored pulses and smoother camera behavior,
-with version/SHA/FPS visibility and APM 0.30.0 distribution.
-See the [changelog](CHANGELOG.md#030---2026-09-09) for the release changes.
+The upcoming v0.4.0 release adds session-backed chat with cited Atlas reads,
+reliable deployed source identity, readable external sources, and compact,
+responsive navigation and settings. It retains APM 0.30.0 distribution.
+See the [changelog](CHANGELOG.md#040---2026-09-10) for the release changes.
 
 ## Run
 
@@ -93,7 +93,14 @@ apm install sergio-sisternes-epam/atlas-cartograph --target copilot
 ```
 
 Install from a ref containing `apm.yml`. Use `#<tag-or-commit>` on the package
-reference to pin a version; use `#v0.3.0` after that release is published.
+reference to pin a version. `#v0.3.0` is the latest published release;
+use `#v0.4.0` once its release is published.
+
+The private [marketplace](https://github.com/sergio-sisternes-epam/apm-marketplace)
+pins releases separately. Publishing a GitHub release does not update its catalog
+or existing installations automatically. Consumers need access to both private
+repositories; maintainers should follow the
+[marketplace handoff](CONTRIBUTING.md#marketplace-handoff).
 
 Reload project extensions and open **Cartograph**. APM deploys the complete
 runtime to `.github/extensions/cartograph/`; it does not deploy the development
@@ -107,10 +114,39 @@ requires a new grant. A bundle-name-only or legacy `allowExecutables` grant
 does not approve the archive.
 The viewer uses local fallback fonts; it does not fetch Google Fonts or other
 third-party UI assets.
+Native canvas chat asks the same Copilot session, shows queued/working status,
+and receives **Copilot** answers back in the drawer through request-scoped
+callbacks. Each question sends only a compact **cartograph-chat** activation
+card; the bundled `atlas/cartograph-chat.md` owns the instructions for reading
+mounted pages, citing sources and delivering replies. Standalone development
+mode remains labelled local search.
+While it works, brief labels such as **Searching the Atlas**, **Reading pages**
+and **Preparing answer** explain the current stage beside the animated dots.
+See [chat usage](docs/usage.md#chat-with-this-atlas) for timeouts and delivery.
+Chat starts folded. Its fixed top-right button opens a right-hand panel at 25% of the
+window width, with a 360px minimum (capped at 90% on narrow windows). The graph
+and its controls use the remaining space. The rounded composer has an embedded
+send arrow and grows with your draft, scrolling after 45% of the window height
+or 384px, whichever is smaller. Enter sends; Shift+Enter adds a line.
+Close or Escape inside chat restores the full map without clearing the
+conversation or draft.
+Use the diagonal-arrow **Full screen** icon to read wide tables across the canvas.
+Its arrows point inward when expanded: click again or press Escape to restore
+the drawer. One split-panel icon stays at the top-right in every size to open
+or close chat; there is no duplicate toggle in the toolbar.
+Node previews and their backdrop stay within the graph area, so you can keep
+chatting about a selected page or reopen chat without dismissing its preview.
+Page previews show web provenance in a separate **External sources** section:
+readable link rows identify the destination and its repository/domain, instead
+of displaying only a URL's final segment. Titles can come from frontmatter or
+be derived locally; no remote metadata is fetched. Internal relationships stay
+as chips. See [source links](docs/usage.md#external-source-links) for authoring.
+
 The small bottom-left badge shows the runtime version and abbreviated source SHA.
 Hover for the full SHA; `+ local` marks uncommitted runtime changes. Release
-archives carry their source identity. Unstamped deployments show `SHA unavailable`
-rather than borrowing the consumer project's commit.
+archives carry their source identity in stamped runtime metadata. Unstamped or
+placeholder deployments show `SHA unavailable` rather than borrowing the
+consumer project's commit.
 The adjacent FPS counter samples rendered frames once per second; `-- FPS`
 means a sample is not yet available. This measures rendering cadence, not GPU time.
 The footer has dedicated space below map controls and honours bottom safe areas.
@@ -123,7 +159,15 @@ Large overviews use subtle
 relationships and fewer labels, restoring detail through zoom, search,
 selection and activation. The toolbar **Search stars** field finds every page by title, ID,
 Atlas, path, type or kind, including hidden-layer pages; its query also drives
-map highlighting. Results appear as you type; press Down with an empty field
+map highlighting. Search fills the available toolbar width between controls.
+The menu opens a full-height left-hand overlay with the Atlas Cartograph logo
+and name above Options. It stays within the Atlas area when chat is open.
+Compact sections separate Atlases, Layout, Layers, Links and Graph; **i**
+buttons hold explanations, and **Other pages** expands the fallback categories.
+The branded header stays visible while the options scroll.
+On very narrow windows, Options and chat take turns without losing chat drafts.
+Close or Escape dismisses Options.
+Results appear as you type; press Down with an empty field
 to browse every node. Escape closes results without hiding the query.
 Clear the field to reset highlighting.
 This is deterministic visual organization, not a gravity simulation.
@@ -171,17 +215,29 @@ returns after the last highlight expires.
 
 Visual activations normally stay **400 ms apart**, smoothly accelerating toward
 **200, 100, or 50 ms** as the queue grows or ages. Repeated observations share a
-file's queue slot and display a count. The Knowledge Activation panel shows queue depth, lag,
+file's queue slot and display a count. The floating bottom status bar shows
+Knowledge Activation on the left, a **View** selector, and zoom controls on the right.
+The View popup offers All and the current grouping's views, with full labels.
+Click its
+activation section to open settings above the bar; zoom works independently.
+Collector setup and diagnostics are collapsed until needed. The panel shows queue depth, lag,
 current speed and aggregation. Actual file access and graph changes are never
 delayed; each displayed highlight gets the full configured lifetime.
+Connection status comes first, with a **Set up collector** shortcut when needed.
+Menus keep labels brief. Use the round **i** buttons for explanations, setup
+instructions and detailed diagnostics; Escape or the cross closes the popup.
+Duration drafts survive live updates until Save or Cancel; checkboxes apply
+immediately. The inline ms value describes visual playback pace, not collection
+latency.
 
-**Automatically frame changing nodes** is on by default in Knowledge Activation.
+**Follow activity** is on by default in Knowledge Activation.
 The camera gently pans, zooms and turns toward the active surface for displayed
 accesses and node/relationship creation/deletion effects. Drag to rotate while
 automatic framing continues; your angle takes priority for five seconds after
 release. Manual zoom/reset/island navigation pause following for five seconds;
 selected nodes keep focus. Idle restoration preserves manual rotation. Turn the option
-off for manual framing. Reduced-motion preferences suppress automatic movement.
+off for manual framing. Reduced-motion preferences suppress automatic movement;
+the panel shows **Paused by reduced motion** without clearing the checkbox.
 Single-node close-in framing uses a faster zoom with coordinated translation;
 multi-node following, zoom-out, orbit and idle restoration keep their usual pace.
 The return pan follows zoom progress to keep the Atlas in view during zoom-out.

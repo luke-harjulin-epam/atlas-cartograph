@@ -2,6 +2,90 @@
 
 ## Unreleased
 
+## 0.4.0 - 2026-09-10
+
+### Changed
+
+- Keep source URL descriptions visually hidden instead of removing them from
+  display, retaining their full hover and keyboard-focus reveal.
+- Use chat revisions to skip full-history serialization on unchanged snapshots,
+  preserving progress updates, draft focus and older-server compatibility.
+- Document the separate, commit-pinned marketplace handoff after source release
+  publication; catalog and consumer updates are not automatic.
+- Restore the chat drawer when opening a citation or local search hit from
+  full-screen chat, so the destination preview is visible and interactive.
+- Match the search results panel to the input's full width, adapting to window
+  size and chat visibility.
+- Keep the version/FPS badge behind Options so it cannot cover the Graph section.
+- Replace the Add atlas text with a compact SVG plus icon and accessible label.
+- Removing the last selected node layer now restores all node layers, including
+  schema types and fallback categories, without changing link visibility.
+- Simplify Options into compact sections with shared information popups,
+  separate node/link filters, collapsed Other pages, and a fixed branded header.
+  Keep Atlas controls focused through updates and retain full schema identities.
+  On narrow layouts, Options and chat take turns without clearing chat drafts.
+- Reduce information buttons to 12px with an 8px glyph, retaining visible
+  keyboard focus.
+- Keep menu text brief and move explanations into shared **i** information
+  popups across activation settings, layer controls and search. Preserve
+  visible errors, permissions, private-token warnings and key counters.
+- Prioritize collector/file-change status and a contextual setup shortcut in
+  Knowledge Activation. Preserve unsaved duration drafts until Save or Cancel,
+  improve helper-text contrast, show reduced-motion suppression, and clarify
+  playback pace. Keep setup task-oriented and move process mechanics into
+  provider diagnostics without removing permission or private-token warnings.
+- Move view navigation into a status-bar popup showing the selected view.
+  Keep all available views reachable through bounded pages and keyboard controls.
+  Match its two-line label and chevron in Knowledge Activation, with collector
+  status, change status and playback timing on the same row.
+- Combine Knowledge Activation and zoom in a floating bottom status bar,
+  removing the click-to-focus hint. Open concise activation settings above
+  the bar, with separate Collector setup and Diagnostics disclosures.
+  Fetch private connection details only while Collector setup is open.
+- Fill the available toolbar width with search and show Options in a
+  full-height left-side overlay with an Atlas Cartograph logo/header,
+  independent scrolling and Escape/Close.
+  Slide Options and chat in and out over 180ms, with instant reduced-motion
+  behavior and no width snap when closing full-screen chat.
+- Add a full-screen chat toggle for reading wide tables. Restore or Escape
+  returns to the drawer, preserving the conversation and draft.
+  Use one persistent top-right panel icon to open or close chat in every size.
+- Show external sources as readable, keyboard-accessible preview rows with
+  descriptive labels, repository/domain context and an external-link icon.
+  Prefer optional frontmatter titles; derive fallback labels locally without
+  fetching websites. Keep internal relationships as chips.
+- Rename the bundled answering activation to `cartograph-chat` and send only
+  its compact activation card. Keep progress, retrieval and reply-delivery
+  instructions in the bundled file instead of repeating them in every question.
+- Show brief request-specific chat progress labels as the agent searches,
+  reads pages and prepares its answer. Replace each stage in place, keep the
+  original timeout, and retain plain Working status for older callers.
+- Give the chat drawer a readable 360px minimum, capped to fit narrow windows.
+  Add a rounded, auto-growing multiline composer with an embedded SVG send
+  arrow; retain Enter-to-send, with Shift+Enter for new lines and IME protection.
+- Fold chat into a right-hand panel using 25% of the window width, with the
+  graph and its controls kept alongside it. Resize proportionally, preserve
+  drafts/history on collapse, and support Escape with focus restoration.
+- Stamp deployed runtimes with `cartograph-build.json` as well as
+  `cartographBuild`, so installed canvases keep the source SHA when Git is
+  absent. Unsubstituted export placeholders still show `SHA unavailable`.
+- Native canvas chat sends a compact Atlas envelope to the joined Copilot
+  session. The host reads mounted pages; local keyword search remains only for
+  HTTP/dev servers without a session.
+
+### Fixed
+
+- Preserve external source URLs, including `.md` suffixes, queries and
+  fragments, and read source objects using `path`, `url` or `uri`.
+- Confine node previews and their backdrop to the graph area so chat remains
+  usable alongside a selected page, including reopening a folded chat panel.
+- Deliver native chat answers through acknowledged, request-scoped canvas
+  callbacks instead of displaying SDK message IDs. Reject wrong-session,
+  conflicting and stale replies; expire unanswered requests and release timers.
+- Label native replies **Copilot** and show queued/working status with animated
+  dots that respect reduced motion. Ship the `cartograph-chat` answering activation
+  with the runtime so the agent sends its answer into the originating drawer.
+
 ## 0.3.0 - 2026-09-09
 
 ### Added

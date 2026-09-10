@@ -36,6 +36,36 @@ function page(root, path, title, body = "") {
   writeFileSync(file, `---\ntitle: ${title}\n---\n${body}\n`);
 }
 
+test("scanning and page loading preserve external destinations and additive source metadata", (t) => {
+  const cwd = workspace(t);
+  const root = store(cwd, "sources");
+  page(root, "guide.md", "Guide");
+  const urls = ["https://example.com/spec.md", "https://example.com/spec.md?raw=1&view=all#part.md"];
+  writeFileSync(join(root, "index.md"), `---
+sources:
+  - path: guide.md
+    title: Internal guide
+  - url: ${urls[0]}
+    title: Specification
+  - uri: ${urls[1]}
+    title: Query and fragment
+---\nOriginal preview text.`);
+  const graph = loadFullGraph(root, cwd, { strict: true });
+  const node = graph.nodes.find((n) => n.id === "index");
+  assert.equal(node.sourceCount, 3);
+  assert.deepEqual(node.refs.filter((r) => r.kind === "source").map((r) => r.raw), ["guide", ...urls]);
+  assert.deepEqual(graph.edges.map(({ source, target, kind }) => ({ source, target, kind })),
+    [{ source: "index", target: "guide", kind: "source" }]);
+  const loaded = loadPage(root, "index", cwd);
+  assert.deepEqual(loaded.sources, ["guide", ...urls]);
+  assert.deepEqual(loaded.sourceDetails, [
+    { path: "guide", title: "Internal guide" },
+    { path: urls[0], title: "Specification" },
+    { path: urls[1], title: "Query and fragment" },
+  ]);
+  assert.equal(loaded.body, "Original preview text.");
+});
+
 test("page identifiers reject traversal and absolute paths without basename fallback", (t) => {
   const cwd = workspace(t);
   const root = store(cwd, "one");

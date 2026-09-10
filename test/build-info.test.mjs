@@ -42,6 +42,35 @@ test("unversioned bundles explicitly report unavailable SHA", (t) => {
   assert.deepEqual(readBuildInfo(runtime), { version: "0.2.0", commit: null, dirty: false });
 });
 
+test("unsubstituted export-subst stamps are ignored", (t) => {
+  const { runtime } = fixture(t);
+  writeFileSync(join(runtime, "cartograph-build.json"), `${JSON.stringify({
+    commit: "$Format:%H$",
+    dirty: false,
+  }, null, 2)}\n`);
+  assert.deepEqual(readBuildInfo(runtime), { version: "0.2.0", commit: null, dirty: false });
+});
+
+test("deployed file stamps survive without package metadata or consumer Git", (t) => {
+  const { runtime, init } = fixture(t, ".github/extensions/cartograph");
+  const commit = "b".repeat(40);
+  writeFileSync(join(runtime, "cartograph-build.json"), `${JSON.stringify({ commit, dirty: false }, null, 2)}\n`);
+  assert.notEqual(init(), commit);
+  assert.deepEqual(readBuildInfo(runtime), { version: "0.2.0", commit, dirty: false });
+});
+
+test("source checkout Git identity wins over a stale file stamp", (t) => {
+  const { root, runtime, init } = fixture(t);
+  mkdirSync(join(root, ".github/extensions/cartograph"), { recursive: true });
+  writeFileSync(join(root, ".github/extensions/cartograph/extension.mjs"), "// Development shim\n");
+  writeFileSync(join(runtime, "cartograph-build.json"), `${JSON.stringify({
+    commit: "c".repeat(40),
+    dirty: true,
+  }, null, 2)}\n`);
+  const commit = init();
+  assert.deepEqual(readBuildInfo(runtime), { version: "0.2.0", commit, dirty: false });
+});
+
 test("deployed bundles never borrow the consumer repository's commit", (t) => {
   const { runtime, init } = fixture(t, ".github/extensions/cartograph");
   init();

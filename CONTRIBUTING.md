@@ -50,11 +50,12 @@ installation, including default discovery, `get_state`, `set_layers`,
 the runtime `package.json` and root `package.json` aligned. Application imports,
 browser assets, collectors and fixtures must resolve within the bundle.
 The build badge reads this runtime's version and source-checkout SHA, marking
-uncommitted runtime changes. Release packaging stamps `cartographBuild` in the
-isolated producer's runtime `package.json`, never the canonical source or
-generated plugin manifest. Deployed bundles must not read the consumer's Git
-identity; unstamped copies explicitly show an unavailable SHA. Cover both
-paths with `test/build-info.test.mjs` and the package smoke checks.
+uncommitted runtime changes. Release packaging stamps `cartographBuild` and
+`cartograph-build.json` in the isolated producer, never the canonical source or
+generated plugin manifest. Source checkouts prefer Git so a stale stamp cannot
+hide local edits. Deployed bundles must not read the consumer's Git identity;
+unsubstituted or missing stamps show an unavailable SHA. Cover both paths with
+`test/build-info.test.mjs` and the package smoke checks.
 The repository discovery shim is not distribution source; do not run a
 first-party APM deployment over that locally authored shim.
 
@@ -82,6 +83,22 @@ package; do not add an SPDX license without an explicit licensing decision.
 
 For renderer changes, inspect both WebGL and Canvas 2D paths, reduced-motion
 behavior, selection, and the return to baseline after activity expires.
+Exercise the floating status bar beside chat and at narrow widths: zoom stays
+independent of the activation disclosure, Escape restores focus, and private
+connection details load only for Collector setup and clear when it closes.
+Cover the View popup with large group lists, duplicate labels, live updates,
+keyboard navigation and selection; it must not change search or layer filters.
+For activation settings, cover duration drafts across blur, updates, toggle
+saves and failures; Cancel uses the latest confirmed value. Keep setup metadata
+provider-owned, render diagnostics literally, and verify reduced-motion status
+and normal-text contrast without starting a collector.
+Information popups need keyboard/focus, outside dismissal, live-text, owner
+closure and narrow-viewport coverage. Keep private commands out of help copies
+and keep operational errors and permission warnings visible.
+For Options, cover the fixed header and scrolling body with long Atlas/schema
+identities, chat open and closed, and the Other pages disclosure. Layout, node
+layers and link visibility remain independent; live updates must retain focus
+on Atlas controls and preserve disclosure state.
 Preserve visible keyboard focus and local-only assets. HTTP route changes must
 retain same-origin/custom-header checks and JSON-only mutation requests;
 page-loading changes must preserve mounted-root containment and Atlas identity.
@@ -114,9 +131,31 @@ shared playback/camera behaviour and WebGL initialisation/context-loss fallback.
 Cover duplicate mount rejection and recovery, missing explicit Atlas targets,
 single-store URI navigation, and unique edge IDs/degrees. Chat regressions must
 exercise overlapping success/failure replies and pending entries trimmed from
-history. Markdown blocks must work without blank lines around headings or quotes.
+history. The SDK stub must return a message ID from `send`, never pretend to
+return assistant text. Cover `update_chat` progress/completion, identical retries,
+foreign owners/instances, timeout and close cleanup with
+`node --test test/session-chat.test.mjs test/native-extension.test.mjs test/frontend-interactions.test.mjs`.
+The native harness exercises callbacks in both canonical and copied deployments;
+also verify an actual host question/read/reply cycle in the canvas drawer.
+Keep chat revision coverage across HTTP/native snapshots, progress, completion,
+failure, expiry and cancellation. Duplicate callbacks and non-chat changes must
+not advance it. Use serialization-count regressions with large answers to prove
+unchanged snapshots and drawer toggles skip full-history work while preserving
+focus and draft state; keep unversioned-server compatibility covered.
+Ship `atlas/cartograph-chat.md` inside the runtime bundle, not as an installed-user
+patch. Keep chat prompts limited to activation-card data; progress, retrieval
+and delivery instructions belong in that file. Cover escaped card values and
+the deployed activation path. Markdown blocks must work without blank lines around headings or quotes.
 Relative-link cases must use duplicate basenames and confirm that graph edges
 and preview navigation resolve the same source-directory target.
+External-source cases must retain exact HTTP/HTTPS destinations, including
+`.md`, queries and fragments. Cover string sources and titled `path`/`url`/`uri`
+objects, mixed lists, safe escaping and rejection of non-web schemes as
+external links. Keep internal sources and their graph edges unchanged.
+In the browser, check meaningful GitHub and generic-site labels, repository
+context, whole-row activation, native modified clicks, visible keyboard focus
+and full URLs on hover/focus. Long links must wrap inside the graph-only
+preview while chat stays usable. Do not fetch remote titles or favicons.
 Use fake clocks to cover normal 400 ms spacing and adaptive 200/100/50 ms targets,
 queue-age pressure, smooth acceleration/recovery, full displayed lifetimes,
 repeat coalescing, endpoint pulse expiry, and pending-event cancellation.
@@ -142,6 +181,10 @@ revisits, unrelated consecutive nodes, and removal of intermediate nodes;
 recorded segments must not be reconstructed from the current active-node order.
 Browser-asset changes need only a page refresh, not an extension reload or
 collector restart.
+Exercise chat full-screen/restore with a real Markdown table, draft and open
+preview. Covered controls must be inert, resizing must keep tables contained,
+and Escape restores the drawer before closing it. Preserve history and graph
+state without server mutations.
 Cover automatic camera framing with fake clocks: default-on/off controls,
 single and widely spread activations, changed relationship endpoints (including
 deletion ghosts), query/layer filtering, five-second manual override, selection,
@@ -271,9 +314,9 @@ approved policy explicitly rather than infer compliance from these audits.
 
 ## Release procedure
 
-The next prepared release is v0.3.0. A local archive with that version is only a
+The next prepared release is v0.4.0. A local archive with that version is only a
 candidate until the reviewed source reaches `main` and the tag workflow publishes
-it. Do not reuse the earlier 0.1.1 native-acceptance archive as a release asset.
+it. Do not reuse an older native-acceptance archive as a release asset.
 
 1. Update `package.json`, `.apm/extensions/cartograph/package.json`, and the
    double-quoted top-level version in `apm.yml` together. Move the corresponding
@@ -306,3 +349,25 @@ Rerunning a failed final publication job can finish its existing draft; a full
 rerun deliberately refuses an existing release. Only after confirming a draft
 was never published may its owner delete that failed draft and rerun. Never
 delete/recreate a published release or force-move a tag: ship a new version.
+
+### Marketplace handoff
+
+The private
+[`sergio-sisternes-epam/apm-marketplace`](https://github.com/sergio-sisternes-epam/apm-marketplace)
+catalog pins Cartograph by version and commit. Source release publication does
+not advance that pin. Follow the marketplace's own contribution guidance for
+the separate catalog PR:
+
+1. Finish the source release first. Record its URL and resolved tag commit;
+   confirm the published assets and manifest version match that commit.
+2. Update only Cartograph's authoritative `apm.yml` catalog entry to the released
+   version and full commit SHA. Do not pin unreleased branch work.
+3. Use the marketplace's pinned APM version (currently 0.30.0) to run `apm pack`.
+   Commit the manifest and regenerated `.claude-plugin/marketplace.json`, align
+   the README package row and `Unreleased` notes, and review its `AGENTS.md`
+   and `CONTRIBUTING.md`. Never hand-edit the generated catalog.
+4. Require `validate-and-pack` and maintainer review before merging. That merge
+   publishes the catalog change; no separate marketplace release is required.
+5. In an approved consumer, refresh/update the package and confirm it resolves
+   the released SHA. Consumers need access to both private repositories, and
+   existing lockfiles/installations must not be assumed to update automatically.

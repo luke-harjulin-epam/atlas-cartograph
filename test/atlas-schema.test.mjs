@@ -193,6 +193,10 @@ test("All, schema groups, individual types and relationship toggles remain indep
   assert.deepEqual(keys.filter((key) => layers[key]), members);
   assert.equal(layers.sources, false);
   assert.equal(layers.relations, true);
+  const reset = applyLayerClick(layers, schema.key, keys, members);
+  assert.equal(allNodeLayersOn(reset, keys), true, "removing the final schema group selects all node layers");
+  assert.equal(reset.sources, false);
+  assert.equal(reset.relations, true);
   layers = applyLayerClick(layers, members[0], keys);
   assert.equal(layers[members[0]], false);
   layers = applyLayerClick(layers, "all", keys);
