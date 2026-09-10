@@ -4,6 +4,9 @@
 
 ### Changed
 
+- Give the chat drawer a readable 360px minimum, capped to fit narrow windows.
+  Add a rounded, auto-growing multiline composer with an embedded SVG send
+  arrow; retain Enter-to-send, with Shift+Enter for new lines and IME protection.
 - Fold chat into a right-hand panel using 25% of the window width, with the
   graph and its controls kept alongside it. Resize proportionally, preserve
   drafts/history on collapse, and support Escape with focus restoration.

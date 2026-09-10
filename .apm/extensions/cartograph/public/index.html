@@ -132,8 +132,15 @@
             <div id="chat-status" class="chat-announcement" role="status" aria-live="polite" aria-atomic="true"></div>
             <div id="chat-log" class="chat-log" role="log" aria-live="polite" aria-busy="false" aria-label="Chat messages"></div>
             <form id="chat-form" class="chat-form">
-              <input id="chat-input" autocomplete="off" placeholder="Search this Atlas…" aria-label="Search this Atlas" />
-              <button type="submit">Send</button>
+              <textarea id="chat-input" rows="1" autocomplete="off" placeholder="Search this Atlas…" aria-label="Search this Atlas" aria-describedby="chat-input-help"></textarea>
+              <span id="chat-input-help" class="chat-announcement">Enter sends your message. Shift+Enter adds a new line.</span>
+              <div class="chat-compose-actions">
+                <button id="chat-send" type="submit" aria-label="Send message" title="Send message" disabled>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M12 20V4m-7 7 7-7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+              </div>
             </form>
           </div>
         </aside>

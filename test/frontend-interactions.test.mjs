@@ -113,6 +113,9 @@ function appFixture({ reducedMotion = false, phase = "map" } = {}) {
   const frames = new Map();
   const drawings = new Map();
   const motionListeners = new Set();
+  const windowListeners = new Map();
+  const resizeObservers = [];
+  document.getElementById("chat-input").scrollHeight = 56;
   const motion = {
     matches: reducedMotion,
     addEventListener(type, listener) { if (type === "change") motionListeners.add(listener); },
@@ -138,7 +141,15 @@ function appFixture({ reducedMotion = false, phase = "map" } = {}) {
   const context = vm.createContext({
     document, allNodeLayersOn, createLayerControls, createStateControls, handleContentClick, mountNodeBrowser, escapeHtml, renderMarkdown,
     fallbackLayerLabel, nodeCategory, nodeLayer, layerCounts, mountSchemaLayers, nodeSearchText,
-    window: { matchMedia: () => motion, open: (...args) => opened.push(args) },
+    window: {
+      matchMedia: () => motion, open: (...args) => opened.push(args),
+      addEventListener(type, listener) { windowListeners.set(type, listener); },
+    },
+    ResizeObserver: class {
+      constructor(callback) { this.callback = callback; resizeObservers.push(this); }
+      observe(target) { this.target = target; }
+      disconnect() { this.target = null; }
+    },
     performance: { now: () => clock },
     requestAnimationFrame(callback) { frames.set(++frameId, callback); return frameId; },
     cancelAnimationFrame(id) { frames.delete(id); },
@@ -174,7 +185,7 @@ function appFixture({ reducedMotion = false, phase = "map" } = {}) {
   apply(initial);
   return {
     document, calls, opened, queries, graphs, renderers, timers, bootstrap, apply, activities, activityStatuses,
-    frames, drawings, motionListeners,
+    frames, drawings, motionListeners, resizeObservers, windowListeners,
     frame() {
       clock += 16;
       const queued = [...frames.values()];
@@ -868,7 +879,7 @@ test("chat folds into an inert drawer and preserves graph, history and drafts ac
 
 test("chat sizing reserves a responsive quarter-width beside the graph without a modal backdrop", () => {
   const css = readFileSync(new URL("../.apm/extensions/cartograph/public/styles.css", import.meta.url), "utf8");
-  assert.match(css, /\.map \{ --chat-width: 25vw; --chat-inset: 0px; \}/);
+  assert.match(css, /\.map \{ --chat-width: min\(90vw, max\(22\.5rem, 25vw\)\); --chat-inset: 0px; \}/);
   assert.match(css, /\.map\.chat-open \{ --chat-inset: var\(--chat-width\); \}/);
   assert.match(css, /#graph-wrap \{[^}]*inset: 0 var\(--chat-inset\) 0 0;/);
   assert.match(css, /\.graph-chat \{[^}]*right: 0;[^}]*width: var\(--chat-width\);[^}]*transform: translateX\(100%\); visibility: hidden;/);
@@ -876,6 +887,85 @@ test("chat sizing reserves a responsive quarter-width beside the graph without a
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*\}[^}]*\.graph-chat \{ transition: none; \}/);
   assert.match(html, /<form id="chat-form"[\s\S]*?<\/form>\s*<\/div>\s*<\/aside>/);
   assert.doesNotMatch(html, /id="chat-backdrop"/);
+});
+
+test("multiline composer grows and shrinks, rewraps on width changes and cleans up its observer", () => {
+  const { document, apply, resizeObservers, windowListeners } = appFixture();
+  const input = document.getElementById("chat-input");
+  const send = document.getElementById("chat-send");
+  assert.equal(input.tagName, "TEXTAREA");
+  assert.equal(send.getAttribute("aria-label"), "Send message");
+  assert.ok(send.querySelector("svg"));
+  assert.equal(send.disabled, true);
+  document.getElementById("chat-toggle").click();
+  input.value = "First line\nSecond line\nThird line";
+  input.scrollHeight = 180;
+  input.selectionStart = 4;
+  input.selectionEnd = 9;
+  input.scrollTop = 12;
+  input.dispatchEvent(new FrontendEvent("input"));
+  assert.equal(input.style.height, "180px");
+  assert.equal(input.scrollTop, 12);
+  assert.equal(send.disabled, false);
+  apply({ chat: [{ role: "graph", text: "Concurrent reply" }] });
+  assert.equal(input.style.height, "180px");
+  assert.equal(input.selectionStart, 4);
+  assert.equal(input.selectionEnd, 9);
+  assert.equal(document.activeElement, input);
+  const observer = resizeObservers[0];
+  assert.equal(observer.target, input);
+  observer.callback([{ contentRect: { width: 300 } }]);
+  input.scrollHeight = 120;
+  observer.callback([{ contentRect: { width: 400 } }]);
+  assert.equal(input.style.height, "120px");
+  input.scrollHeight = 130;
+  observer.callback([{ contentRect: { width: 400 } }]);
+  assert.equal(input.style.height, "120px", "height-only callbacks never trigger a resize loop");
+  input.selectionStart = input.value.length;
+  input.selectionEnd = input.value.length;
+  observer.callback([{ contentRect: { width: 250 } }]);
+  assert.equal(input.scrollTop, 130, "keep the active trailing caret visible when wrapping changes");
+  input.value = "";
+  input.scrollHeight = 56;
+  input.dispatchEvent(new FrontendEvent("input"));
+  assert.equal(input.style.height, "56px");
+  assert.equal(send.disabled, true);
+  windowListeners.get("pagehide")();
+  assert.equal(observer.target, null);
+  windowListeners.get("pageshow")();
+  assert.equal(observer.target, input);
+});
+
+test("composer submits via Enter or its form, preserves newlines and never sends during IME composition", () => {
+  const { document, calls } = appFixture();
+  const input = document.getElementById("chat-input");
+  document.getElementById("chat-toggle").click();
+  input.value = "First line\nSecond line";
+  for (const options of [{ shiftKey: true }, { isComposing: true }, { keyCode: 229 }]) {
+    const event = new FrontendEvent("keydown", { key: "Enter", ...options });
+    input.dispatchEvent(event);
+    assert.equal(event.defaultPrevented, false);
+    assert.equal(calls.length, 0);
+  }
+  const enter = new FrontendEvent("keydown", { key: "Enter" });
+  input.dispatchEvent(enter);
+  assert.equal(enter.defaultPrevented, true);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].action, "chat");
+  assert.equal(calls[0].text, "First line\nSecond line");
+  assert.equal(input.value, "");
+  assert.equal(input.style.height, "56px");
+  assert.equal(document.getElementById("chat-send").disabled, true);
+  assert.equal(document.activeElement, input);
+  input.value = " \n ";
+  input.dispatchEvent(new FrontendEvent("keydown", { key: "Enter" }));
+  assert.equal(calls.length, 1);
+  input.value = "Button submission";
+  input.dispatchEvent(new FrontendEvent("input"));
+  document.getElementById("chat-form").dispatchEvent(new FrontendEvent("submit"));
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1].text, "Button submission");
+  assert.equal(input.value, "");
 });
 
 test("chat labels distinguish Copilot from local search and preserve legacy messages", () => {

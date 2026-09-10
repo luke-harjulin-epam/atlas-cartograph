@@ -557,19 +557,53 @@ $("chat-close").addEventListener("click", closeChat);
 $("graph-chat").addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     e.preventDefault();
+    e.stopPropagation();
     closeChat();
   }
 });
-$("chat-form").addEventListener("submit", (e) => {
-  e.preventDefault();
+function resizeChatInput() {
+  const input = $("chat-input");
+  $("chat-send").disabled = !input.value.trim();
+  if (!chatOpen) return;
+  const scrollTop = input.scrollTop;
+  input.style.height = "auto";
+  input.style.height = `${input.scrollHeight}px`;
+  const caretAtEnd = document.activeElement === input
+    && input.selectionStart === input.value.length && input.selectionEnd === input.value.length;
+  input.scrollTop = caretAtEnd ? input.scrollHeight : scrollTop;
+}
+$("chat-input").addEventListener("input", resizeChatInput);
+let chatInputWidth = null;
+const chatInputResize = new ResizeObserver(([entry]) => {
+  // Height changes are our own; only remeasure when wrapping width changes.
+  if (entry.contentRect.width === chatInputWidth) return;
+  chatInputWidth = entry.contentRect.width;
+  resizeChatInput();
+});
+chatInputResize.observe($("chat-input"));
+window.addEventListener("pagehide", () => chatInputResize.disconnect());
+window.addEventListener("pageshow", () => chatInputResize.observe($("chat-input")));
+function sendChat() {
   const input = $("chat-input");
   const text = input.value.trim();
   if (!text) return;
   input.value = "";
   chatOpen = true;
+  resizeChatInput();
+  input.focus();
   post("chat", { text }).then((next) => {
     if (next) applyState(next);
   });
+}
+$("chat-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
+    e.preventDefault();
+    sendChat();
+  }
+});
+$("chat-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  sendChat();
 });
 $("toggle-panel").addEventListener("click", () => $("panel").classList.toggle("hidden"));
 $("add-atlas")?.addEventListener("click", () => {
@@ -628,10 +662,12 @@ function renderChat() {
   const mapEl = $("phase-map");
   const toggle = $("chat-toggle");
   if (!log || !drawer) return;
+  const wasOpen = drawer.classList.contains("chat-open");
   drawer.inert = !chatOpen;
   drawer.setAttribute("aria-hidden", chatOpen ? "false" : "true");
   drawer.classList.toggle("chat-open", chatOpen);
   mapEl?.classList.toggle("chat-open", chatOpen);
+  if (chatOpen && !wasOpen) resizeChatInput();
   toggle?.setAttribute("aria-pressed", chatOpen ? "true" : "false");
   toggle?.setAttribute("aria-expanded", chatOpen ? "true" : "false");
   const sessionChat = state.chatMode === "session";
