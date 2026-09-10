@@ -362,7 +362,7 @@ input, textarea { font: inherit; color: inherit; }
 .external-source:hover { border-color: var(--color-accent); background: #1b283a; }
 .external-source:focus-visible { outline: 2px solid var(--color-experience); outline-offset: 3px; }
 .external-source-copy { display: grid; gap: 0.25rem; min-width: 0; flex: 1; overflow-wrap: anywhere; }
-.external-source-label { font-size: 14px; line-height: 1.4; font-weight: 600; }
+.external-source-label { font-size: 12px; line-height: 1.4; font-weight: 600; }
 .external-source-context { font-size: 12px; line-height: 1.4; color: #b9c9df; }
 .external-source-icon { width: 18px; height: 18px; flex-shrink: 0; color: var(--color-experience); }
 .external-source-url { display: none; font-size: 11px; line-height: 1.5; color: #b9c9df; }
