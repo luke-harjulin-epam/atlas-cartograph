@@ -155,6 +155,10 @@ Atlas, path, type or kind, including hidden-layer pages; its query also drives
 map highlighting. Search fills the available toolbar width between controls.
 The menu opens a full-height left-hand overlay with the Atlas Cartograph logo
 and name above Options. It stays within the Atlas area when chat is open.
+Compact sections separate Atlases, Layout, Layers, Links and Graph; **i**
+buttons hold explanations, and **Other pages** expands the fallback categories.
+The branded header stays visible while the options scroll.
+On very narrow windows, Options and chat take turns without losing chat drafts.
 Close or Escape dismisses Options.
 Results appear as you type; press Down with an empty field
 to browse every node. Escape closes results without hiding the query.

@@ -222,42 +222,68 @@
               </svg>
             </button>
           </div>
-          <h2 id="panel-title" class="kicker panel-options-title">Options</h2>
-          <p class="muted" style="margin:0.5rem 0 0">Atlases</p>
-          <div id="open-atlases" class="open-atlases"></div>
-          <button id="add-atlas" class="btn-ghost btn" type="button" style="margin:0.5rem 0 0.75rem;width:100%">Add atlas</button>
-          <p class="muted" style="margin:0.5rem 0 0">Grouping</p>
-          <div class="layers" style="margin-bottom:0.75rem">
-            <button class="layer active" data-grouping="layers" type="button">Layers</button>
-            <button class="layer" data-grouping="atlases" type="button">Atlases</button>
-            <button class="layer" data-grouping="proximity" type="button">Proximity</button>
+          <div class="panel-body">
+            <h2 id="panel-title" class="panel-options-title">Options</h2>
+            <section class="options-section" aria-labelledby="options-atlases-title">
+              <div class="options-section-head">
+                <div class="info-label"><h3 id="options-atlases-title">Atlases</h3><button class="info-button" type="button" data-info="atlases-info" data-info-title="Atlases" aria-label="About open Atlases" aria-controls="menu-info" aria-haspopup="dialog" aria-expanded="false">i</button></div>
+                <button id="add-atlas" class="btn-ghost btn" type="button" aria-label="Add atlas">Add</button>
+              </div>
+              <div id="open-atlases" class="open-atlases"></div>
+              <div id="atlases-info" hidden><p>Open Atlases share one graph. Add another store, or remove one from this view without deleting its files. At least one Atlas stays open.</p></div>
+            </section>
+            <section class="options-section" aria-labelledby="options-layout-title">
+              <div class="info-label"><h3 id="options-layout-title">Layout</h3><button class="info-button" type="button" data-info="layout-info" data-info-title="Layout" aria-label="About graph layout" aria-controls="menu-info" aria-haspopup="dialog" aria-expanded="false">i</button></div>
+              <div class="layers layout-options" role="group" aria-label="Graph layout">
+                <button class="layer active" data-grouping="layers" type="button">Layers</button>
+                <button class="layer" data-grouping="atlases" type="button">Atlases</button>
+                <button class="layer" data-grouping="proximity" type="button">Proximity</button>
+              </div>
+              <div id="layout-info" hidden><p>Layers groups pages by type and schema. Atlases groups by store. Proximity uses folder and relationship neighborhoods.</p><p>Layout changes placement, not relationships or schema membership. Use View in the status bar to focus a group.</p></div>
+            </section>
+            <section class="options-section" aria-labelledby="options-layers-title">
+              <div class="options-section-head">
+                <div class="info-label"><h3 id="options-layers-title">Layers</h3><button class="info-button" type="button" data-info="layers-info" data-info-title="Layers" aria-label="About layers" aria-controls="menu-info" aria-haspopup="dialog" aria-expanded="false">i</button></div>
+                <button class="layer active" data-layer="all" type="button">All</button>
+              </div>
+              <div id="layers-info" hidden><p>When all layers are selected, choose a schema or type to select only it. Then select more layers to add them, or select an enabled layer to remove it. Removing the last selection restores all layers.</p><p>All restores node layers without changing link visibility. Newly discovered types start visible. Core comes from SCHEMA.json; contributions come from schema.d. A dashed schema button means some of its types are visible. Counts include every declared type, even when empty.</p></div>
+              <div id="schema-layers" aria-label="Schema and type layers"></div>
+              <div class="options-fallback">
+                <details id="fallback-layers" class="options-disclosure">
+                  <summary>Other pages</summary>
+                  <div class="layers">
+                    <button class="layer active" data-layer="experiences" data-legacy-layer="experience" type="button">Experiences</button>
+                    <button class="layer active" data-layer="decisions" data-legacy-layer="decision" type="button">Decisions</button>
+                    <button class="layer active" data-layer="work" data-legacy-layer="work" type="button">Work</button>
+                    <button class="layer active" data-layer="indexes" data-legacy-layer="index" type="button">Navigation indexes</button>
+                    <button class="layer active" data-layer="other" data-legacy-layer="page" type="button">Untyped pages</button>
+                    <button class="layer active hidden" data-layer="undeclared" data-legacy-layer="undeclared" type="button">Undeclared types</button>
+                  </div>
+                </details>
+                <button class="info-button" type="button" data-info="fallback-info" data-info-title="Other pages" aria-label="About other page categories" aria-controls="menu-info" aria-haspopup="dialog" aria-expanded="false">i</button>
+              </div>
+              <div id="fallback-info" hidden><p>Pages outside declared schema types remain available here, including legacy categories, navigation indexes and untyped pages. Undeclared types have an explicit type that no loaded schema declares.</p><p>These categories describe page metadata, not folder ownership. Expanding Other pages does not change visibility.</p></div>
+              <p id="schema-diagnostics" class="danger hidden" role="status"></p>
+              <p id="layer-status" class="muted" role="status" aria-live="polite"></p>
+              <p id="layer-error" class="danger hidden" role="alert"></p>
+            </section>
+            <section class="options-section" aria-labelledby="options-links-title">
+              <div class="info-label"><h3 id="options-links-title">Links</h3><button class="info-button" type="button" data-info="links-info" data-info-title="Links" aria-label="About graph links" aria-controls="menu-info" aria-haspopup="dialog" aria-expanded="false">i</button></div>
+              <div class="layers" role="group" aria-label="Link visibility">
+                <button class="layer active" data-layer="relations" type="button">Relates</button>
+                <button class="layer active" data-layer="sources" type="button">Provenance</button>
+              </div>
+              <div id="links-info" hidden><p>Relates shows relationships between pages. Provenance shows source links within the graph. Both controls change edge visibility without hiding nodes or creating relationships.</p></div>
+            </section>
+            <section class="options-section" aria-labelledby="options-graph-title">
+              <div class="info-label"><h3 id="options-graph-title">Graph</h3><button class="info-button" type="button" data-info="graph-info" data-info-title="Graph details" aria-label="About this graph" aria-controls="menu-info" aria-haspopup="dialog" aria-expanded="false">i</button></div>
+              <dl class="stats">
+                <div><dt>Nodes</dt><dd id="stat-nodes">0</dd></div>
+                <div><dt>Edges</dt><dd id="stat-edges">0</dd></div>
+              </dl>
+              <div id="graph-info" hidden><p>Counts reflect the visible node and link layers.</p><p>Format: <span id="stat-format">—</span></p><p id="stat-root"></p></div>
+            </section>
           </div>
-          <div class="info-label"><p class="muted">Layers</p><button class="info-button" type="button" data-info="layers-info" data-info-title="Layers" aria-label="About layers" aria-controls="menu-info" aria-haspopup="dialog" aria-expanded="false">i</button></div>
-          <div class="layers">
-            <button class="layer active" data-layer="all" type="button">All</button>
-            <button class="layer active" data-layer="relations" type="button">Relates</button>
-            <button class="layer active" data-layer="sources" type="button">Provenance</button>
-          </div>
-          <div id="layers-info" hidden><p>Choose a schema or type to isolate it from All; then toggle to combine layers. Newly discovered types start visible.</p></div>
-          <div id="schema-layers" aria-label="Schema and type layers"></div>
-          <p class="muted">Pages without schema declarations</p>
-          <div class="layers">
-            <button class="layer active" data-layer="experiences" data-legacy-layer="experience" type="button">Experiences</button>
-            <button class="layer active" data-layer="decisions" data-legacy-layer="decision" type="button">Decisions</button>
-            <button class="layer active" data-layer="work" data-legacy-layer="work" type="button">Work</button>
-            <button class="layer active" data-layer="indexes" data-legacy-layer="index" type="button">Navigation indexes</button>
-            <button class="layer active" data-layer="other" data-legacy-layer="page" type="button">Untyped pages</button>
-            <button class="layer active hidden" data-layer="undeclared" data-legacy-layer="undeclared" type="button">Undeclared types</button>
-          </div>
-          <p id="schema-diagnostics" class="danger hidden" role="status"></p>
-          <p id="layer-status" class="muted" role="status" aria-live="polite"></p>
-          <p id="layer-error" class="danger hidden" role="alert"></p>
-          <dl class="stats">
-            <div>Nodes <span id="stat-nodes">0</span></div>
-            <div>Edges <span id="stat-edges">0</span></div>
-            <div>Format <span id="stat-format">—</span></div>
-            <div id="stat-root" class="subtle"></div>
-          </dl>
         </aside>
         <p id="map-error" class="danger hidden" style="position:absolute;top:4.5rem;left:1rem;right:1rem;z-index:30"></p>
         <div id="atlas-add" class="atlas-add hidden">

@@ -638,14 +638,47 @@ test("failed bootstrap HTTP responses surface errors without bypassing snapshot 
 test("layer solo, additive, all and relationship semantics are preserved", () => {
   const solo = applyLayerClick(all, "experiences");
   assert.deepEqual(solo, { ...all, decisions: false, work: false, indexes: false, other: false });
-  assert.deepEqual(applyLayerClick(solo, "experiences"), solo, "last visible category stays on");
+  assert.deepEqual(applyLayerClick(solo, "experiences"), all, "removing the last category restores all");
   const added = applyLayerClick(solo, "decisions");
   assert.equal(added.decisions, true);
   assert.equal(added.experiences, true);
   assert.equal(allNodeLayersOn(added), false);
+  assert.deepEqual(applyLayerClick(added, "decisions"), solo, "a selected category is removed");
   const noRelations = applyLayerClick(added, "relations");
   assert.equal(noRelations.relations, false);
   assert.deepEqual(applyLayerClick(noRelations, "all"), { ...all, relations: false });
+  assert.deepEqual(applyLayerClick({ ...solo, relations: false, sources: false }, "experiences"),
+    { ...all, relations: false, sources: false }, "automatic All preserves link visibility");
+});
+
+test("type selection cycles through solo, add, remove and automatic All during pending saves", async () => {
+  const { document, apply, calls, graphs, state } = appFixture();
+  apply({ graph: schemaGraph(), layers: { ...all, sources: false }, layersRevision: 1,
+    query: "retain", queryRevision: 1, grouping: "atlases" });
+  const click = key => document.querySelector(`[data-layer="${key}"]`).click();
+  const visible = () => Array.from(graphs.at(-1), node => node.id);
+  click("document-type");
+  assert.deepEqual(visible(), ["guide"]);
+  click("instrument-type");
+  assert.deepEqual(visible(), ["guide", "telescope"]);
+  click("document-type");
+  assert.deepEqual(visible(), ["telescope"]);
+  click("instrument-type");
+  assert.deepEqual(visible(), ["guide", "telescope", "note"]);
+  assert.equal(document.querySelector('[data-layer="all"]').getAttribute("aria-pressed"), "true");
+  assert.equal(document.querySelector('[data-layer="calibration-type"]').getAttribute("aria-pressed"), "true");
+  assert.equal(state().layers.sources, false);
+  assert.equal(state().query, "retain");
+  assert.equal(state().grouping, "atlases");
+  assert.equal(calls.length, 1, "later intent waits for the first request");
+  calls[0].resolve({ ok: true, json: async () => ({ layers: calls[0].layers, layersRevision: 2 }) });
+  await settle();
+  assert.equal(calls.length, 2);
+  assert.equal(allNodeLayersOn(calls[1].layers), true, "the queued request saves automatic All");
+  assert.equal(calls[1].layers.sources, false);
+  calls[1].resolve({ ok: true, json: async () => ({ layers: calls[1].layers, layersRevision: 3 }) });
+  await settle();
+  assert.equal(allNodeLayersOn(state().layers), true);
 });
 
 test("All remains inactive until the other node layer is restored", () => {
@@ -992,6 +1025,109 @@ test("options overlay opens accessibly and closes without changing graph or sear
   assert.equal(document.activeElement, document.getElementById("atlas-add-close"));
 });
 
+test("Options separates layout, node layers and links while preserving disclosure state", () => {
+  const { document, apply, calls } = appFixture();
+  const panel = document.getElementById("panel");
+  assert.deepEqual(panel.querySelectorAll("h3").map(heading => heading.textContent),
+    ["Atlases", "Layout", "Layers", "Links", "Graph"]);
+  const layerSection = document.getElementById("options-layers-title").closest("section");
+  const linkSection = document.getElementById("options-links-title").closest("section");
+  assert.equal(layerSection.querySelector('[data-layer="all"]').textContent, "All");
+  assert.equal(layerSection.querySelector('[data-layer="relations"]'), null);
+  assert.equal(linkSection.querySelectorAll("[data-layer]").length, 2);
+  assert.equal(document.getElementById("stat-nodes").tagName, "DD");
+  assert.equal(document.getElementById("stat-format").closest("[hidden]").id, "graph-info");
+  const fallback = document.getElementById("fallback-layers");
+  assert.equal(fallback.getAttribute("open"), null);
+  assert.equal(fallback.querySelectorAll("[data-legacy-layer]").length, 6);
+  fallback.open = true;
+  apply({ graph: schemaGraph(), query: "updated", queryRevision: 1 });
+  assert.equal(fallback.open, true);
+  document.getElementById("toggle-panel").click();
+  document.getElementById("panel-close").click();
+  document.getElementById("toggle-panel").click();
+  assert.equal(fallback.open, true);
+  for (const id of ["schema-diagnostics", "layer-status", "layer-error"]) {
+    assert.equal(document.getElementById(id).closest("details"), null, `${id} must not be inside a collapsed disclosure`);
+  }
+  assert.equal(calls.length, 0);
+});
+
+test("Atlas remove controls retain focus across updates and keep the last store open", async () => {
+  const { document, apply, calls } = appFixture();
+  const roots = ["/atlas", "/second"];
+  const stores = [{ root: "/atlas", label: "Primary" }, { root: "/second", label: "Second <Atlas>" }];
+  apply({ roots, stores });
+  const remove = document.querySelector('[data-drop="/second"]');
+  assert.equal(remove.getAttribute("aria-label"), "Remove Second <Atlas>");
+  assert.equal(remove.querySelector("svg").getAttribute("aria-hidden"), "true");
+  remove.focus();
+  apply({ query: "update", queryRevision: 1 });
+  assert.equal(document.activeElement, remove);
+  stores[1].label = "Renamed";
+  apply({ stores });
+  assert.equal(document.activeElement.getAttribute("data-drop"), "/second");
+  assert.equal(document.activeElement.getAttribute("aria-label"), "Remove Renamed");
+  document.activeElement.click();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].action, "drop");
+  assert.equal(calls[0].root, "/second");
+  calls[0].resolve({ ok: true, json: async () => ({ roots: ["/atlas"], stores }) });
+  await settle();
+  apply({ roots: ["/atlas"], stores });
+  assert.equal(document.activeElement.id, "add-atlas");
+  assert.equal(document.querySelector('[data-drop="/atlas"]').disabled, true);
+});
+
+test("narrow Options and chat take turns without clearing the chat draft", () => {
+  const { document, windowListeners, calls } = appFixture();
+  const map = document.getElementById("phase-map");
+  const panel = document.getElementById("panel");
+  const chat = document.getElementById("graph-chat");
+  const input = document.getElementById("chat-input");
+  map.clientWidth = 400;
+  chat.offsetWidth = 360;
+  input.value = "Keep this draft";
+  document.getElementById("toggle-panel").click();
+  document.getElementById("chat-toggle").click();
+  assert.equal(panel.inert, true);
+  assert.equal(chat.inert, false);
+  document.getElementById("toggle-panel").click();
+  assert.equal(panel.inert, false);
+  assert.equal(chat.inert, true);
+  assert.equal(input.value, "Keep this draft");
+  map.clientWidth = 800;
+  document.getElementById("chat-toggle").click();
+  assert.equal(panel.inert, false);
+  assert.equal(chat.inert, false);
+  document.getElementById("panel-close").focus();
+  map.clientWidth = 400;
+  windowListeners.get("resize")();
+  assert.equal(panel.inert, true);
+  assert.equal(document.activeElement.id, "chat-input");
+  assert.equal(input.value, "Keep this draft");
+  map.clientWidth = 800;
+  document.getElementById("toggle-panel").click();
+  const info = document.querySelector('[data-info="layout-info"]');
+  info.setAttribute("aria-expanded", "true");
+  document.getElementById("menu-info-close").focus();
+  map.clientWidth = 400;
+  windowListeners.get("resize")();
+  assert.equal(document.activeElement.id, "chat-input");
+  info.setAttribute("aria-expanded", "false");
+  map.clientWidth = 800;
+  document.getElementById("toggle-panel").click();
+  document.getElementById("chat-fullscreen").click();
+  map.clientWidth = 400;
+  windowListeners.get("resize")();
+  assert.equal(panel.classList.contains("options-open"), true, "full-screen chat retains covered Options state");
+  document.getElementById("chat-fullscreen").click();
+  assert.equal(panel.classList.contains("options-open"), false, "restoring a narrow drawer reconciles Options after removing full-screen inertness");
+  assert.equal(panel.inert, true);
+  assert.equal(input.value, "Keep this draft");
+  assert.equal(calls.length, 0);
+});
+
 test("search fills its toolbar and options overlay the full-height left side", () => {
   const css = readFileSync(new URL("../.apm/extensions/cartograph/public/styles.css", import.meta.url), "utf8");
   assert.doesNotMatch(css.match(/\.search-field \{[^}]*\}/)[0], /max-width/);
@@ -999,6 +1135,9 @@ test("search fills its toolbar and options overlay the full-height left side", (
   assert.match(css, /\.panel \{[^}]*transform: translateX\(-100%\); visibility: hidden;[^}]*transition: transform 180ms ease-out, visibility 0s linear 180ms;/);
   assert.match(css, /\.panel\.options-open \{ transform: translateX\(0\); visibility: visible; transition-delay: 0s; \}/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{\s*\.panel \{ transition: none; \}/);
+  assert.match(css, /\.panel-body \{[^}]*min-height: 0; overflow: auto/);
+  assert.match(css, /\.panel-head \{[^}]*flex-shrink: 0/);
+  assert.match(css, /@media \(max-width: 26rem\) \{\s*\.panel-head \{ padding-right: 4rem; \}/);
 });
 
 test("chat folds into an inert drawer and preserves graph, history and drafts across toggles", () => {

@@ -97,8 +97,16 @@ The field fills the available toolbar width, leaving space for the menu and
 chat controls. The menu opens a full-height panel over the left side of the
 Atlas without shrinking the graph. A logo and **Atlas Cartograph** header sit
 above **Options**. With chat open, the panel stays within the Atlas area.
-Its contents scroll independently; Close or
+If chat leaves less than 220px for Options, opening either panel folds the
+other without clearing the chat draft. Narrowing the window also folds Options
+when the two panels no longer fit.
+Its branded header stays visible while the options scroll; Close or
 Escape dismisses it and returns focus to the menu button.
+The menu separates **Atlases**, **Layout**, **Layers**, **Links** and **Graph**.
+Use **Add** or an Atlas row's cross to manage open stores; removing one never
+deletes its files, and the final Atlas cannot be removed. Short labels keep
+controls compact; the **i** buttons explain each section. Node/edge counts
+stay visible, while format and store details appear in Graph's information popup.
 Options slides in and out from the left; chat slides in and out from the
 right, including when closing full-screen chat. Both use a 180ms transition
 and become non-interactive immediately on close. Reduced motion disables
@@ -277,14 +285,21 @@ its originating Atlas and relative source file; duplicate names in different
 stores are independent controls.
 
 Choose a schema or individual type while **All** is active to isolate it, then
-toggle other types or schemas to combine them. A dashed schema button means
+select other types or schemas to add them. Click a selected layer to remove it;
+removing the last selection automatically selects all node layers again,
+including empty declared types and fallback categories. Link visibility stays
+unchanged. A dashed schema button means
 only some of its types are enabled. Counts show total nodes in each layer,
 independent of search and visibility. **All** restores every type and legacy
-category without changing **Relates** or **Provenance**. **Pages without schema
-declarations** separates **Navigation indexes** (untyped `index.md` files),
+category without changing **Relates** or **Provenance** in the separate **Links**
+section. Expand **Other pages** to reach categories outside schema declarations:
+**Navigation indexes** (untyped `index.md` files),
 **Undeclared types** (explicit types without a matching declaration), and
 **Untyped pages** (ordinary untyped pages). Neutral Experiences, Decisions and
 Work categories retain filename-derived navigation for older store layouts.
+Other pages starts collapsed; opening it does not change filters, and its open
+state survives live updates and closing the menu. Schema diagnostics and layer
+save errors remain outside that disclosure.
 An explicit undeclared `type: index` belongs to Undeclared types, not Navigation
 indexes; a declared index type belongs to its schema. These labels do not imply
 that content is outdated or invalid. The node browser and previews

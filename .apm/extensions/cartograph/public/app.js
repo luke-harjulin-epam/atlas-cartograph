@@ -192,18 +192,30 @@ function renderStores() {
   grid.innerHTML = atlas.map(storeCard).join("");
 }
 
+let openAtlasesMarkup = "";
 function renderOpenAtlases() {
   const box = $("open-atlases");
   if (!box) return;
   const roots = openRoots();
   const byRoot = new Map((state.stores || []).map((s) => [s.root, s]));
-  box.innerHTML = roots
+  const markup = roots
     .map((root) => {
       const s = byRoot.get(root);
       const label = s?.label || root.split("/").pop();
-      return `<div class="open-atlas"><span>${escapeHtml(label)}</span><button type="button" data-drop="${escapeHtml(root)}" ${roots.length < 2 ? "disabled" : ""}>Remove</button></div>`;
+      return `<div class="open-atlas"><span>${escapeHtml(label)}</span><button type="button" data-drop="${escapeHtml(root)}" aria-label="Remove ${escapeHtml(label)}" title="${roots.length < 2 ? "Keep at least one Atlas open" : `Remove ${escapeHtml(label)}`}" ${roots.length < 2 ? "disabled" : ""}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+      </button></div>`;
     })
     .join("");
+  if (markup === openAtlasesMarkup) return;
+  openAtlasesMarkup = markup;
+  const focusedRoot = box.contains(document.activeElement) ? document.activeElement.getAttribute("data-drop") : null;
+  box.innerHTML = markup;
+  if (focusedRoot) {
+    const replacement = [...box.querySelectorAll("[data-drop]")]
+      .find(button => button.getAttribute("data-drop") === focusedRoot && !button.disabled);
+    (replacement || $("add-atlas")).focus({ preventScroll: true });
+  }
   box.querySelectorAll("[data-drop]").forEach((btn) => {
     btn.addEventListener("click", () => post("drop", { root: btn.getAttribute("data-drop") }));
   });
@@ -689,6 +701,7 @@ $("chat-form").addEventListener("submit", (e) => {
   sendChat();
 });
 function setOptionsOpen(open, restoreFocus = true) {
+  if (open && optionsNeedsRoom()) closeChat();
   const panel = $("panel");
   if (!open) menuInfo.closeWithin(panel);
   panel.classList.toggle("options-open", open);
@@ -699,6 +712,19 @@ function setOptionsOpen(open, restoreFocus = true) {
   if (open) $("panel-close").focus({ preventScroll: true });
   else if (restoreFocus) $("toggle-panel").focus({ preventScroll: true });
 }
+function optionsNeedsRoom() {
+  return chatOpen && !chatFullscreen && $("phase-map").clientWidth - $("graph-chat").offsetWidth < 220;
+}
+function fitOptionsBesideChat() {
+  const panel = $("panel");
+  if (!panel.classList.contains("options-open") || !optionsNeedsRoom()) return;
+  const restoreFocus = panel.contains(document.activeElement)
+    || ($("menu-info").contains(document.activeElement)
+      && [...panel.querySelectorAll("[data-info]")].some(button => button.getAttribute("aria-expanded") === "true"));
+  setOptionsOpen(false, false);
+  if (restoreFocus) $("chat-input").focus({ preventScroll: true });
+}
+window.addEventListener("resize", fitOptionsBesideChat);
 $("toggle-panel").addEventListener("click", () => setOptionsOpen(!$("panel").classList.contains("options-open")));
 $("panel-close").addEventListener("click", () => setOptionsOpen(false));
 $("panel").addEventListener("keydown", (e) => {
@@ -767,6 +793,7 @@ function renderChat() {
   const toggle = $("chat-toggle");
   if (!log || !drawer) return;
   const wasOpen = drawer.classList.contains("chat-open");
+  const wasFullscreen = mapEl?.classList.contains("chat-fullscreen");
   drawer.inert = !chatOpen;
   drawer.setAttribute("aria-hidden", chatOpen ? "false" : "true");
   drawer.classList.toggle("chat-open", chatOpen);
@@ -786,6 +813,7 @@ function renderChat() {
       chatBackgroundInert.delete(child);
     }
   }
+  if (chatOpen && (!wasOpen || (wasFullscreen && !fullscreen))) fitOptionsBesideChat();
   const fullscreenButton = $("chat-fullscreen");
   fullscreenButton.setAttribute("aria-pressed", String(fullscreen));
   fullscreenButton.setAttribute("aria-label", fullscreen ? "Restore chat drawer" : "Full screen chat");

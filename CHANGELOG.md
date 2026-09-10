@@ -4,6 +4,12 @@
 
 ### Changed
 
+- Removing the last selected node layer now restores all node layers, including
+  schema types and fallback categories, without changing link visibility.
+- Simplify Options into compact sections with shared information popups,
+  separate node/link filters, collapsed Other pages, and a fixed branded header.
+  Keep Atlas controls focused through updates and retain full schema identities.
+  On narrow layouts, Options and chat take turns without clearing chat drafts.
 - Reduce information buttons to 12px with an 8px glyph, retaining visible
   keyboard focus.
 - Keep menu text brief and move explanations into shared **i** information

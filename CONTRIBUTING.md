@@ -95,6 +95,10 @@ and normal-text contrast without starting a collector.
 Information popups need keyboard/focus, outside dismissal, live-text, owner
 closure and narrow-viewport coverage. Keep private commands out of help copies
 and keep operational errors and permission warnings visible.
+For Options, cover the fixed header and scrolling body with long Atlas/schema
+identities, chat open and closed, and the Other pages disclosure. Layout, node
+layers and link visibility remain independent; live updates must retain focus
+on Atlas controls and preserve disclosure state.
 Preserve visible keyboard focus and local-only assets. HTTP route changes must
 retain same-origin/custom-header checks and JSON-only mutation requests;
 page-loading changes must preserve mounted-root containment and Atlas identity.

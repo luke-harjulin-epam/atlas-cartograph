@@ -27,7 +27,7 @@ export function applyLayerClick(layers, key, keys = keysOf(layers), members = [k
   const enabled = !members.every((member) => layers?.[member] !== false);
   for (const member of members) next[member] = enabled;
   if (keys.every((k) => next[k] === false)) {
-    for (const member of members) next[member] = true;
+    for (const k of keys) next[k] = true;
   }
   return next;
 }

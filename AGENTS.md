@@ -193,6 +193,15 @@
   the mounted project Atlas's `decisions/cartograph-ux-principles-protostar.md`
   for the forming UX principles and proposed review-skill scope; do not treat
   that protostar as an accepted cross-project standard.
+  Keep Options grouped into Atlases, Layout, Layers, Links and Graph, with a
+  fixed branded header and scrolling body. Keep full store/schema identities
+  and errors visible; collapse fallback categories under Other pages without
+  changing filters. Retain disclosure state and Atlas-control focus on updates.
+  Layer clicks isolate from All, then add/remove selections; removing the last
+  selection restores all node layers, never changing relationship visibility.
+  When chat leaves less than 220px for Options, show one panel at a time without
+  clearing the chat draft; opening Options folds chat, opening chat or narrowing
+  the viewport folds Options and preserves keyboard access.
   Show collector health separately from the highlight toggle; keep dirty
   duration input through snapshots and failed saves until Save or Cancel.
   Report reduced-motion suppression without changing the follow preference,

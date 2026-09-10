@@ -84,6 +84,10 @@ test("every menu information button has one hidden source and accessible popup w
   const document = frontendDocument(html);
   const buttons = document.querySelectorAll("[data-info]");
   assert.ok(buttons.length >= 8);
+  for (const id of ["atlases-info", "layout-info", "layers-info", "fallback-info", "links-info", "graph-info"]) {
+    assert.equal(document.getElementById("panel").querySelectorAll(`[data-info="${id}"]`).length, 1);
+    assert.ok(document.getElementById(id).textContent.trim());
+  }
   for (const button of buttons) {
     const id = button.getAttribute("data-info");
     assert.equal(document.querySelectorAll(`#${id}`).length, 1);
