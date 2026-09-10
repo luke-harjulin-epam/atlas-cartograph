@@ -133,7 +133,22 @@ try {
   assert.ok(!JSON.stringify(state.chat).includes("11111111-2222-4333-8444-555555555555"),
     "SDK message ID must not become an answer");
   await action(ctx, "update_chat", { requestId: firstChat, status: "working" });
+  for (const text of ["Searching the Atlas", "Reading pages"]) {
+    await action(ctx, "update_chat", { requestId: firstChat, status: "working", text });
+    const progressSnapshot = await fetch(new URL("/api/bootstrap", initial.url), {
+      headers: { "X-Cartograph-Client": "canvas" },
+    }).then((response) => response.json());
+    assert.equal(progressSnapshot.state.chat[1].progress, text);
+    assert.equal(progressSnapshot.state.chat[1].pending, true);
+    assert.equal(progressSnapshot.state.chat[3].status, "queued");
+  }
+  await assert.rejects(action(ctx, "update_chat", {
+    requestId: firstChat, status: "working", text: "x".repeat(161),
+  }), { code: "invalid_chat_reply" });
   const otherOwner = { ...ctx, sessionId: "foreign-session" };
+  await assert.rejects(action(otherOwner, "update_chat", {
+    requestId: firstChat, status: "working", text: "Wrong session",
+  }), { code: "chat_session_mismatch" });
   assert.deepEqual((await action(otherOwner, "get_state")).chat, [], "Another caller cannot read chat history");
   await assert.rejects(action(otherOwner, "update_chat", {
     requestId: firstChat, status: "answered", text: "Wrong session",

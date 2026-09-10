@@ -89,6 +89,9 @@
   idempotent retries, bounded replies and timeout/close cleanup. Keep queued
   and working indicators distinct, honour reduced motion, and keep standalone
   local search explicitly labelled. Do not capture unrelated session replies.
+- Report short, truthful task stages through working `update_chat` text.
+  Validate progress separately from answers, render it as plain text, and
+  replace labels in place without extending deadlines or adding chat entries.
 - Keep chat folded by default in a right-hand drawer at 25% of the viewport
   width, with a 360px minimum capped at 90vw. Reserve the remaining map area
   for both renderers and graph controls;

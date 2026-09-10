@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 export const CHAT_TIMEOUT_MS = 10 * 60 * 1000;
 export const MAX_CHAT_REPLY_BYTES = 128 * 1024;
+export const MAX_CHAT_PROGRESS_BYTES = 160;
 
 function invalid(code, message) {
   return Object.assign(new Error(message), { code });
@@ -31,6 +32,7 @@ export function createChatRequests(state, {
 
   function finish(message, status, text, hits = []) {
     release(message.id);
+    delete message.progress;
     Object.assign(message, { status, text, hits, pending: false });
     onChange();
   }
@@ -43,6 +45,7 @@ export function createChatRequests(state, {
         id, role: "graph", pending: true, hits: [],
         status: sessionChat ? "queued" : "working",
         text: sessionChat ? "Waiting for Copilot…" : "Searching the Atlas…",
+        ...(sessionChat ? {} : { progress: "Searching the Atlas…" }),
       };
       state.chat = [...(state.chat ?? []), { role: "user", text }, message].slice(-50);
       const retained = new Set(state.chat.map((item) => item.id));
@@ -64,11 +67,15 @@ export function createChatRequests(state, {
       if (!["working", "answered", "failed"].includes(status)) {
         throw invalid("invalid_chat_reply", "Chat status must be working, answered or failed.");
       }
+      if (status === "working" && text !== undefined && (typeof text !== "string" || !text.trim() ||
+          Buffer.byteLength(text, "utf8") > MAX_CHAT_PROGRESS_BYTES || /[\r\n]/.test(text))) {
+        throw invalid("invalid_chat_reply", "Progress must be a nonempty single line of at most 160 UTF-8 bytes.");
+      }
       if (status !== "working" && (typeof text !== "string" || !text.trim() ||
           Buffer.byteLength(text, "utf8") > MAX_CHAT_REPLY_BYTES)) {
         throw invalid("invalid_chat_reply", "A nonempty reply of at most 128 KiB is required.");
       }
-      const content = status === "working" ? "Working…" : text.trim();
+      const content = status === "working" ? text?.trim() ?? message.progress ?? "Working…" : text.trim();
       if (!message.pending) {
         if (message.status === status && message.text === content) {
           return { ok: true, requestId: id, status, duplicate: true };
@@ -76,8 +83,8 @@ export function createChatRequests(state, {
         throw invalid("chat_request_finished", "This chat request has already finished.");
       }
       if (status === "working") {
-        if (message.status !== "working") {
-          Object.assign(message, { status, text: content });
+        if (message.status !== "working" || message.progress !== content) {
+          Object.assign(message, { status, text: content, progress: content });
           onChange();
         }
       } else {
@@ -102,9 +109,12 @@ export function createChatRequests(state, {
       closed = true;
       for (const id of timers.keys()) release(id);
       for (const message of state.chat ?? []) {
-        if (message.pending) Object.assign(message, {
-          pending: false, status: "cancelled", text: "Chat closed before a reply arrived.",
-        });
+        if (message.pending) {
+          delete message.progress;
+          Object.assign(message, {
+            pending: false, status: "cancelled", text: "Chat closed before a reply arrived.",
+          });
+        }
       }
     },
   };

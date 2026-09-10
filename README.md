@@ -111,6 +111,8 @@ Native canvas chat asks the same Copilot session, shows queued/working status,
 and receives **Copilot** answers back in the drawer through request-scoped
 callbacks. Its bundled `atlas-chat` activation reads mounted pages and cites
 sources; standalone development mode remains labelled local search.
+While it works, brief labels such as **Searching the Atlas**, **Reading pages**
+and **Preparing answer** explain the current stage beside the animated dots.
 See [chat usage](docs/usage.md#chat-with-this-atlas) for timeouts and delivery.
 Chat starts folded. Its toolbar button opens a right-hand panel at 25% of the
 window width, with a 360px minimum (capped at 90% on narrow windows). The graph

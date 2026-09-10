@@ -87,13 +87,13 @@ const session = await joinSession({
       actions: [
         {
           name: "update_chat",
-          description: "Report working status or deliver an answer/error to the originating Cartograph chat request. Acknowledges delivery; never use transcript text as the reply.",
+          description: "Report a brief task-stage label while working, or deliver an answer/error to the originating Cartograph chat request. Acknowledges delivery; never use transcript text as the reply.",
           inputSchema: {
             type: "object",
             properties: {
               requestId: { type: "string", minLength: 1 },
               status: { type: "string", enum: ["working", "answered", "failed"] },
-              text: { type: "string", description: "Complete Markdown answer or error; required for answered/failed (at most 128 KiB)." },
+              text: { type: "string", description: "For working: optional brief, single-line task stage (at most 160 UTF-8 bytes), e.g. Searching the Atlas or Reading pages. For answered/failed: required complete Markdown answer/error (at most 128 KiB)." },
             },
             required: ["requestId", "status"],
             additionalProperties: false,

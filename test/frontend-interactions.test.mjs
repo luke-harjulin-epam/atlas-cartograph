@@ -1029,6 +1029,42 @@ test("chat moves from queued to working to final answers or errors without expos
   assert.match(log.textContent, /Please retry/);
 });
 
+test("working stage labels replace in place, stay plain text and preserve drafts across snapshots", () => {
+  const { document, apply } = appFixture();
+  const input = document.getElementById("chat-input");
+  const log = document.getElementById("chat-log");
+  const status = document.getElementById("chat-status");
+  const message = { role: "graph", id: "private-request-id", pending: true, status: "working", text: "Never display unfinished answer" };
+  document.getElementById("chat-toggle").click();
+  input.value = "Another question";
+  input.selectionStart = 3;
+  input.selectionEnd = 5;
+  for (const [index, progress] of ["Searching the Atlas", "Reading pages", "<img src=x> Preparing answer"].entries()) {
+    apply({ stateRevision: index + 1, chatMode: "session", chat: [
+      { role: "user", text: "Question" }, { ...message, progress },
+    ] });
+    assert.equal(log.children.length, 2);
+    assert.match(log.querySelector(".chat-pending").textContent, new RegExp(progress));
+    assert.equal(status.textContent, progress);
+    assert.equal(log.querySelector("img"), null);
+    assert.equal(log.querySelector(".chat-pending").classList.contains("working"), true);
+    assert.doesNotMatch(log.textContent, /private-request-id|Never display unfinished answer/);
+    assert.equal(input.value, "Another question");
+    assert.equal(input.selectionStart, 3);
+    assert.equal(input.selectionEnd, 5);
+    assert.equal(document.activeElement, input);
+    const pending = log.querySelector(".chat-pending");
+    apply({ stateRevision: index + 1 });
+    assert.equal(log.querySelector(".chat-pending"), pending);
+  }
+  apply({ stateRevision: 1, chat: [{ ...message, progress: "Old stage" }] });
+  assert.equal(status.textContent, "<img src=x> Preparing answer");
+  apply({ stateRevision: 4, chat: [{ ...message, pending: false, status: "answered", text: "Final answer" }] });
+  assert.equal(log.querySelector(".chat-pending"), null);
+  assert.equal(status.textContent, "");
+  assert.match(log.textContent, /Final answer/);
+});
+
 test("unchanged chat snapshots preserve pending animation, focused links and draft caret", () => {
   const { document, apply } = appFixture();
   const log = document.getElementById("chat-log");

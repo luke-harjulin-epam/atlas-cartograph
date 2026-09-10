@@ -680,15 +680,17 @@ function renderChat() {
   input?.setAttribute("placeholder", sessionChat ? "Ask Copilot…" : "Search this Atlas…");
   input?.setAttribute("aria-label", sessionChat ? "Ask Copilot" : "Search this Atlas");
   const msgs = state.chat || [];
-  const signature = JSON.stringify([sessionChat, msgs.map(({ role, pending, status, text, hits }) =>
-    ({ role, pending, status, text, hits }))]);
+  const signature = JSON.stringify([sessionChat, msgs.map(({ role, pending, status, progress, text, hits }) =>
+    ({ role, pending, status, progress, text, hits }))]);
   if (signature === chatRenderSignature) return;
   chatRenderSignature = signature;
   const isPending = (m) => m.role === "graph" && (m.pending === true || m.status === "queued" || m.status === "working");
   const pendingMessages = msgs.filter(isPending);
+  const workingMessages = pendingMessages.filter((m) => m.status === "working");
+  const progressText = (m) => typeof m.progress === "string" && m.progress.trim() ? m.progress : "Working…";
   log.setAttribute("aria-busy", String(pendingMessages.length > 0));
   const announcement = $("chat-status");
-  const pendingText = pendingMessages.some((m) => m.status === "working") ? "Working…"
+  const pendingText = workingMessages.length ? progressText(workingMessages.at(-1))
     : pendingMessages.length ? sessionChat ? "Waiting for Copilot…" : "Waiting for search…" : "";
   if (announcement && announcement.textContent !== pendingText) announcement.textContent = pendingText;
   log.innerHTML = msgs
@@ -697,10 +699,10 @@ function renderChat() {
       const isGraph = m.role === "graph";
       const pending = isPending(m);
       const working = pending && m.status === "working";
-      const statusText = working ? "Working…" : sessionChat ? "Waiting for Copilot…" : "Waiting for search…";
+      const statusText = working ? progressText(m) : sessionChat ? "Waiting for Copilot…" : "Waiting for search…";
       const fallback = { failed: "The request failed.", expired: "The request expired.", cancelled: "The request was cancelled." };
       const body = pending
-        ? `<span class="chat-pending${working ? " working" : ""}"><span>${statusText}</span><span class="chat-dots" aria-hidden="true"><span>•</span><span>•</span><span>•</span></span></span>`
+        ? `<span class="chat-pending${working ? " working" : ""}"><span>${escapeHtml(statusText)}</span><span class="chat-dots" aria-hidden="true"><span>•</span><span>•</span><span>•</span></span></span>`
         : isGraph ? renderMarkdown(m.text || fallback[m.status] || "") : escapeHtml(m.text || "");
       const hits = (pending ? [] : m.hits || [])
         .map(

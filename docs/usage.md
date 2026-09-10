@@ -144,8 +144,11 @@ without page bodies. Its bundled `atlas/atlas-chat.md` activation directs the
 agent to read mounted Markdown through session file tools, cite sources, and
 send the answer back to this drawer with the `update_chat` canvas action.
 
-**Waiting for Copilot…** means the request is queued. **Working…** and animated
-dots appear when the agent reports that it has started. Reduced motion keeps a
+**Waiting for Copilot…** means the request is queued. Once the agent starts,
+short stage labels such as **Searching the Atlas**, **Reading pages**, and
+**Preparing answer** appear beside animated dots. Each stage replaces the
+previous pending label, not the conversation history. Older callers without
+a label still show **Working…**. Reduced motion keeps a
 static status. Sending the prompt is not completion: the indicator remains
 until the answer, an error, or a ten-minute timeout. An identical reply retry
 does not duplicate the answer; replies cannot overwrite another completed

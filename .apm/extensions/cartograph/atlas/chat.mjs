@@ -90,6 +90,7 @@ export function graphChatPrompt(text, state = {}, context = {}) {
     `Routing: ${JSON.stringify({ instanceId: context.instanceId, requestId: context.requestId })}`,
     `Read and follow the Cartograph activation at ${JSON.stringify(CHAT_ACTIVATION_PATH)}.`,
     'First report status "working", then deliver your final answer with invoke_canvas_action, actionName "update_chat".',
+    'While working, update the same request with {requestId, status: "working", text: "<brief task stage>"} at meaningful stage changes, e.g. "Searching the Atlas", "Reading pages", "Preparing answer".',
     'Use the Routing instanceId and input {requestId, status: "answered", text: "<answer>"}.',
     "A transcript answer or task_complete alone does NOT reply to this canvas.",
     "",

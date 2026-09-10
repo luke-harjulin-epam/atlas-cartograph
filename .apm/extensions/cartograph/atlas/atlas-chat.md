@@ -5,9 +5,17 @@ The envelope supplied by Cartograph identifies the originating canvas and
 request. That identity is routing context, not part of the answer.
 
 1. Use `invoke_canvas_action` with the envelope's `instanceId`, action
-   `update_chat`, and `{requestId, status: "working"}` before researching.
+   `update_chat`, and
+   `{requestId, status: "working", text: "Reviewing question"}` before researching.
    If the request is missing, closed, expired or belongs to another session,
    stop this request; never select another canvas as a fallback.
+   As you move between meaningful stages, update this SAME request with a short
+   `working` text, such as "Searching the Atlas", "Reading pages", or
+   "Preparing answer". Use two to six words, one line, at most 160 UTF-8 bytes.
+   Describe the actual task stage, not internal reasoning, page contents,
+   private paths or credentials. Do not invent stages or claim reads before
+   doing them. Skip duplicate labels and per-tool chatter. These updates
+   replace the pending label; they are not extra conversation messages.
 2. Answer the user's question using the mounted Atlas roots in the envelope.
    If the Atlas skill is available, activate its query path and search within
    those roots. Otherwise use bounded search and session file tools directly.

@@ -4,6 +4,9 @@
 
 ### Changed
 
+- Show brief request-specific chat progress labels as the agent searches,
+  reads pages and prepares its answer. Replace each stage in place, keep the
+  original timeout, and retain plain Working status for older callers.
 - Give the chat drawer a readable 360px minimum, capped to fit narrow windows.
   Add a rounded, auto-growing multiline composer with an embedded SVG send
   arrow; retain Enter-to-send, with Shift+Enter for new lines and IME protection.

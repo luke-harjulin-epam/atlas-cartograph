@@ -70,8 +70,14 @@ Cartograph ignores that ID as display content. Each submitted question creates
 a UUID-correlated pending message; the envelope names that request, its canvas
 instance, and the deployed `atlas/atlas-chat.md` activation path.
 
-The agent calls `update_chat` with `status: working` when it begins, then with
-`status: answered` and the full Markdown answer (or `failed` plus an explanation).
+The agent calls `update_chat` with `status: working` when it begins and at
+meaningful task-stage changes. Optional `text` is a nonempty, single-line
+label capped at 160 UTF-8 bytes; omitted text retains the current label or
+defaults to `Working…`. The server exposes validated labels as `progress`,
+which the browser escapes as plain text rather than rendering pending Markdown.
+Changed labels broadcast without resetting the request deadline; duplicate
+labels do not broadcast. Completion removes progress and uses `status: answered`
+with the full Markdown answer (or `failed` plus an explanation).
 The action checks both instance ownership and the joined session, validates a
 nonempty reply capped at 128 KiB, updates only that request, broadcasts the
 revisioned snapshot and returns a delivery acknowledgement. Identical terminal
