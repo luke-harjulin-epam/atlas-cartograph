@@ -86,6 +86,8 @@ behavior, selection, and the return to baseline after activity expires.
 Exercise the floating status bar beside chat and at narrow widths: zoom stays
 independent of the activation disclosure, Escape restores focus, and private
 connection details load only for Collector setup and clear when it closes.
+Cover the View popup with large group lists, duplicate labels, live updates,
+keyboard navigation and selection; it must not change search or layer filters.
 Preserve visible keyboard focus and local-only assets. HTTP route changes must
 retain same-origin/custom-header checks and JSON-only mutation requests;
 page-loading changes must preserve mounted-root containment and Atlas identity.

@@ -4,6 +4,10 @@
 
 ### Changed
 
+- Move view navigation into a status-bar popup showing the selected view.
+  Keep all available views reachable through bounded pages and keyboard controls.
+  Match its two-line label and chevron in Knowledge Activation, with collector
+  status, change status and playback timing on the same row.
 - Combine Knowledge Activation and zoom in a floating bottom status bar,
   removing the click-to-focus hint. Open concise activation settings above
   the bar, with separate Collector setup and Diagnostics disclosures.

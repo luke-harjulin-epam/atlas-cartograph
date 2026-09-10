@@ -182,6 +182,8 @@
   independently per node, and preserve selection/search/layer state.
 - Keep the Knowledge Activation camera option client-side and default-on.
   Put its status in the floating bottom bar with independent zoom controls.
+  Keep view navigation in that bar's popup, with bounded pages, store-qualified
+  labels, stable focus across snapshots and local-only camera selection.
   Keep everyday settings concise, setup and diagnostics in disclosures, and
   private connection fetching scoped to the open Collector setup disclosure.
   Fit displayed activations and lifecycle endpoints/ghosts, never raw queued

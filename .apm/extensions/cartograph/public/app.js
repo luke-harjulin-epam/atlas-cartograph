@@ -322,19 +322,63 @@ function renderMapChrome() {
 }
 
 let islandStart = 0;
+let islandFocus;
+let islandGrouping;
+let islandMarkup;
 const ISLAND_PAGE = 6;
+const viewControls = $("view-controls");
+
+function closeViews(restoreFocus = false) {
+  viewControls.open = false;
+  if (restoreFocus) $("view-summary").focus({ preventScroll: true });
+}
+
+viewControls.addEventListener("toggle", (event) => {
+  if (event.target === viewControls && viewControls.open) $("activity-controls").open = false;
+});
+$("activity-controls").addEventListener("toggle", (event) => {
+  if (event.target === $("activity-controls") && event.target.open) closeViews();
+});
+document.addEventListener("pointerdown", (event) => {
+  if (!viewControls.contains(event.target)) closeViews();
+});
+viewControls.addEventListener("focusout", (event) => {
+  if (event.relatedTarget && !viewControls.contains(event.relatedTarget)) closeViews();
+});
+viewControls.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    event.stopPropagation();
+    closeViews(true);
+    return;
+  }
+  if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+  event.preventDefault();
+  viewControls.open = true;
+  const buttons = [...$("islands").querySelectorAll("button")].filter(button => !button.disabled);
+  const current = buttons.indexOf(document.activeElement);
+  const index = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1
+    : event.key === "ArrowDown" ? (current + 1) % buttons.length
+    : current <= 0 ? buttons.length - 1 : current - 1;
+  buttons[index]?.focus();
+});
 
 function renderIslands() {
   const nav = $("islands");
   if (!nav || !map) return;
   const items = [...(map.clusters?.() ?? [])].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
-  const focus = map.focusCluster?.();
-  if (focus) {
+  const focus = map.focusCluster?.() || null;
+  if (focus && (focus !== islandFocus || state.grouping !== islandGrouping)) {
     const idx = items.findIndex((c) => (c.key || c.label) === focus);
     if (idx >= 0 && (idx < islandStart || idx >= islandStart + ISLAND_PAGE)) {
       islandStart = Math.max(0, Math.min(idx, Math.max(0, items.length - ISLAND_PAGE)));
     }
   }
+  islandFocus = focus;
+  islandGrouping = state.grouping;
+  const selected = items.find(c => (c.key || c.label) === focus);
+  $("view-label").textContent = selected?.label || "All";
+  $("view-summary").title = `View: ${selected?.label || "All"}`;
   const maxStart = Math.max(0, items.length - ISLAND_PAGE);
   islandStart = Math.max(0, Math.min(islandStart, maxStart));
   const slice = items.slice(islandStart, islandStart + ISLAND_PAGE);
@@ -344,32 +388,42 @@ function renderIslands() {
     items.length <= ISLAND_PAGE
       ? ""
       : `<span class="island-range">${islandStart + 1}–${islandStart + slice.length} / ${items.length}</span>`;
-  nav.innerHTML =
-    `<button type="button" data-island="" class="${focus ? "" : "active"}">All</button>` +
-    `<button type="button" data-island-shift="-1" ${canPrev ? "" : "disabled"}>‹</button>` +
+  const markup =
+    `<button type="button" data-island="" aria-pressed="${!selected}" class="${selected ? "" : "active"}">All</button>` +
     slice
       .map(
         (c) =>
-          `<button type="button" data-island="${escapeHtml(c.key || c.label)}" class="${focus === (c.key || c.label) ? "active" : ""}">${escapeHtml(c.label)} · ${c.count}</button>`,
+          `<button type="button" data-island="${escapeHtml(c.key || c.label)}" aria-pressed="${focus === (c.key || c.label)}" class="${focus === (c.key || c.label) ? "active" : ""}">${escapeHtml(c.label)} · ${c.count}</button>`,
       )
       .join("") +
-    `<button type="button" data-island-shift="1" ${canNext ? "" : "disabled"}>›</button>` +
-    range;
+    (items.length > ISLAND_PAGE ? `<div class="view-pagination"><button type="button" data-island-shift="-1" ${canPrev ? "" : "disabled"}>Previous</button>${range}<button type="button" data-island-shift="1" ${canNext ? "" : "disabled"}>Next</button></div>` : "");
   map.setFeatured?.(slice.map((c) => c.key || c.label));
-  nav.querySelectorAll("[data-island-shift]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      islandStart += Number(btn.getAttribute("data-island-shift")) * ISLAND_PAGE;
-      renderIslands();
-    });
-  });
-  nav.querySelectorAll("[data-island]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const label = btn.getAttribute("data-island") || null;
-      map.flyTo(label || null);
-      renderIslands();
-    });
-  });
+  if (markup === islandMarkup) return;
+  islandMarkup = markup;
+  const active = nav.contains(document.activeElement) ? document.activeElement : null;
+  const key = active?.getAttribute("data-island");
+  const shift = active?.getAttribute("data-island-shift");
+  nav.innerHTML = markup;
+  if (active) {
+    const buttons = [...nav.querySelectorAll("button")].filter(button => !button.disabled);
+    (buttons.find(button => key !== null ? button.getAttribute("data-island") === key
+      : button.getAttribute("data-island-shift") === shift) || buttons[0])?.focus({ preventScroll: true });
+  }
 }
+
+$("islands").addEventListener("click", (event) => {
+  const shift = event.target.closest("[data-island-shift]");
+  if (shift && !shift.disabled) {
+    islandStart += Number(shift.getAttribute("data-island-shift")) * ISLAND_PAGE;
+    renderIslands();
+    return;
+  }
+  const button = event.target.closest("[data-island]");
+  if (!button) return;
+  map.flyTo(button.getAttribute("data-island") || null);
+  renderIslands();
+  closeViews(true);
+});
 
 function renderStateError() {
   const error = state.error || (state.phase === "map" && !state.previewOpen ? state.linkError : null);

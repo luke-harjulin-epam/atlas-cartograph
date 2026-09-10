@@ -259,7 +259,12 @@ pages retain their rendering categories. **Proximity** still uses existing
 folder/relationship neighborhoods and its previous layout, not schema ownership.
 The separation is in
 3D: groups can still line up in projection while
-you orbit the camera. Use an Atlas's island-navigation button to inspect it.
+you orbit the camera. Open **View** in the floating status bar to inspect a
+group, or select **All** to return to the overview. The popup lists the available
+views for the current grouping, with counts and full Atlas/schema labels.
+Large lists use Previous/Next pages. Arrow keys move between options; Enter
+selects, and Escape closes the popup. Selecting a view closes the popup and
+updates the status-bar label without changing search or layer filters.
 
 ## Schema and type layers
 
@@ -369,8 +374,11 @@ that command nor subsequent refreshes.
 
 ## Activity controls
 
-The floating bottom bar keeps **Knowledge Activation** status on the left and
-zoom controls on the right. Click the activation section to open settings above
+The floating bottom bar keeps **Knowledge Activation** status on the left,
+the **View** selector beside it, and zoom controls on the right. Activation's
+title sits above the collector/change statuses and playback timing.
+Both selectors use the same expand/collapse chevron.
+Click the activation section to open settings above
 the bar. Zoom buttons do not open or close settings. Escape or the cross closes
 settings and returns focus to the status section.
 

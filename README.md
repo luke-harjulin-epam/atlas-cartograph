@@ -205,7 +205,9 @@ returns after the last highlight expires.
 Visual activations normally stay **400 ms apart**, smoothly accelerating toward
 **200, 100, or 50 ms** as the queue grows or ages. Repeated observations share a
 file's queue slot and display a count. The floating bottom status bar shows
-Knowledge Activation on the left and zoom controls on the right. Click its
+Knowledge Activation on the left, a **View** selector, and zoom controls on the right.
+The View popup offers All and the current grouping's views, with full labels.
+Click its
 activation section to open settings above the bar; zoom works independently.
 Collector setup and diagnostics are collapsed until needed. The panel shows queue depth, lag,
 current speed and aggregation. Actual file access and graph changes are never

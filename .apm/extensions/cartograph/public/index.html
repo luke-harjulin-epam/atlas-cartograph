@@ -87,10 +87,17 @@
           <p id="node-error" class="danger hidden" role="alert"></p>
         </section>
         <div class="status-dock">
-          <nav id="islands" class="islands" aria-label="Island navigation"></nav>
-          <div id="status-bar" class="status-bar" role="group" aria-label="Map status and zoom">
+          <div id="status-bar" class="status-bar" role="group" aria-label="Map status, view and zoom">
         <details id="activity-controls" class="activity-controls">
-          <summary id="activity-summary" aria-controls="activity-settings">Knowledge Activation <span id="activity-status" role="status" aria-live="polite">Waiting</span> · <span id="graph-watch-status" role="status" aria-live="polite">Changes idle</span> <span id="activity-playback-status" aria-label="Knowledge activation playback queue">400 ms</span></summary>
+          <summary id="activity-summary" aria-controls="activity-settings">
+            <span class="status-caption">Knowledge Activation</span>
+            <span class="activity-status-row">
+              <span id="activity-status" role="status" aria-live="polite">Waiting</span>
+              <span id="graph-watch-status" role="status" aria-live="polite">Changes idle</span>
+              <span id="activity-playback-status" aria-label="Knowledge activation playback queue">400 ms</span>
+            </span>
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><path d="m4 10 4-4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </summary>
           <div id="activity-settings" class="activity-body">
             <div class="activity-settings-head">
               <h2>Knowledge Activation</h2>
@@ -140,6 +147,14 @@
             </details>
           </div>
         </details>
+            <details id="view-controls" class="view-controls">
+              <summary id="view-summary" aria-controls="islands">
+                <span class="status-caption">View</span>
+                <span id="view-label">All</span>
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><path d="m4 10 4-4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </summary>
+              <nav id="islands" class="view-menu" aria-label="Available views"></nav>
+            </details>
             <div id="status-zoom" class="zoom-bar" role="group" aria-label="Zoom controls">
               <button type="button" data-zoom-out aria-label="Zoom out">−</button>
               <span data-zoom>100%</span>

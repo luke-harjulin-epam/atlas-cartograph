@@ -32,6 +32,98 @@ test("floating status bar groups activation and independent zoom outside the gra
   assert.equal(document.getElementById("activity-setup").tagName, "DETAILS");
   assert.equal(document.getElementById("activity-setup").getAttribute("open"), null);
   assert.equal(document.getElementById("activity-summary").getAttribute("aria-controls"), "activity-settings");
+  const summary = document.getElementById("activity-summary");
+  assert.equal(summary.querySelector(".status-caption").textContent, "Knowledge Activation");
+  const row = summary.querySelector(".activity-status-row");
+  for (const id of ["activity-status", "graph-watch-status", "activity-playback-status"]) {
+    assert.equal(document.getElementById(id).parentElement, row);
+  }
+  assert.equal(summary.querySelector("path").getAttribute("d"), document.getElementById("view-summary").querySelector("path").getAttribute("d"));
+});
+
+test("View popup replaces the island row, selects keyed views and returns to All", () => {
+  const { document, flights, calls } = appFixture({ clusters: [
+    { key: "store-a/work", label: "Work", count: 3 }, { key: "store-b/work", label: "Work", count: 2 },
+  ] });
+  const menu = document.getElementById("view-controls");
+  const nav = document.getElementById("islands");
+  assert.equal(menu.parentElement, document.getElementById("status-bar"));
+  assert.equal(nav.parentElement, menu);
+  assert.equal(document.querySelector(".islands"), null);
+  assert.equal(document.querySelectorAll("[data-island-shift]").length, 0);
+  menu.open = true;
+  document.querySelector('[data-island="store-b/work"]').click();
+  assert.deepEqual(flights, ["store-b/work"]);
+  assert.equal(document.getElementById("view-label").textContent, "Work");
+  assert.equal(document.querySelector('[data-island="store-b/work"]').getAttribute("aria-pressed"), "true");
+  assert.equal(menu.open, false);
+  assert.equal(document.activeElement, document.getElementById("view-summary"));
+  document.querySelector('[data-island=""]').click();
+  assert.deepEqual(flights, ["store-b/work", null]);
+  assert.equal(document.getElementById("view-label").textContent, "All");
+  assert.equal(calls.length, 0, "Changing views remains local camera navigation");
+});
+
+test("View popup bounds large lists and can page away from a selected view", () => {
+  const clusters = Array.from({ length: 20 }, (_, i) => ({ key: `view-${i}`, label: `View ${i}`, count: 100 - i }));
+  const { document, apply } = appFixture({ clusters });
+  const menu = document.getElementById("view-controls");
+  document.querySelector('[data-island="view-0"]').click();
+  menu.open = true;
+  document.querySelector('[data-island-shift="1"]').click();
+  assert.equal(document.querySelectorAll("[data-island]").length, 7);
+  assert.ok(document.querySelector('[data-island="view-6"]'));
+  apply({ query: "new", queryRevision: 1 });
+  assert.ok(document.querySelector('[data-island="view-6"]'), "Live snapshots must not snap pagination back to the selected view");
+  document.querySelector('[data-island-shift="1"]').click();
+  document.querySelector('[data-island-shift="1"]').click();
+  assert.ok(document.querySelector('[data-island="view-19"]'));
+  assert.equal(document.querySelector('[data-island-shift="1"]').disabled, true);
+  assert.notEqual(document.activeElement, document.body);
+  document.querySelector('[data-island="view-19"]').click();
+  assert.equal(document.getElementById("view-label").textContent, "View 19");
+});
+
+test("View popup preserves focused options across live updates and falls back when removed", () => {
+  const clusters = [{ key: "stable", label: "A", count: 4 }, { key: "removed", label: "B", count: 3 }];
+  const { document, apply } = appFixture({ clusters });
+  const option = document.querySelector('[data-island="stable"]');
+  option.focus();
+  apply({ query: "new", queryRevision: 1 });
+  assert.equal(document.activeElement, option);
+  clusters[0].label = "Renamed";
+  apply({ query: "", queryRevision: 2 });
+  assert.equal(document.activeElement.getAttribute("data-island"), "stable");
+  document.querySelector('[data-island="removed"]').focus();
+  clusters.pop();
+  apply({ query: "", queryRevision: 3 });
+  assert.equal(document.activeElement.getAttribute("data-island"), "");
+});
+
+test("View popup supports arrow keys, Escape, outside dismissal and exclusive status popups", () => {
+  const { document } = appFixture({ clusters: [{ key: "work", label: "Work", count: 1 }] });
+  const menu = document.getElementById("view-controls");
+  const summary = document.getElementById("view-summary");
+  summary.focus();
+  summary.dispatchEvent(new FrontendEvent("keydown", { key: "ArrowDown" }));
+  assert.equal(menu.open, true);
+  assert.equal(document.activeElement.getAttribute("data-island"), "");
+  document.activeElement.dispatchEvent(new FrontendEvent("keydown", { key: "End" }));
+  assert.equal(document.activeElement.getAttribute("data-island"), "work");
+  document.activeElement.dispatchEvent(new FrontendEvent("keydown", { key: "Escape" }));
+  assert.equal(menu.open, false);
+  assert.equal(document.activeElement, summary);
+  const activity = document.getElementById("activity-controls");
+  activity.open = true;
+  menu.open = true;
+  menu.dispatchEvent(new FrontendEvent("toggle"));
+  assert.equal(activity.open, false);
+  activity.open = true;
+  activity.dispatchEvent(new FrontendEvent("toggle"));
+  assert.equal(menu.open, false);
+  menu.open = true;
+  document.getElementById("search").dispatchEvent(new FrontendEvent("pointerdown"));
+  assert.equal(menu.open, false);
 });
 
 test("build badge shows version and short SHA, exposes full provenance, and rejects stale state", () => {
@@ -116,13 +208,15 @@ function controlsFixture(layersRevision = 0) {
   return { controls, calls, changes };
 }
 
-function appFixture({ reducedMotion = false, phase = "map" } = {}) {
+function appFixture({ reducedMotion = false, phase = "map", clusters = [] } = {}) {
   const document = frontendDocument(html);
   const calls = [];
   const opened = [];
   const queries = [];
   const graphs = [];
   const renderers = [];
+  const flights = [];
+  let focusedCluster = null;
   const streams = [];
   const timers = [];
   const activities = [];
@@ -176,7 +270,12 @@ function appFixture({ reducedMotion = false, phase = "map" } = {}) {
     mountGraphWatchControls: () => ({ setWatch() {} }),
     mountGraphCanvas: (_wrap, options) => {
       renderers.push(options);
-      return { setGraph(nodes) { graphs.push(nodes); }, setSelected() {}, setQuery(query) { queries.push(query); }, setActivity(activity) { activities.push(activity); }, clusters: () => [] };
+      return {
+        setGraph(nodes) { graphs.push(nodes); }, setSelected() {}, setQuery(query) { queries.push(query); },
+        setActivity(activity) { activities.push(activity); }, clusters: () => clusters,
+        focusCluster: () => focusedCluster,
+        flyTo(key) { focusedCluster = key; flights.push(key); options.onCluster?.(); },
+      };
     },
     EventSource: class {
       constructor() { streams.push(this); this.listeners = new Map(); }
@@ -202,7 +301,7 @@ function appFixture({ reducedMotion = false, phase = "map" } = {}) {
   function apply(next) { return vm.runInContext(`applyState(${JSON.stringify(next)})`, context); }
   apply(initial);
   return {
-    document, calls, opened, queries, graphs, renderers, timers, bootstrap, apply, activities, activityStatuses,
+    document, calls, opened, queries, graphs, renderers, flights, timers, bootstrap, apply, activities, activityStatuses,
     frames, drawings, motionListeners, resizeObservers, windowListeners,
     frame() {
       clock += 16;
