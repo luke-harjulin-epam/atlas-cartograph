@@ -872,6 +872,9 @@ test("search fills its toolbar and options overlay the full-height left side", (
   const css = readFileSync(new URL("../.apm/extensions/cartograph/public/styles.css", import.meta.url), "utf8");
   assert.doesNotMatch(css.match(/\.search-field \{[^}]*\}/)[0], /max-width/);
   assert.match(css, /\.panel \{[^}]*top: 0; bottom: 0; left: 0;[^}]*width: min\(22\.5rem, calc\(100% - var\(--chat-inset\)\)\)/);
+  assert.match(css, /\.panel:not\(\.hidden\) \{ animation: options-slide-in 180ms ease-out; \}/);
+  assert.match(css, /@keyframes options-slide-in \{\s*from \{ transform: translateX\(-100%\); \}\s*to \{ transform: translateX\(0\); \}/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{\s*\.panel:not\(\.hidden\) \{ animation: none; \}/);
 });
 
 test("chat folds into an inert drawer and preserves graph, history and drafts across toggles", () => {
