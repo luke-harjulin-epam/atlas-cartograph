@@ -109,10 +109,12 @@ input, textarea { font: inherit; color: inherit; }
   background: rgba(12, 18, 28, 0.8); color: var(--color-fg); display: inline-flex; align-items: center; justify-content: center;
 }
 .toolbar {
-  position: absolute; left: 0; right: var(--chat-inset); top: 0; z-index: 40; display: flex; gap: 0.5rem; justify-content: center;
+  position: absolute; left: 0; right: var(--chat-inset); top: 0; display: flex; gap: 0.5rem; justify-content: center;
   padding: 0.75rem; pointer-events: none;
 }
-.toolbar > * { pointer-events: auto; }
+/* Only the chat toggle rises above the graph's preview and backdrop. */
+.toolbar > * { position: relative; z-index: 40; pointer-events: auto; }
+#chat-toggle { z-index: 72; }
 .search-field { flex: 1 1 auto; min-width: 0; max-width: 28rem; }
 .node-browser {
   position: absolute; top: 4.25rem; left: calc((100% - var(--chat-inset)) / 2); transform: translateX(-50%); z-index: 56; width: min(28rem, calc(100% - var(--chat-inset) - 1.5rem));
@@ -235,7 +237,7 @@ input, textarea { font: inherit; color: inherit; }
 }
 
 .graph-chat {
-  position: absolute; right: 0; top: 0; bottom: 0; z-index: 55; width: var(--chat-width);
+  position: absolute; right: 0; top: 0; bottom: 0; z-index: 75; width: var(--chat-width);
   display: flex; flex-direction: column; align-items: stretch; pointer-events: none;
   transform: translateX(100%); visibility: hidden;
   transition: transform 180ms ease-out, visibility 0s linear 180ms;
@@ -326,10 +328,10 @@ input, textarea { font: inherit; color: inherit; }
 .chat-form button:disabled { opacity: 0.4; }
 .map.chat-open .hint { display: none; }
 
-.preview-backdrop { position: absolute; inset: 0; z-index: 70; background: rgba(5, 8, 14, 0.45); border: 0; }
+.preview-backdrop { position: absolute; inset: 0 var(--chat-inset) 0 0; z-index: 70; background: rgba(5, 8, 14, 0.45); border: 0; }
 .preview {
-  position: absolute; z-index: 71; left: 0; right: 0; bottom: 0; top: auto;
-  width: 100%; height: 66.666%; max-height: none; transform: none;
+  position: absolute; z-index: 71; left: 0; right: var(--chat-inset); bottom: 0; top: auto;
+  width: auto; height: 66.666%; max-height: none; transform: none;
   display: flex; flex-direction: column; overflow: hidden;
   border: 1px solid var(--color-border); border-bottom: 0; border-radius: 16px 16px 0 0;
   background: var(--color-surface); padding: 0 1.25rem 1rem;

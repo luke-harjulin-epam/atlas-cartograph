@@ -25,6 +25,8 @@
 
 ### Fixed
 
+- Confine node previews and their backdrop to the graph area so chat remains
+  usable alongside a selected page, including reopening a folded chat panel.
 - Deliver native chat answers through acknowledged, request-scoped canvas
   callbacks instead of displaying SDK message IDs. Reject wrong-session,
   conflicting and stale replies; expire unanswered requests and release timers.

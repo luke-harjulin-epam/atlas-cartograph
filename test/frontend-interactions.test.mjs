@@ -889,6 +889,38 @@ test("chat sizing reserves a responsive quarter-width beside the graph without a
   assert.doesNotMatch(html, /id="chat-backdrop"/);
 });
 
+test("node previews leave chat available without dismissing the selection", async () => {
+  const { document, calls, state } = appFixture();
+  const preview = document.getElementById("preview");
+  const toggle = document.getElementById("chat-toggle");
+  assert.equal(preview.classList.contains("hidden"), false);
+  toggle.click();
+  const input = document.getElementById("chat-input");
+  input.value = "Explain this selected node";
+  input.dispatchEvent(new FrontendEvent("input"));
+  input.dispatchEvent(new FrontendEvent("keydown", { key: "Enter" }));
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].action, "chat");
+  assert.equal(calls[0].text, "Explain this selected node");
+  calls[0].resolve({ ok: true, json: async () => ({ selectedId: "node", previewOpen: true, chat: [] }) });
+  await settle();
+  assert.equal(preview.classList.contains("hidden"), false);
+  assert.equal(state().selectedId, "node");
+  assert.equal(document.activeElement, input);
+  document.getElementById("chat-close").click();
+  assert.equal(preview.classList.contains("hidden"), false);
+  toggle.click();
+  assert.equal(document.activeElement, input);
+  assert.equal(calls.length, 1, "chat folding does not dismiss the selected page");
+
+  const css = readFileSync(new URL("../.apm/extensions/cartograph/public/styles.css", import.meta.url), "utf8");
+  assert.match(css, /\.preview-backdrop \{[^}]*inset: 0 var\(--chat-inset\) 0 0;/);
+  assert.match(css, /\.preview \{[^}]*right: var\(--chat-inset\);[^}]*width: auto;/);
+  assert.doesNotMatch(css.match(/\.toolbar \{[^}]*\}/)[0], /z-index/);
+  assert.match(css, /#chat-toggle \{ z-index: 72; \}/);
+  assert.match(css, /\.graph-chat \{[^}]*z-index: 75;/);
+});
+
 test("multiline composer grows and shrinks, rewraps on width changes and cleans up its observer", () => {
   const { document, apply, resizeObservers, windowListeners } = appFixture();
   const input = document.getElementById("chat-input");

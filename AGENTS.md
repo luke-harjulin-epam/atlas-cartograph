@@ -100,6 +100,8 @@
   for both renderers and graph controls;
   keep resizing proportional and preserve drafts/history when collapsing.
   Folded chat must be inert; Escape and Close return focus to its toolbar toggle.
+- Constrain node previews and their backdrop to the remaining graph area.
+  Keep the chat drawer and its toolbar toggle accessible while a preview is open.
 - Use a growing multiline composer with an embedded SVG send arrow. Remeasure
   wrapping on input and width changes without resetting the caret on snapshots.
   Cap growth to retain conversation space; Enter sends, Shift+Enter inserts a

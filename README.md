@@ -123,6 +123,8 @@ send arrow and grows with your draft, scrolling after 45% of the window height
 or 384px, whichever is smaller. Enter sends; Shift+Enter adds a line.
 Close or Escape inside chat restores the full map without clearing the
 conversation or draft.
+Node previews and their backdrop stay within the graph area, so you can keep
+chatting about a selected page or reopen chat without dismissing its preview.
 
 The small bottom-left badge shows the runtime version and abbreviated source SHA.
 Hover for the full SHA; `+ local` marks uncommitted runtime changes. Release
