@@ -717,6 +717,6 @@ test("chunked requests receive 413 as soon as the byte limit is crossed, without
 test("browser forwards link targets to the server and marks canvas requests", () => {
   const app = readFileSync(new URL("../.apm/extensions/cartograph/public/app.js", import.meta.url), "utf8");
   assert.match(app, /"X-Cartograph-Client": "canvas"/);
-  assert.match(app, /function navigateWiki\(target\) \{\s*return post\("select", \{ nodeId: target \}\);/);
+  assert.match(app, /function navigateWiki\(target\) \{[\s\S]*?\n  return post\("select", \{ nodeId: target \}\);\n\}/);
   assert.match(app, /fetch\("\/api\/bootstrap", \{ headers: \{ "X-Cartograph-Client": "canvas" \} \}\)/);
 });
