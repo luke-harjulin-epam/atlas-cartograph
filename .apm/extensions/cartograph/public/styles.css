@@ -320,7 +320,7 @@ input, textarea { font: inherit; color: inherit; }
 .chat-compose-actions { display: flex; justify-content: flex-end; padding: 0 0.25rem; }
 .chat-form button {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 44px; height: 44px; padding: 0; border-radius: 50%; border: 0;
+  width: 34px; height: 34px; padding: 0; border-radius: 50%; border: 0;
   background: #1599ff; color: #fff;
 }
 .chat-form button:disabled { opacity: 0.4; }
