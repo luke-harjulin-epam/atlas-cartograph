@@ -13,6 +13,7 @@ import {
   pageSlug,
   parseFrontmatter,
   relatesToOf,
+  sourceDetailsOf,
   sourcesOf,
   stripMarkdownCode,
 } from "./parse.mjs";
@@ -329,6 +330,7 @@ function pageFromStore(store, id) {
     ...schemaTypes(store.schemaCatalog).get(type),
     kind,
     sources: sourcesOf(meta),
+    sourceDetails: sourceDetailsOf(meta),
     relatesTo: relatesToOf(meta),
     body: body.trim(),
   };

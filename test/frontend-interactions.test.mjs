@@ -5,6 +5,7 @@ import vm from "node:vm";
 import { allNodeLayersOn, applyLayerClick, createLayerControls } from "../.apm/extensions/cartograph/public/layer-controls.js";
 import { createStateControls } from "../.apm/extensions/cartograph/public/state-controls.js";
 import { handleContentClick } from "../.apm/extensions/cartograph/public/content-navigation.js";
+import { renderExternalSources, sourceKind } from "../.apm/extensions/cartograph/public/source-links.js";
 import { mountNodeBrowser } from "../.apm/extensions/cartograph/public/node-browser.js";
 import { fallbackLayerLabel, nodeCategory, nodeLayer, layerCounts } from "../.apm/extensions/cartograph/public/node-layers.js";
 import { mountSchemaLayers } from "../.apm/extensions/cartograph/public/schema-layers.js";
@@ -140,6 +141,7 @@ function appFixture({ reducedMotion = false, phase = "map" } = {}) {
   const bootstrap = deferred();
   const context = vm.createContext({
     document, allNodeLayersOn, createLayerControls, createStateControls, handleContentClick, mountNodeBrowser, escapeHtml, renderMarkdown,
+    renderExternalSources, sourceKind,
     fallbackLayerLabel, nodeCategory, nodeLayer, layerCounts, mountSchemaLayers, nodeSearchText,
     window: {
       matchMedia: () => motion, open: (...args) => opened.push(args),
@@ -1187,6 +1189,75 @@ test("unhandled controls still bubble and internal anchors use the single naviga
   assert.equal(unrelated.defaultPrevented, false);
   assert.equal(unrelated.propagationStopped, false);
   assert.equal(calls.length, 1);
+});
+
+test("preview separates readable external source rows from internal source and relationship chips", () => {
+  const { document, apply, calls, opened } = appFixture();
+  const sourceDetails = [
+    { path: "https://github.com/team/project/pull/8" },
+    { path: "https://github.com/team/project/releases/tag/v0.3.0" },
+    { path: "https://github.com/team/project/issues/10", title: "Fix source readability" },
+    { path: "atlas://one/guide", title: "Internal title" },
+    { path: "javascript:alert(1)", title: "Unsafe" },
+  ];
+  apply({ page: { body: "# Body", relatesTo: [{ path: "related", kind: "implements" }],
+    sources: sourceDetails.map((s) => s.path), sourceDetails } });
+  const section = document.getElementById("preview-sources");
+  assert.equal(section.classList.contains("hidden"), false);
+  assert.equal(section.getAttribute("aria-labelledby"), "preview-sources-title");
+  assert.equal(section.querySelector("h3").textContent, "External sources");
+  const chips = document.getElementById("preview-relates").querySelectorAll("button");
+  assert.deepEqual(chips.map((c) => c.getAttribute("data-target")), ["related", "atlas://one/guide"]);
+  const rows = section.querySelectorAll("a");
+  assert.equal(rows.length, 3);
+  assert.deepEqual(rows.map((r) => r.querySelector(".external-source-label").textContent),
+    ["Pull request #8", "Release v0.3.0", "Fix source readability"]);
+  for (const [index, row] of rows.entries()) {
+    assert.equal(row.getAttribute("href"), sourceDetails[index].path);
+    assert.equal(row.getAttribute("target"), "_blank");
+    assert.equal(row.getAttribute("rel"), "noopener noreferrer");
+    assert.equal(row.getAttribute("title"), sourceDetails[index].path);
+    assert.equal(row.querySelector(".external-source-context").textContent, "team/project · github.com");
+    assert.equal(document.getElementById(row.getAttribute("aria-describedby")).textContent, sourceDetails[index].path);
+    const icon = row.querySelector("svg");
+    assert.equal(icon.getAttribute("aria-hidden"), "true");
+    assert.equal(icon.getAttribute("focusable"), "false");
+    row.focus();
+    assert.equal(document.activeElement, row);
+    // The harness cannot open tabs or synthesize native Enter activation. Dispatch
+    // its resulting click from nested text and SVG, including modifier variants.
+    for (const target of [row, row.querySelector(".external-source-label"), icon.querySelector("path")]) {
+      for (const options of [{ detail: 0 }, { ctrlKey: true }, { metaKey: true }, { shiftKey: true }, { button: 1 }]) {
+        const event = new FrontendEvent("click", options);
+        target.dispatchEvent(event);
+        assert.equal(event.defaultPrevented, false);
+        assert.equal(event.propagationStopped, false);
+      }
+    }
+  }
+  assert.equal(calls.length, 0, "native source links never select an Atlas page");
+  assert.equal(opened.length, 0, "no scripted window.open duplicates native navigation");
+  rows[0].focus();
+  apply({});
+  assert.equal(document.activeElement, rows[0], "unchanged snapshots preserve source focus and URL disclosure");
+  assert.equal(section.querySelector("a"), rows[0]);
+  document.getElementById("preview-relates").querySelectorAll("button")[1].click();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].nodeId, "atlas://one/guide");
+  apply({ page: { body: "No external sources", sources: ["internal"] } });
+  assert.equal(section.classList.contains("hidden"), true);
+  assert.equal(section.querySelectorAll("a").length, 0);
+  apply({ page: { sources: ["https://example.com/guide.md?q=1#intro"] } });
+  assert.equal(section.querySelector("a").getAttribute("href"), "https://example.com/guide.md?q=1#intro",
+    "older string-only payloads still render source rows");
+});
+
+test("external source focus and hover expose the full URL with generous high-contrast targets", () => {
+  const css = readFileSync(new URL("../.apm/extensions/cartograph/public/styles.css", import.meta.url), "utf8");
+  assert.match(css, /\.external-source:focus-visible\s*\{[^}]*outline:\s*2px/);
+  assert.match(css, /\.external-source:hover \.external-source-url,\s*\.external-source:focus \.external-source-url\s*\{\s*display: block/);
+  assert.match(css, /\.external-source\s*\{[^}]*min-height: 56px;[^}]*color: var\(--color-fg\)/);
+  assert.match(css, /\.external-source-label\s*\{[^}]*font-size: 15px/);
 });
 
 test("actual layer wiring updates buttons immediately, keeps grouping/SSE data, and handles non-2xx JSON", async () => {

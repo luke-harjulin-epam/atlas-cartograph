@@ -5,6 +5,7 @@ import { mountGraphWatchControls } from "./graph-watch-controls.js";
 import { allNodeLayersOn, createLayerControls } from "./layer-controls.js";
 import { createStateControls } from "./state-controls.js";
 import { handleContentClick } from "./content-navigation.js";
+import { renderExternalSources, sourceKind } from "./source-links.js";
 import { mountNodeBrowser } from "./node-browser.js";
 import { fallbackLayerLabel, nodeCategory, nodeLayer, layerCounts } from "./node-layers.js";
 import { mountSchemaLayers } from "./schema-layers.js";
@@ -247,6 +248,7 @@ function navigateWiki(target) {
   return post("select", { nodeId: target });
 }
 
+let previewSourcesMarkup = "";
 function renderPreview() {
   const box = $("preview");
   const back = $("preview-backdrop");
@@ -263,9 +265,10 @@ function renderPreview() {
     err.textContent = state.linkError || "";
     err.classList.toggle("hidden", !state.linkError);
   }
+  const sources = page?.sourceDetails ?? (page?.sources ?? []).map((path) => ({ path }));
   const chips = [
     ...(page?.relatesTo ?? []).map((r) => ({ kind: r.kind || "relates", path: r.path })),
-    ...(page?.sources ?? []).map((s) => ({ kind: "source", path: s })),
+    ...sources.filter((s) => sourceKind(s.path) === "internal").map((s) => ({ kind: "source", path: s.path })),
   ];
   const rel = $("preview-relates");
   rel.classList.toggle("hidden", chips.length === 0);
@@ -275,6 +278,13 @@ function renderPreview() {
         `<li><button type="button" class="kind-${escapeHtml(c.kind)}" data-target="${escapeHtml(c.path)}">${escapeHtml(c.kind)} · ${escapeHtml(chipLabel(c.path))}</button></li>`,
     )
     .join("");
+  const external = sources.filter((s) => sourceKind(s.path) === "external");
+  $("preview-sources").classList.toggle("hidden", external.length === 0);
+  const sourceMarkup = renderExternalSources(external);
+  if (sourceMarkup !== previewSourcesMarkup) {
+    $("preview-source-list").innerHTML = sourceMarkup;
+    previewSourcesMarkup = sourceMarkup;
+  }
   $("preview-body").innerHTML = renderMarkdown(page?.body || "_No page body._");
 }
 

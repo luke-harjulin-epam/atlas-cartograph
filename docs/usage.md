@@ -135,6 +135,34 @@ The map uses WebGL where available, with the same labels, camera and controls
 as its 2D fallback. If WebGL is interrupted, rendering continues in 2D with a
 status notice; graph selection and playback are retained.
 
+## External source links
+
+Open a page's Markdown preview to see its **External sources**. Each HTTP/HTTPS
+source is a full clickable row with a descriptive label, repository/domain
+context and an external-link icon. Tab to a source and press Enter to open it.
+Hover or focus the row to see its full destination. Internal Atlas sources and
+relationships remain navigation chips.
+
+Cartograph recognises strings and source objects with `path`, `url` or `uri`
+in the page's frontmatter:
+
+```yaml
+sources:
+  - https://github.com/example/project/pull/8
+  - uri: https://github.com/example/project/releases/tag/v0.3.0
+    title: Version 0.3.0 release notes
+  - path: decisions/design.md
+```
+
+An optional `title` takes precedence over a derived label. Without a title,
+GitHub links identify pull requests, issues, releases, commits or files; other
+sites show a readable path with their domain. Labels are derived locally:
+opening a preview does not fetch external titles, favicons or page contents.
+External source links keep the complete destination, including `.md` suffixes,
+query strings and fragments. Non-HTTP/HTTPS schemes are not external web links.
+The viewer recognises these metadata forms; your Atlas's schema remains the
+authority for authoring and validation.
+
 ## Chat with this Atlas
 
 The map chat button talks to the same Copilot session that opened the canvas.

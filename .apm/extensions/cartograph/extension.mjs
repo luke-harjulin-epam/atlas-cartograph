@@ -232,6 +232,7 @@ const session = await joinSession({
                     title: entry.state.page.title,
                     relatesTo: entry.state.page.relatesTo,
                     sources: entry.state.page.sources,
+                    sourceDetails: entry.state.page.sourceDetails,
                   }
                 : null,
               nodes: (g?.nodes ?? []).map((n) => ({

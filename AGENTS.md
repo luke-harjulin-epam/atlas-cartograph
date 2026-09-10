@@ -80,6 +80,12 @@
   second animation loop or report the capped simulation delta as frame rate.
 - Keep page reads inside their mounted store, including canonical symlink
   targets. Preserve the originating Atlas in navigation and chat references.
+- Show HTTP/HTTPS provenance in readable external-source rows, separate from
+  internal relationship chips. Prefer explicit source titles, otherwise derive
+  labels locally with repository/domain context; never fetch remote metadata.
+  Preserve exact web destinations instead of normalizing them as page slugs.
+  Keep source metadata inert, native link semantics, visible keyboard focus
+  and full URLs on hover/focus, using the shared delegated navigation path.
 - Reject duplicate mount keys before changing the mounted graph or selection.
   Explicit Atlas links must not fall back to another store; generate each mesh
   relationship once. Chat completions must update their own request placeholder.

@@ -127,6 +127,14 @@ and delivery instructions belong in that file. Cover escaped card values and
 the deployed activation path. Markdown blocks must work without blank lines around headings or quotes.
 Relative-link cases must use duplicate basenames and confirm that graph edges
 and preview navigation resolve the same source-directory target.
+External-source cases must retain exact HTTP/HTTPS destinations, including
+`.md`, queries and fragments. Cover string sources and titled `path`/`url`/`uri`
+objects, mixed lists, safe escaping and rejection of non-web schemes as
+external links. Keep internal sources and their graph edges unchanged.
+In the browser, check meaningful GitHub and generic-site labels, repository
+context, whole-row activation, native modified clicks, visible keyboard focus
+and full URLs on hover/focus. Long links must wrap inside the graph-only
+preview while chat stays usable. Do not fetch remote titles or favicons.
 Use fake clocks to cover normal 400 ms spacing and adaptive 200/100/50 ms targets,
 queue-age pressure, smooth acceleration/recovery, full displayed lifetimes,
 repeat coalescing, endpoint pulse expiry, and pending-event cancellation.

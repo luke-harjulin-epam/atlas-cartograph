@@ -4,6 +4,10 @@
 
 ### Changed
 
+- Show external sources as readable, keyboard-accessible preview rows with
+  descriptive labels, repository/domain context and an external-link icon.
+  Prefer optional frontmatter titles; derive fallback labels locally without
+  fetching websites. Keep internal relationships as chips.
 - Rename the bundled answering activation to `cartograph-chat` and send only
   its compact activation card. Keep progress, retrieval and reply-delivery
   instructions in the bundled file instead of repeating them in every question.
@@ -25,6 +29,8 @@
 
 ### Fixed
 
+- Preserve external source URLs, including `.md` suffixes, queries and
+  fragments, and read source objects using `path`, `url` or `uri`.
 - Confine node previews and their backdrop to the graph area so chat remains
   usable alongside a selected page, including reopening a folded chat panel.
 - Deliver native chat answers through acknowledged, request-scoped canvas

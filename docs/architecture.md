@@ -23,6 +23,7 @@ hand-authored; there is no generated marketplace site or documentation generator
 | `public/node-layers.js` | Shared type-key membership, counts and accepted layer-key normalization |
 | `public/schema-layers.js` | Store-qualified schema/type controls with stable focus and diagnostics |
 | `public/content-navigation.js` | Single delegated preview/wiki/external click handling |
+| `public/source-links.js` | Safe source classification, local destination labels and accessible external-source rows |
 | `public/node-browser.js` | Filtered, paginated native node controls and live focus preservation |
 | `public/node-search.js` | Shared node descriptions and title/ID/Atlas/path/type/kind query matching |
 | `http.mjs` | Shared request authorisation and bounded JSON object parsing |
@@ -62,6 +63,27 @@ transport, then exercises its real handlers and server. The harness stays outsid
 the distributed runtime. It validates registration shape and data flow, not the
 host's actual `session.resume` implementation or renderer; exact-artifact native
 acceptance remains external to the local packaging check.
+
+## Source provenance in previews
+
+Frontmatter sources serve two different purposes: internal page references
+participate in graph linking, while HTTP/HTTPS provenance opens an external
+destination. External URLs retain their exact text; they must not pass through
+internal slug normalization, which removes `.md` suffixes.
+
+Preview metadata adds ordered `sourceDetails: [{ path, title? }]` while
+retaining the existing `sources: string[]` graph contract. The browser
+separates external-source rows from
+internal relationship chips and derives fallback labels locally, including
+GitHub destination types and repository/domain context. It escapes all source
+metadata and does not fetch remote titles or favicons.
+
+External rows use native links with an external-link indicator, keyboard focus
+and full-URL disclosure on hover/focus. The shared delegated navigation handler
+leaves external-source anchors to native browser activation, including Enter,
+modified clicks and context menus, rather than also calling `window.open`.
+External provenance does not introduce new graph nodes
+or inferred relationships.
 
 ## Chat delivery
 

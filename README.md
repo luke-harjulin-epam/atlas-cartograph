@@ -125,6 +125,11 @@ Close or Escape inside chat restores the full map without clearing the
 conversation or draft.
 Node previews and their backdrop stay within the graph area, so you can keep
 chatting about a selected page or reopen chat without dismissing its preview.
+Page previews show web provenance in a separate **External sources** section:
+readable link rows identify the destination and its repository/domain, instead
+of displaying only a URL's final segment. Titles can come from frontmatter or
+be derived locally; no remote metadata is fetched. Internal relationships stay
+as chips. See [source links](docs/usage.md#external-source-links) for authoring.
 
 The small bottom-left badge shows the runtime version and abbreviated source SHA.
 Hover for the full SHA; `+ local` marks uncommitted runtime changes. Release

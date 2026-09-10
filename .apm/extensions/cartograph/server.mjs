@@ -324,6 +324,9 @@ function enrichPage(state, page, nodeId) {
     (page?.sources?.length
       ? page.sources
       : (node?.refs ?? []).filter((r) => r.kind === "source").map((r) => r.raw)).map(declaredPath);
+  const sourceDetails = page?.sourceDetails?.length
+    ? page.sourceDetails.map((source) => ({ ...source, path: declaredPath(source.path) }))
+    : sources.map((path) => ({ path }));
   if (!page) {
     return {
       id: nodeId,
@@ -332,11 +335,12 @@ function enrichPage(state, page, nodeId) {
       type: node?.type ?? node?.kind ?? "",
       kind: node?.kind ?? "page",
       sources,
+      sourceDetails,
       relatesTo,
       body: "",
     };
   }
-  return { ...page, relatesTo, sources };
+  return { ...page, relatesTo, sources, sourceDetails };
 }
 
 export function selectNode(state, nodeId) {

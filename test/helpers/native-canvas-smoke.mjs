@@ -11,6 +11,7 @@ const runtime = resolve(process.argv[2]);
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), "cartograph-native-")));
 const previousCwd = process.cwd();
 const opened = new Map();
+const sourceUrl = "https://github.com/team/project/blob/main/README.md?raw=1#section.md";
 let canvas;
 
 function workspace(name) {
@@ -26,7 +27,10 @@ function store(cwd, name, id) {
     atlas_id: id, templates: { by_type: { observation: {}, instrument: {} } },
   }));
   writeFileSync(join(root, "index.md"), "# Observatory\n");
-  writeFileSync(join(root, "signal.md"), "---\ntitle: Signal\ntype: observation\n---\n\n[[index]]\n");
+  writeFileSync(join(root, "signal.md"), [
+    "---", "title: Signal", "type: observation", "sources:", `  - url: ${sourceUrl}`,
+    "    title: Project guide", "---", "", "[[index]]", "",
+  ].join("\n"));
   return root;
 }
 
@@ -118,6 +122,8 @@ try {
   assert.equal(state.selectedId, signal.id);
   assert.equal(state.layers[signal.typeKey], false);
   assert.equal(state.page.title, "Signal");
+  assert.deepEqual(state.page.sources, [sourceUrl]);
+  assert.deepEqual(state.page.sourceDetails, [{ path: sourceUrl, title: "Project guide" }]);
   assert.equal(state.layersRevision, layerResult.layersRevision);
 
   const firstChat = await ask(initial.url, "What is Signal?");
