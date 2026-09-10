@@ -4,6 +4,8 @@
 
 ### Changed
 
+- Match the search results panel to the input's full width, adapting to window
+  size and chat visibility.
 - Keep the version/FPS badge behind Options so it cannot cover the Graph section.
 - Replace the Add atlas text with a compact SVG plus icon and accessible label.
 - Removing the last selected node layer now restores all node layers, including

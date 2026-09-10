@@ -94,8 +94,10 @@ require SDK context or metadata.
 
 Type in the always-visible **Search stars** field in the map toolbar.
 The field fills the available toolbar width, leaving space for the menu and
-chat controls. The menu opens a full-height panel over the left side of the
-Atlas without shrinking the graph. A logo and **Atlas Cartograph** header sit
+chat controls. Search results align with both edges of that field and resize
+with it as the window or chat panel changes. The menu opens a full-height panel
+over the left side of the Atlas without shrinking the graph.
+A logo and **Atlas Cartograph** header sit
 above **Options**. With chat open, the panel stays within the Atlas area.
 If chat leaves less than 220px for Options, opening either panel folds the
 other without clearing the chat draft. Narrowing the window also folds Options

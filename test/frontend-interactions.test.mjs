@@ -1141,6 +1141,18 @@ test("narrow Options and chat take turns without clearing the chat draft", () =>
   assert.equal(calls.length, 0);
 });
 
+test("search results share the search field's responsive horizontal bounds", () => {
+  const css = readFileSync(new URL("../.apm/extensions/cartograph/public/styles.css", import.meta.url), "utf8");
+  const results = css.match(/\.node-browser \{[^}]*\}/)[0];
+  const toolbar = css.match(/\.toolbar \{[^}]*\}/)[0];
+  assert.match(results, /left: calc\(var\(--toolbar-padding\) \+ var\(--toolbar-button-size\) \+ var\(--toolbar-gap\)\)/);
+  assert.match(results, /right: calc\(var\(--chat-inset\) \+ var\(--search-end\)\); width: auto/);
+  assert.doesNotMatch(results, /translateX|28rem/);
+  assert.match(toolbar, /gap: var\(--toolbar-gap\)/);
+  assert.match(toolbar, /padding: var\(--toolbar-padding\); padding-right: var\(--search-end\)/);
+  assert.match(css, /\.map\.chat-open \{[^}]*--search-end: var\(--toolbar-padding\)/);
+});
+
 test("search fills its toolbar and options overlay the full-height left side", () => {
   const css = readFileSync(new URL("../.apm/extensions/cartograph/public/styles.css", import.meta.url), "utf8");
   assert.doesNotMatch(css.match(/\.search-field \{[^}]*\}/)[0], /max-width/);
@@ -1250,8 +1262,8 @@ test("chat fullscreen restores the drawer and preserves draft, history and graph
 
 test("chat sizing reserves a responsive quarter-width beside the graph without a modal backdrop", () => {
   const css = readFileSync(new URL("../.apm/extensions/cartograph/public/styles.css", import.meta.url), "utf8");
-  assert.match(css, /\.map \{ --chat-width: min\(90vw, max\(22\.5rem, 25vw\)\); --chat-inset: 0px; \}/);
-  assert.match(css, /\.map\.chat-open \{ --chat-inset: var\(--chat-width\); \}/);
+  assert.match(css, /\.map \{[^}]*--chat-width: min\(90vw, max\(22\.5rem, 25vw\)\); --chat-inset: 0px;/);
+  assert.match(css, /\.map\.chat-open \{[^}]*--chat-inset: var\(--chat-width\);/);
   assert.match(css, /#graph-wrap \{[^}]*inset: 0 var\(--chat-inset\) 0 0;/);
   assert.match(css, /\.graph-chat \{[^}]*right: 0;[^}]*width: var\(--chat-width\);[^}]*transform: translateX\(100%\); visibility: hidden;/);
   assert.match(css, /\.graph-chat\.chat-open \{ transform: translateX\(0\); visibility: visible;/);

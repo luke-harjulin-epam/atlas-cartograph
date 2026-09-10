@@ -66,7 +66,9 @@
   Resolve both stages atomically on the server. Explicit page navigation and
   native `select_node` retain their direct-preview contract.
 - Keep one always-visible toolbar search field for both accessible results and
-  map highlighting. Share title/ID/Atlas/path/type/kind matching with both
+  map highlighting. Align results to the field's full width using shared
+  responsive bounds, including when chat opens or the viewport changes.
+  Share title/ID/Atlas/path/type/kind matching with both
   renderers and activation framing; pre-index render nodes rather than building
   descriptions per frame. Keep hidden-layer results, bounded keyboard pages,
   pending text/caret protection and visible query text when results close.
