@@ -4,6 +4,8 @@
 
 ### Changed
 
+- Reduce information buttons to 24px with a 12px glyph, keeping a usable
+  target and visible keyboard focus.
 - Keep menu text brief and move explanations into shared **i** information
   popups across activation settings, layer controls and search. Preserve
   visible errors, permissions, private-token warnings and key counters.

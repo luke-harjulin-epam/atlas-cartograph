@@ -95,4 +95,8 @@ test("every menu information button has one hidden source and accessible popup w
   assert.equal(document.getElementById("preview").contains(document.getElementById("menu-info")), false);
   assert.equal(document.getElementById("activity-command").closest("[hidden]"), null);
   assert.equal(document.getElementById("activity-setup-notice").closest("[hidden]"), null);
+  const css = readFileSync(new URL("../.apm/extensions/cartograph/public/styles.css", import.meta.url), "utf8");
+  const buttonStyle = css.match(/\.info-button \{([^}]+)\}/)[1];
+  assert.match(buttonStyle, /width: 24px; height: 24px/);
+  assert.match(buttonStyle, /font: bold 12px/);
 });
