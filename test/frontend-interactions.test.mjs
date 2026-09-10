@@ -1011,7 +1011,8 @@ test("node previews leave chat available without dismissing the selection", asyn
   assert.match(css, /\.preview-backdrop \{[^}]*inset: 0 var\(--chat-inset\) 0 0;/);
   assert.match(css, /\.preview \{[^}]*right: var\(--chat-inset\);[^}]*width: auto;/);
   assert.doesNotMatch(css.match(/\.toolbar \{[^}]*\}/)[0], /z-index/);
-  assert.match(css, /#chat-toggle \{[^}]*position: absolute;[^}]*right: 0.7rem;[^}]*z-index: 111;/);
+  assert.match(css, /#chat-toggle \{[^}]*position: absolute;[^}]*top: 0.75rem; right: 0.75rem;[^}]*z-index: 111;/);
+  assert.doesNotMatch(css.match(/#chat-toggle \{[^}]*\}/)[0], /width:|height:|border-radius:/);
   assert.match(css, /\.graph-chat \{[^}]*z-index: 75;/);
 });
 
