@@ -189,7 +189,7 @@
   Move long menu explanations into shared information popups. Keep errors,
   permissions, private-token warnings and key counters visible; render popup
   text literally and release its observer when dismissed or its menu closes.
-  Keep small info buttons at a usable 24px target with visible focus. Consult
+  Use 12px info buttons with an 8px glyph and visible keyboard focus. Consult
   the mounted project Atlas's `decisions/cartograph-ux-principles-protostar.md`
   for the forming UX principles and proposed review-skill scope; do not treat
   that protostar as an accepted cross-project standard.
