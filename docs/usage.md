@@ -18,9 +18,11 @@ Cartograph can coexist; choose the project provider to run this source.
 The small bottom-left build badge shows the canvas version and the first eight
 characters of its source commit SHA. Hover for the full SHA. `+ local` means
 the runtime includes uncommitted source changes, so it is not the exact commit.
-Release archives retain their source SHA in the deployed runtime. Unstamped
-copies without source-checkout metadata show `SHA unavailable`; the consumer
-project's commit is never used as the canvas version.
+Release archives retain their source SHA in the deployed runtime via stamped
+`cartograph-build.json` and `package.json` metadata. Source checkouts read Git
+first so `+ local` still reflects uncommitted runtime files. Unsubstituted or
+missing stamps show `SHA unavailable`; the consumer project's commit is never
+used as the canvas version.
 The FPS counter beside it reports rendered frames per second over a one-second
 sample. It works with WebGL and Canvas 2D and resets after a suspended tab.
 `-- FPS` means no current sample is available, including outside the map.
@@ -117,6 +119,19 @@ unfiltered map highlighting. Live graph updates preserve the
 focused entry and filter text; deleting that entry moves focus to the filter.
 Wiki links, preview relationship links and the native `select_node` action
 remain explicit page navigation and open the preview directly.
+
+## Chat with this Atlas
+
+The map chat button talks to the same Copilot session that opened the canvas.
+Cartograph sends the question plus open Atlas identities, the selected node and
+the current search query. It does not paste page bodies. The session should
+read mounted Atlas Markdown with its own file tools when it needs content;
+those reads can light Knowledge Activation. Canvas HTTP scans and previews stay
+excluded from the collector.
+
+A failed session turn shows an error on that prompt. It does not fall back to
+keyword search. The standalone `npm start` server still uses local Atlas search
+because it has no host session.
 
 Layer buttons update immediately and serialise rapid changes. A saving message
 remains until acknowledgement; failures restore the last confirmed view and show

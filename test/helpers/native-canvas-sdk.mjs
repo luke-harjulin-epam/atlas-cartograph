@@ -27,6 +27,11 @@ export async function joinSession(config) {
   assert.deepEqual(config.canvases, [registration.canvas]);
   return {
     sessionId: "observatory-session",
+    send: async ({ prompt }) => {
+      assert.equal(typeof prompt, "string");
+      assert.match(prompt, /^Cartograph chat:/);
+      return `Synthetic session reply for ${prompt.split("\n")[0]}`;
+    },
     rpc: {
       metadata: {
         snapshot: async () => {

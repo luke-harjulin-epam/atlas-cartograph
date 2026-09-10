@@ -78,6 +78,53 @@ export function pickGraphReply({ messages = [], response, summary } = {}) {
   return lastMessage || asText(response) || asText(summary) || "";
 }
 
+function storeLines(state) {
+  const stores = state.graph?.stores || [];
+  if (stores.length) {
+    return stores.map((store) => {
+      const id = store.atlasId || store.label || store.root || "atlas";
+      return `- ${id}${store.root ? ` (${store.root})` : ""}`;
+    });
+  }
+  const roots = state.roots?.length ? state.roots : state.root ? [state.root] : [];
+  return roots.length ? roots.map((root) => `- ${root}`) : ["- (none)"];
+}
+
+function selectedLine(state) {
+  const id = state.selectedId;
+  if (!id) return "Selected node: (none)";
+  const node = state.graph?.nodes?.find((item) => item.id === id);
+  const path = node?.path ? ` (${node.path})` : "";
+  return `Selected node: ${id}${path}`;
+}
+
+export function graphChatPrompt(text, state = {}) {
+  const query = String(state.query || "").trim();
+  return [
+    `Cartograph chat: ${String(text || "").trim()}`,
+    "",
+    "Open Atlas stores:",
+    ...storeLines(state),
+    selectedLine(state),
+    `Search query: ${query || "(none)"}`,
+    "",
+    "Read mounted Atlas Markdown with session file tools when you need page content. Do not invent bodies. Reply to the Cartograph chat question.",
+  ].join("\n");
+}
+
+export async function askHostSession(host, text, state) {
+  if (typeof host?.send !== "function") {
+    throw new Error("Host session cannot accept chat.");
+  }
+  const response = await host.send({ prompt: graphChatPrompt(text, state) });
+  const out = pickGraphReply({
+    response,
+    messages: response && typeof response === "object" ? response.messages : [],
+  });
+  if (!out) throw new Error("Session produced an empty reply.");
+  return { text: out, hits: [] };
+}
+
 function firstSentence(text) {
   const clean = String(text || "")
     .replace(/\s+/g, " ")

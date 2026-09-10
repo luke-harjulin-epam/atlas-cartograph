@@ -160,8 +160,10 @@ their last PID and access kind only until expiry, not as an access history.
 Both lexical and canonical paths are
 matched, so symlinked Atlas roots work. Basename matching is deliberately not
 used: identical names in different stores are different nodes. Cartograph's
-own server PID is excluded to prevent scans, previews, and chat reads from
-triggering their own activity.
+own server PID is excluded to prevent scans, previews, and local chat excerpts from
+triggering their own activity. Native session chat does not read pages through
+that HTTP server; host file tools run in the Copilot session and can appear as
+ordinary Atlas opens.
 
 Transport is loopback HTTP, bound to `127.0.0.1`. Every collector request uses a
 random per-canvas bearer token. The connection command is fetched only on

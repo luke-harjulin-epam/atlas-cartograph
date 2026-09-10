@@ -50,11 +50,12 @@ installation, including default discovery, `get_state`, `set_layers`,
 the runtime `package.json` and root `package.json` aligned. Application imports,
 browser assets, collectors and fixtures must resolve within the bundle.
 The build badge reads this runtime's version and source-checkout SHA, marking
-uncommitted runtime changes. Release packaging stamps `cartographBuild` in the
-isolated producer's runtime `package.json`, never the canonical source or
-generated plugin manifest. Deployed bundles must not read the consumer's Git
-identity; unstamped copies explicitly show an unavailable SHA. Cover both
-paths with `test/build-info.test.mjs` and the package smoke checks.
+uncommitted runtime changes. Release packaging stamps `cartographBuild` and
+`cartograph-build.json` in the isolated producer, never the canonical source or
+generated plugin manifest. Source checkouts prefer Git so a stale stamp cannot
+hide local edits. Deployed bundles must not read the consumer's Git identity;
+unsubstituted or missing stamps show an unavailable SHA. Cover both paths with
+`test/build-info.test.mjs` and the package smoke checks.
 The repository discovery shim is not distribution source; do not run a
 first-party APM deployment over that locally authored shim.
 

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Changed
+
+- Stamp deployed runtimes with `cartograph-build.json` as well as
+  `cartographBuild`, so installed canvases keep the source SHA when Git is
+  absent. Unsubstituted export placeholders still show `SHA unavailable`.
+- Native canvas chat sends a compact Atlas envelope to the joined Copilot
+  session. The host reads mounted pages; local keyword search remains only for
+  HTTP/dev servers without a session.
+
 ## 0.3.0 - 2026-09-09
 
 ### Added

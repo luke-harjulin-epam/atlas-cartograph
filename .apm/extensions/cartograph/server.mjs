@@ -92,6 +92,7 @@ function snapshot(state) {
     stores: state.stores,
     grouping: state.grouping || "layers",
     chat: state.chat || [],
+    chatMode: state.chatMode || "local",
     openedAt: state.openedAt,
     activity: state.activity,
     graphWatch: state.graphWatch,
@@ -386,6 +387,7 @@ function serveStatic(req, res) {
 }
 
 export async function startServer(instanceId, state, options = {}) {
+  state.chatMode = options.onChat ? "session" : "local";
   const entry = { state, clients: new Set(), instanceId, onChat: options.onChat };
   entry.activity = createActivityService(entry, sendJson, options.activity);
   const server = createServer(async (req, res) => {
@@ -484,12 +486,17 @@ export async function startServer(instanceId, state, options = {}) {
           if (text) {
             const chat = Array.isArray(entry.state.chat) ? entry.state.chat : [];
             chat.push({ role: "user", text });
-            const pending = { role: "graph", text: "Searching the Atlas…", pending: true, hits: [] };
+            const ask = entry.onChat;
+            const pending = {
+              role: "graph",
+              text: ask ? "Asking the session…" : "Searching the Atlas…",
+              pending: true,
+              hits: [],
+            };
             chat.push(pending);
             entry.state.chat = chat.slice(-50);
             broadcast(entry);
             sendJson(res, 200, snapshot(entry.state));
-            const ask = entry.onChat;
             Promise.resolve()
               .then(() => (ask ? ask(text, entry.state) : answerQuery(entry.state, text)))
               .then((reply) => {

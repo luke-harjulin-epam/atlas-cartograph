@@ -109,8 +109,9 @@ The viewer uses local fallback fonts; it does not fetch Google Fonts or other
 third-party UI assets.
 The small bottom-left badge shows the runtime version and abbreviated source SHA.
 Hover for the full SHA; `+ local` marks uncommitted runtime changes. Release
-archives carry their source identity. Unstamped deployments show `SHA unavailable`
-rather than borrowing the consumer project's commit.
+archives carry their source identity in stamped runtime metadata. Unstamped or
+placeholder deployments show `SHA unavailable` rather than borrowing the
+consumer project's commit.
 The adjacent FPS counter samples rendered frames once per second; `-- FPS`
 means a sample is not yet available. This measures rendering cadence, not GPU time.
 The footer has dedicated space below map controls and honours bottom safe areas.

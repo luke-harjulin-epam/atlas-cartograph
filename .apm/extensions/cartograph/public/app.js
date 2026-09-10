@@ -623,10 +623,13 @@ function renderChat() {
   drawer.classList.toggle("chat-open", chatOpen);
   mapEl?.classList.toggle("chat-open", chatOpen);
   toggle?.setAttribute("aria-pressed", chatOpen ? "true" : "false");
+  const sessionChat = state.chatMode === "session";
+  const kicker = $("chat-kicker");
+  if (kicker) kicker.textContent = sessionChat ? "Session chat" : "Local Atlas search";
   const msgs = state.chat || [];
   log.innerHTML = msgs
     .map((m) => {
-      const who = m.role === "user" ? "You" : "Graph";
+      const who = m.role === "user" ? "You" : sessionChat ? "Session" : "Search";
       const isGraph = m.role === "graph";
       const body = isGraph ? renderMarkdown(m.text || "") : escapeHtml(m.text || "");
       const hits = (m.hits || [])

@@ -44,10 +44,12 @@ try {
   cpSync(source, join(producer, ".apm/extensions/cartograph"), { recursive: true });
   const stagedRuntime = join(producer, ".apm/extensions/cartograph");
   const stagedMetadata = join(stagedRuntime, "package.json");
+  const stamped = { commit: buildInfo.commit, dirty: buildInfo.dirty };
   writeFileSync(stagedMetadata, `${JSON.stringify({
     ...JSON.parse(readFileSync(stagedMetadata, "utf8")),
-    cartographBuild: { commit: buildInfo.commit, dirty: buildInfo.dirty },
+    cartographBuild: stamped,
   }, null, 2)}\n`);
+  writeFileSync(join(stagedRuntime, "cartograph-build.json"), `${JSON.stringify(stamped, null, 2)}\n`);
   run(["experimental", "enable", "canvas"], producer);
   run(["install", "--frozen", "--dry-run", "--target", "copilot"], producer);
   run(["audit", "--ci"], producer);
@@ -131,10 +133,12 @@ try {
   assert.deepEqual(filesIn(deployed), sourceFiles, "Installed bundle must contain every runtime file");
   for (const file of sourceFiles) {
     assert.deepEqual(readFileSync(join(deployed, file)), readFileSync(join(stagedRuntime, file)), file);
-    if (file !== "package.json") {
+    if (file !== "package.json" && file !== "cartograph-build.json") {
       assert.deepEqual(readFileSync(join(deployed, file)), readFileSync(join(source, file)), file);
     }
   }
+  assert.deepEqual(JSON.parse(readFileSync(join(deployed, "cartograph-build.json"), "utf8")), stamped,
+    "Deployed canvas must retain the stamped build file");
   assert.deepEqual(readBuildInfo(deployed), buildInfo, "Deployed canvas must retain its source build identity");
   execFileSync(process.execPath, [
     "--import", join(repository, "test/helpers/native-canvas-register.mjs"),

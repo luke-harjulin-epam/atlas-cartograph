@@ -8,8 +8,9 @@ hand-authored; there is no generated marketplace site or documentation generator
 | --- | --- |
 | `extension.mjs` | Copilot canvas lifecycle, actions, session working directory |
 | `server.mjs` | Per-canvas loopback HTTP server, Atlas state, full-state SSE |
-| `build-info.mjs` | Runtime version/source SHA, release stamp and source-checkout dirty marker |
+| `build-info.mjs` | Runtime version/source SHA; Git on source checkouts, then package/file stamps |
 | `atlas/` | Store discovery, Markdown parsing, node linking and multi-Atlas merge |
+| `atlas/chat.mjs` | Host-session chat envelope and local-search fallback for HTTP/dev |
 | `atlas/schema.mjs` | Confined metadata-only schema catalog and deterministic ownership diagnostics |
 | `atlas/watch.mjs` | Replaceable, unprivileged open-root filesystem change source |
 | `atlas/live.mjs` | Debounced rescans, watcher status and explicit creation/deletion deltas |
@@ -357,8 +358,10 @@ metadata when supplied. Their POST bodies must be `application/json`.
 The collector continues to use its separate bearer authentication.
 
 Page loading confines lexical and canonical file paths to a mounted root.
-Qualified node IDs retain their Atlas during page lookup and chat excerpts;
-unqualified links prefer the selected page's Atlas. Full-graph loading consumes
+Qualified node IDs retain their Atlas during page lookup and local chat excerpts;
+unqualified links prefer the selected page's Atlas. Native canvas chat sends a
+compact store/selection envelope to `session.send` on the joined host session
+and does not load page bodies in the canvas process. Full-graph loading consumes
 all available batches instead of treating a partial scan as complete.
 
 Without an explicit root, initialization discovers the consumer workspace's

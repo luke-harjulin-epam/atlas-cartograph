@@ -15,7 +15,7 @@ import {
   startServer,
 } from "./server.mjs";
 import { isInstalledPath } from "./atlas/catalog.mjs";
-import { answerQuery } from "./atlas/chat.mjs";
+import { askHostSession } from "./atlas/chat.mjs";
 import { MIN_DURATION_MS, MAX_DURATION_MS } from "./activity/model.mjs";
 import { monitorProviders } from "./activity/providers/index.mjs";
 
@@ -239,7 +239,7 @@ const session = await joinSession({
           const state = freshState(cwd, input);
           openDefaultAtlases(state, input);
           entry = await startServer(ctx.instanceId, state, {
-            onChat: async (text, st) => answerQuery(st, text),
+            onChat: async (text, st) => askHostSession(session, text, st),
             activity: {
               scope: { mode: "session", rootPid: process.ppid, excludePids: [process.pid] },
             },
