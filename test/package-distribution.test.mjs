@@ -24,6 +24,7 @@ test("APM source contains every runtime import and aligns package versions", () 
   assert.equal(runtimeInfo.type, "module");
   assert.deepEqual(runtimeInfo.engines, packageInfo.engines);
   assert.ok(manifest.includes(`version: "${packageInfo.version}"`));
+  assert.match(manifest, /\n    - name: atlas\n      marketplace: atlas\n/);
   assert.match(manifest, /includes:\n  - \.apm\/extensions\/cartograph\n/);
   assert.ok(!existsSync(join(repository, "src")), "Canonical runtime has no duplicate src tree");
   for (const path of filesIn(runtime).filter((file) => /\.(mjs|js)$/.test(file))) {

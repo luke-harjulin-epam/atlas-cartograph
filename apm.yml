@@ -1,8 +1,11 @@
 name: atlas-cartograph
-version: "0.4.0"
+version: "0.4.1"
 description: Live Atlas knowledge-graph canvas for GitHub Copilot App
 targets:
   - copilot
-dependencies: {}
+dependencies:
+  apm:
+    - name: atlas
+      marketplace: atlas
 includes:
   - .apm/extensions/cartograph

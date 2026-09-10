@@ -1,5 +1,29 @@
 lockfile_version: '1'
-generated_at: '2026-09-05T17:25:41.633767+00:00'
-apm_version: 0.29.0
-dependencies: []
+generated_at: '2026-09-10T19:59:03.079012+00:00'
+apm_version: 0.30.0
+dependencies:
+- repo_url: sergio-sisternes-epam/atlas
+  name: atlas
+  host: github.com
+  resolved_commit: 579e8090273ce991ea0717abed0775dc03f28de2
+  resolved_ref: 579e8090273ce991ea0717abed0775dc03f28de2
+  version: 0.11.2
+  package_type: hybrid
+  content_hash: sha256:4b742d2074a56c7fbc5d0542a24c943b89e5eb429a4a67f1bbe063ca501dc0a4
+  discovered_via: atlas
+  marketplace_plugin_name: atlas
+  declared_license: Apache-2.0
+- repo_url: sergio-sisternes-epam/okf
+  name: okf
+  host: github.com
+  resolved_commit: 5246f7b193b58a32ac8a15fc76aedf37c42b042c
+  resolved_ref: 5246f7b193b58a32ac8a15fc76aedf37c42b042c
+  version: 0.2.1
+  depth: 2
+  resolved_by: sergio-sisternes-epam/atlas
+  package_type: hybrid
+  content_hash: sha256:48d5e79752e6a448975da0fef2981938f7c6149810e30aca805a77cf123a10d8
+  discovered_via: atlas
+  marketplace_plugin_name: okf
+  declared_license: Apache-2.0
 deployments: []
