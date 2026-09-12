@@ -45,6 +45,7 @@ try {
   const stagedRuntime = join(producer, ".apm/extensions/cartograph");
   const stagedMetadata = join(stagedRuntime, "package.json");
   const stamped = { commit: buildInfo.commit, dirty: buildInfo.dirty };
+  cpSync(join(repository, "LICENSE"), join(stagedRuntime, "LICENSE"));
   writeFileSync(stagedMetadata, `${JSON.stringify({
     ...JSON.parse(readFileSync(stagedMetadata, "utf8")),
     cartographBuild: stamped,
@@ -65,12 +66,12 @@ try {
   run(["pack", "--format", "plugin", "--target", "copilot", "--dry-run"], producer);
   run(["pack", "--format", "plugin", "--target", "copilot", "--archive", "--archive-format", "tar.gz"], producer);
   const archive = join(producer, "build", archiveName);
-  const sourceFiles = filesIn(source);
+  const stagedFiles = filesIn(stagedRuntime);
   const archiveFiles = execFileSync("tar", ["-tzf", archive], { encoding: "utf8" }).trim().split("\n").sort();
   const prefix = `atlas-cartograph-${version}/`;
   assert.deepEqual(archiveFiles, [
     `${prefix}apm.lock.yaml`, `${prefix}plugin.json`,
-    ...sourceFiles.map((file) => `${prefix}extensions/cartograph/${file}`),
+    ...stagedFiles.map((file) => `${prefix}extensions/cartograph/${file}`),
   ].sort(), "Archive must contain exactly the runtime and APM metadata");
   // APM's legacy plugin tar preserves workstation ownership in its headers.
   // Rearchive only the verified members; all content is audited after install.
@@ -138,10 +139,10 @@ try {
   run(["install", archive, "--target", "copilot"], consumer);
   run(["audit", "--ci"], consumer);
   const deployed = join(consumer, ".github/extensions/cartograph");
-  assert.deepEqual(filesIn(deployed), sourceFiles, "Installed bundle must contain every runtime file");
-  for (const file of sourceFiles) {
+  assert.deepEqual(filesIn(deployed), stagedFiles, "Installed bundle must contain every staged runtime file");
+  for (const file of stagedFiles) {
     assert.deepEqual(readFileSync(join(deployed, file)), readFileSync(join(stagedRuntime, file)), file);
-    if (file !== "package.json" && file !== "cartograph-build.json") {
+    if (file !== "LICENSE" && file !== "package.json" && file !== "cartograph-build.json") {
       assert.deepEqual(readFileSync(join(deployed, file)), readFileSync(join(source, file)), file);
     }
   }
@@ -160,7 +161,7 @@ try {
   assert.deepEqual(state.roots, [smokeRoot]);
   assert.ok(state.graph.nodes.length > 0);
   entry = await startServer("release-smoke", state, { activity: { platform: "unsupported" } });
-  for (const asset of sourceFiles.filter((file) => /^public\/.*\.(?:html|js|css)$/.test(file))) {
+  for (const asset of stagedFiles.filter((file) => /^public\/.*\.(?:html|js|css)$/.test(file))) {
     const response = await fetch(new URL(asset.slice("public/".length), entry.url));
     assert.equal(response.status, 200, asset);
     assert.equal(await response.text(), readFileSync(join(deployed, asset), "utf8"));
@@ -183,7 +184,7 @@ try {
   const commit = buildInfo.commit;
   writeFileSync(join(output, "release.json"), `${JSON.stringify({
     name: "atlas-cartograph", version, prerelease, commit, tag: process.env.TAG || null, apmVersion,
-    format: "plugin", archive: archiveName, sha256, runtimeFiles: sourceFiles.length,
+    format: "plugin", archive: archiveName, sha256, runtimeFiles: stagedFiles.length,
   }, null, 2)}\n`);
   console.log(`Ready: build/release/${archiveName}`);
 } finally {

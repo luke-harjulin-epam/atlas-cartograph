@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Atlas knowledge-graph viewer as a GitHub Copilot canvas",
+  "license": "Apache-2.0",
   "engines": { "node": ">=22" },
   "scripts": {
     "start": "node .apm/extensions/cartograph/dev.mjs",

@@ -85,8 +85,9 @@ canvas access to the validated identity printed by APM. Omitting the executable
 block enables legacy permissive behavior and is not an approval test. Do not grant
 other executable types to silence unrelated APM warnings.
 Keep lockfiles and canonical `.apm/` source; do not commit `apm_modules/`, built
-archives or local browser artifacts. A license has not been declared for this
-package; do not add an SPDX license without an explicit licensing decision.
+archives or local browser artifacts. The project is licensed under Apache
+License 2.0; keep the root license and SPDX declarations in `apm.yml` and both
+package manifests aligned.
 
 For renderer changes, inspect both WebGL and Canvas 2D paths, reduced-motion
 behavior, selection, and the return to baseline after activity expires.

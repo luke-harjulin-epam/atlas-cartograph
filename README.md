@@ -302,3 +302,9 @@ unreadable files as deletions.
 | `.github/extensions/cartograph/` | Repository-only development discovery shim |
 
 Run `npm test` for the test suite. See [contributing](CONTRIBUTING.md).
+
+## License
+
+Copyright 2026 Sergio Sisternes.
+
+Licensed under the [Apache License 2.0](LICENSE).
