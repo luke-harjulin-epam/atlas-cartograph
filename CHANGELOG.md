@@ -11,7 +11,8 @@
 
 - Restructure the root README to the family outline (Why, Install, Use,
   Related, Contributing, License). Extra depth stays in `docs/` and
-  `CONTRIBUTING.md`.
+  `CONTRIBUTING.md`. README Install documents only the public marketplace
+  path (`atlas-cartograph@atlas`); `--name atlas` is required.
 
 - Point consumer APM install at the public Atlas family catalog
   (`sergio-sisternes-epam/atlas-marketplace`) with

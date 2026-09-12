@@ -22,26 +22,7 @@ apm marketplace add sergio-sisternes-epam/atlas-marketplace --name atlas
 apm install atlas-cartograph@atlas
 ```
 
-Use an APM version with experimental canvas support (validated with 0.30.0)
-and Copilot App canvas support. Canvas packages execute code; review and trust
-this package before installing it.
-
-Cartograph is in the public Atlas family catalog
-[`sergio-sisternes-epam/atlas-marketplace`](https://github.com/sergio-sisternes-epam/atlas-marketplace)
-and depends on `atlas` from the same marketplace (`atlas@atlas`). Enable
-experimental canvases (`apm experimental enable canvas`) and merge this
-canvas-only approval into the consuming project's `apm.yml` before install:
-
-```yaml
-executables:
-  allow:
-    sergio-sisternes-epam/atlas-cartograph:
-      canvas: true
-```
-
-Reload project extensions and open **Cartograph**. Offline archives use the
-exact `name#version@sha256:<digest>` key printed by `apm install`; grant only
-`canvas: true` under that key. See [usage](docs/usage.md) for approval details.
+`--name atlas` is required so the package resolves as `atlas-cartograph@atlas`.
 
 ## Use
 
