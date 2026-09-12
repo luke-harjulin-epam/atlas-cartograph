@@ -365,17 +365,11 @@ Auto-generated notes use `.github/release.yml` and PR labels.
 After downloading the release assets, verify with
 `shasum -a 256 -c atlas-cartograph-X.Y.Z.tar.gz.sha256` (or `sha256sum -c` on
 Linux), then install the archive with APM's experimental canvas support and
-the appropriate consumer approval. Public consumers install from the Atlas
-family catalog:
-
-```sh
-apm marketplace add sergio-sisternes-epam/atlas-marketplace --name atlas
-apm install atlas-cartograph@atlas
-```
-
-Source installation pinned to `#vX.Y.Z` remains supported. Do not send
-consumers to `epam-agent-forge/apm-marketplace` or
-`sergio-sisternes-epam/apm-marketplace` for this package.
+the appropriate consumer approval. Source installation pinned to `#vX.Y.Z`
+remains supported. Do not send consumers to
+`epam-agent-forge/apm-marketplace` or `sergio-sisternes-epam/apm-marketplace`
+for this package. Catalog install is post-handoff consumer verification
+below, not a substitute for installing the downloaded archive.
 
 If validation or building fails, nothing is published. If uploading or final
 publication fails, inspect the retained draft and failed run before recovery.

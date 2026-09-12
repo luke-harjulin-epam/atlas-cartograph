@@ -74,15 +74,11 @@ this package before installing it.
 Cartograph is in the public Atlas family catalog
 [`sergio-sisternes-epam/atlas-marketplace`](https://github.com/sergio-sisternes-epam/atlas-marketplace).
 It depends on `atlas` from the same marketplace (`name: atlas` /
-`marketplace: atlas`). Register that catalog, then install Cartograph from it:
-
-```sh
-apm marketplace add sergio-sisternes-epam/atlas-marketplace --name atlas
-apm install atlas-cartograph@atlas
-```
+`marketplace: atlas`).
 
 In the consuming project's `apm.yml`, merge this canvas-only approval with any
-existing executable settings. Initialize an APM project first if needed.
+existing executable settings before install. Initialize an APM project first if
+needed.
 
 ```yaml
 executables:
@@ -95,11 +91,13 @@ APM 0.30.0 checks the source dependency reference for canvas approval;
 `apm approve` can record a different package identity. Use the explicit
 repository-key grant above rather than granting unrelated executable types.
 
-From the consuming project, enable experimental canvases before install if
-they are not already enabled:
+Enable experimental canvases, register the family catalog, then install
+Cartograph from it:
 
 ```sh
 apm experimental enable canvas
+apm marketplace add sergio-sisternes-epam/atlas-marketplace --name atlas
+apm install atlas-cartograph@atlas
 ```
 
 Publishing a GitHub release does not update the family catalog or existing
