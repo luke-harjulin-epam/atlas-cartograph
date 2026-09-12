@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Changed
+
+- License the project under Apache License 2.0 and declare the license in the
+  APM and npm package metadata.
+
 ## 0.4.1 - 2026-09-10
 
 ### Changed
