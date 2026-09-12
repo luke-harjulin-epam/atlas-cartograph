@@ -50,12 +50,27 @@ limit or encountering unreadable content reports an error rather than silently
 opening a partial graph. Existing environment presets remain picker choices,
 not automatic mounts.
 
-See [APM installation](../README.md#install) to register the public
-Atlas family catalog (`sergio-sisternes-epam/atlas-marketplace`) and install
-with `apm install atlas-cartograph@atlas`, including experimental canvas
-enablement and package approval. Reloading extensions after an APM install
-loads the deployed canvas. The OS read collector is still separately started
-by the user; installing the package does not elevate privileges.
+See [Install](../README.md#install) to register the public Atlas family catalog
+and run `apm install atlas-cartograph@atlas`. Reloading extensions after an APM
+install loads the deployed canvas. The OS read collector is still separately
+started by the user; installing the package does not elevate privileges.
+
+### Canvas approval
+
+Canvas packages execute code. Before `apm install`, merge this canvas-only
+grant into the consuming project's `apm.yml` (initialize an APM project first
+if needed):
+
+```yaml
+executables:
+  allow:
+    sergio-sisternes-epam/atlas-cartograph:
+      canvas: true
+```
+
+Do not grant other executable types. Offline archives use the exact
+`name#version@sha256:<digest>` key printed by `apm install`; grant only
+`canvas: true` under that key.
 
 ### Native workspace resolution
 
