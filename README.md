@@ -21,6 +21,10 @@ external file accesses illuminate the graph in a Space-themed visualiser. Search
 open Atlas; Layers follows declared schema types and still keeps unknown pages
 available.
 
+Cartograph is a viewer, not a physics simulation: layout is deterministic visual
+organization and does not invent relationships. Atlas mounts are data, not
+executable code.
+
 ## Install
 
 ```bash
