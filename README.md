@@ -1,6 +1,12 @@
 # atlas-cartograph
 
-Cartograph is an Atlas knowledge-graph viewer for GitHub Copilot App canvases.
+Cartograph is an Atlas knowledge-graph viewer for the GitHub Copilot App.
+
+<p align="center">
+  <img src="docs/images/hero-activity.png" width="32%" alt="Cartograph graph with chat and knowledge activation">
+  <img src="docs/images/hero-preview.png" width="32%" alt="Cartograph page preview">
+  <img src="docs/images/hero-galaxy.png" width="32%" alt="Cartograph galaxy overview">
+</p>
 
 ## Why / what this is not
 
@@ -18,7 +24,8 @@ catalog or existing installs.
 ## Install
 
 ```bash
-apm marketplace add sergio-sisternes-epam/atlas-marketplace --name atlas
+apm experimental enable canvas # Enables Canvas deployment. This is an experimental feature in APM
+apm marketplace add sergio-sisternes-epam/atlas-marketplace --name atlas # Install the Canvas
 apm install atlas-cartograph@atlas
 ```
 
@@ -32,8 +39,8 @@ are found, it shows the store picker.
 
 From a source checkout (Node.js 22 or later; no npm install or build):
 
-```sh
-npm start
+```markdown
+Copilot, mount the project Atlas and open Cartograph
 ```
 
 Open the printed local URL. If both a project and user extension are listed,
