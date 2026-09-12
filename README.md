@@ -67,19 +67,18 @@ links stay within the named Atlas and work with one or multiple stores open.
 
 ## Install with APM
 
-Use an APM version with experimental canvas support (validated with 0.30.0),
-repository access, and Copilot App canvas support. Canvas packages execute code;
-review and trust this package before installing it.
-This package depends on `atlas` from marketplace `atlas`
-(`sergio-sisternes-epam/atlas-marketplace`). Register that marketplace before
-install if it is not already present:
+Use an APM version with experimental canvas support (validated with 0.30.0)
+and Copilot App canvas support. Canvas packages execute code; review and trust
+this package before installing it.
 
-```sh
-apm marketplace add sergio-sisternes-epam/atlas-marketplace --name atlas
-```
+Cartograph is in the public Atlas family catalog
+[`sergio-sisternes-epam/atlas-marketplace`](https://github.com/sergio-sisternes-epam/atlas-marketplace).
+It depends on `atlas` from the same marketplace (`name: atlas` /
+`marketplace: atlas`).
 
 In the consuming project's `apm.yml`, merge this canvas-only approval with any
-existing executable settings. Initialize an APM project first if needed.
+existing executable settings before install. Initialize an APM project first if
+needed.
 
 ```yaml
 executables:
@@ -92,21 +91,17 @@ APM 0.30.0 checks the source dependency reference for canvas approval;
 `apm approve` can record a different package identity. Use the explicit
 repository-key grant above rather than granting unrelated executable types.
 
-From the consuming project:
+Enable experimental canvases, register the family catalog, then install
+Cartograph from it:
 
 ```sh
 apm experimental enable canvas
-apm install sergio-sisternes-epam/atlas-cartograph --target copilot
+apm marketplace add sergio-sisternes-epam/atlas-marketplace --name atlas
+apm install atlas-cartograph@atlas
 ```
 
-Install from a ref containing `apm.yml`. Use `#<tag-or-commit>` on the package
-reference to pin a version. `#v0.3.0` is the latest published release;
-use `#v0.4.0` once its release is published.
-
-The private [marketplace](https://github.com/sergio-sisternes-epam/apm-marketplace)
-pins releases separately. Publishing a GitHub release does not update its catalog
-or existing installations automatically. Consumers need access to both private
-repositories; maintainers should follow the
+Publishing a GitHub release does not update the family catalog or existing
+installations automatically. Maintainers should follow the
 [marketplace handoff](CONTRIBUTING.md#marketplace-handoff).
 
 Reload project extensions and open **Cartograph**. APM deploys the complete
@@ -207,7 +202,7 @@ uploads everything to a draft and rechecks its tag and assets before publishing,
 and refuses to overwrite an existing release. It uses only the built-in
 `GITHUB_TOKEN`, with write
 permission limited to the two publication jobs; no npm or Docker credentials
-are needed. Releases retain this repository's access restrictions.
+are needed.
 
 See [contributing](CONTRIBUTING.md#release-procedure) for tagging and recovery.
 

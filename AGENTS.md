@@ -13,10 +13,13 @@
   requires a matching SemVer tag in main history, completed checks and verified
   artifacts; never publish from PR events or replace an existing release.
 - Marketplace publication is a separate reviewed change in
-  `sergio-sisternes-epam/apm-marketplace`. Its catalog pins a released version
+  `sergio-sisternes-epam/atlas-marketplace`. Its catalog pins a released version
   and commit; publish the source release before updating that pin. Regenerate
   its catalog from its authoritative manifest rather than editing generated
   output. Neither publication automatically updates existing consumer installs.
+  Consumers register that catalog and install with
+  `apm install atlas-cartograph@atlas`. Do not send them to
+  `epam-agent-forge/apm-marketplace` or `sergio-sisternes-epam/apm-marketplace`.
 - Keep CI actions commit-pinned and the APM download checksum-pinned. Use
   `scripts/package-apm.mjs` for isolated release packaging and producer/consumer
   lockfile audits; do not edit generated plugin manifests or install over the
