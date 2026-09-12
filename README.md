@@ -2,11 +2,9 @@
 
 Cartograph is an Atlas knowledge-graph viewer for the GitHub Copilot App.
 
-<p align="center">
-  <img src="docs/images/hero-activity.png" width="32%" alt="Cartograph graph with chat and knowledge activation">
-  <img src="docs/images/hero-preview.png" width="32%" alt="Cartograph page preview">
-  <img src="docs/images/hero-galaxy.png" width="32%" alt="Cartograph galaxy overview">
-</p>
+| Graph and chat | Page preview | Galaxy |
+| :---: | :---: | :---: |
+| ![Cartograph graph with chat and knowledge activation](./docs/images/hero-activity.png) | ![Cartograph page preview](./docs/images/hero-preview.png) | ![Cartograph galaxy overview](./docs/images/hero-galaxy.png) |
 
 ## Why / what this is not
 
