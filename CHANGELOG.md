@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added
+
+- GitHub issue and pull request templates for bugs, features, and contribution
+  checks.
+
 ### Changed
 
 - License the project under Apache License 2.0, copyright 2026 Sergio
