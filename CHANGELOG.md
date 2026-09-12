@@ -9,6 +9,10 @@
 
 ### Changed
 
+- Restructure the root README to the family outline (Why, Install, Use,
+  Related, Contributing, License). Extra depth stays in `docs/` and
+  `CONTRIBUTING.md`.
+
 - Point consumer APM install at the public Atlas family catalog
   (`sergio-sisternes-epam/atlas-marketplace`) with
   `apm marketplace add sergio-sisternes-epam/atlas-marketplace --name atlas`

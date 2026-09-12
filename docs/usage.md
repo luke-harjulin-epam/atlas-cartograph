@@ -50,7 +50,7 @@ limit or encountering unreadable content reports an error rather than silently
 opening a partial graph. Existing environment presets remain picker choices,
 not automatic mounts.
 
-See [APM installation](../README.md#install-with-apm) to register the public
+See [APM installation](../README.md#install) to register the public
 Atlas family catalog (`sergio-sisternes-epam/atlas-marketplace`) and install
 with `apm install atlas-cartograph@atlas`, including experimental canvas
 enablement and package approval. Reloading extensions after an APM install
