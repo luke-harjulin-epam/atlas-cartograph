@@ -365,8 +365,17 @@ Auto-generated notes use `.github/release.yml` and PR labels.
 After downloading the release assets, verify with
 `shasum -a 256 -c atlas-cartograph-X.Y.Z.tar.gz.sha256` (or `sha256sum -c` on
 Linux), then install the archive with APM's experimental canvas support and
-the appropriate consumer approval. Source installation pinned to `#vX.Y.Z`
-remains supported; no separate package registry is involved.
+the appropriate consumer approval. Public consumers install from the Atlas
+family catalog:
+
+```sh
+apm marketplace add sergio-sisternes-epam/atlas-marketplace --name atlas
+apm install atlas-cartograph@atlas
+```
+
+Source installation pinned to `#vX.Y.Z` remains supported. Do not send
+consumers to `epam-agent-forge/apm-marketplace` or
+`sergio-sisternes-epam/apm-marketplace` for this package.
 
 If validation or building fails, nothing is published. If uploading or final
 publication fails, inspect the retained draft and failed run before recovery.
@@ -377,8 +386,8 @@ delete/recreate a published release or force-move a tag: ship a new version.
 
 ### Marketplace handoff
 
-The private
-[`sergio-sisternes-epam/apm-marketplace`](https://github.com/sergio-sisternes-epam/apm-marketplace)
+The public
+[`sergio-sisternes-epam/atlas-marketplace`](https://github.com/sergio-sisternes-epam/atlas-marketplace)
 catalog pins Cartograph by version and commit. Source release publication does
 not advance that pin. Follow the marketplace's own contribution guidance for
 the separate catalog PR:
@@ -393,6 +402,8 @@ the separate catalog PR:
    and `CONTRIBUTING.md`. Never hand-edit the generated catalog.
 4. Require `validate-and-pack` and maintainer review before merging. That merge
    publishes the catalog change; no separate marketplace release is required.
-5. In an approved consumer, refresh/update the package and confirm it resolves
-   the released SHA. Consumers need access to both private repositories, and
-   existing lockfiles/installations must not be assumed to update automatically.
+5. In an approved consumer, register the family catalog if needed
+   (`apm marketplace add sergio-sisternes-epam/atlas-marketplace --name atlas`),
+   refresh/update with `apm install atlas-cartograph@atlas`, and confirm it
+   resolves the released SHA. Existing lockfiles/installations must not be
+   assumed to update automatically.

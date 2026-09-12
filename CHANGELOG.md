@@ -9,6 +9,13 @@
 
 ### Changed
 
+- Point consumer APM install at the public Atlas family catalog
+  (`sergio-sisternes-epam/atlas-marketplace`) with
+  `apm marketplace add sergio-sisternes-epam/atlas-marketplace --name atlas`
+  and `apm install atlas-cartograph@atlas`. Drop the private
+  `apm-marketplace` install path and dual-private-repository access
+  requirement.
+
 - License the project under Apache License 2.0, copyright 2026 Sergio
   Sisternes, and declare the license in the APM and npm package metadata.
 
