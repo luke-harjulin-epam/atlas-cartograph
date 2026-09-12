@@ -27,6 +27,9 @@ executable code.
 
 ## Install
 
+Grant only `canvas: true` for this package before install; see
+[canvas approval](docs/usage.md#canvas-approval).
+
 ```bash
 apm experimental enable canvas
 apm marketplace add sergio-sisternes-epam/atlas-marketplace --name atlas
@@ -35,7 +38,6 @@ apm install atlas-cartograph@atlas
 
 `--name atlas` is required so the package resolves as `atlas-cartograph@atlas`.
 `apm marketplace add` registers the family catalog; `apm install` installs the canvas.
-Grant only `canvas: true` for this package; see [canvas approval](docs/usage.md#canvas-approval).
 
 ## Use
 
