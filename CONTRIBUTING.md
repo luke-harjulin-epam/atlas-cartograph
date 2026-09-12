@@ -1,5 +1,22 @@
 # Contributing
 
+## Issues and pull requests
+
+Use the GitHub issue templates in `.github/ISSUE_TEMPLATE/` for bugs and
+feature requests. Report vulnerabilities through a
+[private security advisory](https://github.com/sergio-sisternes-epam/atlas-cartograph/security/advisories/new);
+do not file public issues for them.
+
+External substantive work needs a linked issue first. Maintainer-authored
+small docs or maintenance may skip that wait.
+
+A human must approve the scope before an agent implements the change, except
+for maintainer-authored small docs or maintenance. The pull request author
+owns any agent-generated diffs and must not open the pull request as an
+unattended GitHub author. Use
+[`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md) when
+opening a pull request.
+
 Use Node.js 22 or later. There are no npm dependencies to install.
 
 Keep runtime code in `.apm/extensions/cartograph/` and documentation in `docs/`.
