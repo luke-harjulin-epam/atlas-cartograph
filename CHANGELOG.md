@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Changed
+
+- Align the APM package description with the README: Cartograph is an Atlas
+  knowledge-graph viewer for the GitHub Copilot App.
+
 ## 0.4.2 - 2026-09-13
 
 ### Added
