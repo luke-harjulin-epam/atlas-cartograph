@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.4.2 - 2026-09-13
+
 ### Added
 
 - GitHub issue and pull request templates for bugs, features, and contribution
@@ -24,6 +26,7 @@
 
 - License the project under Apache License 2.0, copyright 2026 Sergio
   Sisternes, and declare the license in the APM and npm package metadata.
+  The published 0.4.2 tree includes the Apache-2.0 LICENSE file.
 
 ## 0.4.1 - 2026-09-10
 

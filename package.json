@@ -1,6 +1,6 @@
 {
   "name": "atlas-cartograph",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "private": true,
   "type": "module",
   "description": "Atlas knowledge-graph viewer as a GitHub Copilot canvas",
