@@ -1,6 +1,6 @@
 name: atlas-cartograph
 version: "0.4.2"
-description: Live Atlas knowledge-graph canvas for GitHub Copilot App
+description: "Cartograph is an Atlas knowledge-graph viewer for the GitHub Copilot App."
 license: Apache-2.0
 targets:
   - copilot
