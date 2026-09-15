@@ -75,6 +75,19 @@ test("base declarations include types outside the legacy rendering set and empty
   assert.deepEqual(graph.schemaDiagnostics, []);
 });
 
+test("CRLF frontmatter preserves declared schema types", (t) => {
+  const { root, cwd } = fixture(t);
+  put(root, "windows.md", [
+    "---", "type: document", "title: Windows document", "---", "",
+    "Content written with Windows line endings.",
+  ].join("\r\n"));
+  const graph = loadFullGraph(root, cwd, { strict: true });
+  const node = graph.nodes.find((item) => item.path === "windows.md");
+  assert.equal(node.declaredType, "document");
+  assert.equal(node.typeKey, graph.schemas[0].types.find((type) => type.id === "document").key);
+  assert.deepEqual(nodeCategory(node), { key: node.typeKey, label: "Core" });
+});
+
 test("navigation indexes, undeclared types and untyped pages remain distinct without changing type identity", (t) => {
   const { root, cwd } = fixture(t);
   put(root, "typed/index.md", "---\ntype: index\ntitle: Explicit index\n---\n");
