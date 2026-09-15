@@ -256,7 +256,9 @@ a few distant halo points to make an otherwise thin disk look three-dimensional.
 Core lighting is shared by WebGL and Canvas 2D.
 
 The home view starts obliquely and rotates at the original idle speed
-(0.16 radians per second). Selection and reduced motion still stop idle rotation.
+(0.16 radians per second) by default. Options → Layout **Idle rotation** scales
+that spin from 0 to 2× and remembers the multiplier in this browser. Selection
+and reduced motion still stop idle rotation.
 Drag to orbit freely; activation following still turns toward active nodes.
 The expanding decorative pulse stays at each galaxy's projected core. With a
 node selected, it follows that node instead, including during pan, zoom and

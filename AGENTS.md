@@ -62,7 +62,8 @@
   Proximity's existing layout and never infer new relationships from placement.
   Fill the spiral arms' bounded volume with meaningful vertical depth; measure
   the bulk side profile, not just extreme halo points. Start at an oblique angle
-  and retain the original 0.16-radian/second idle rotation, yielding to selection,
+  and retain the original 0.16-radian/second idle rotation as the default 1×,
+  with Layout scaling it from 0 to 2×, yielding to selection,
   manual orbit and reduced motion. Share core decoration, overview detail and camera behavior
   across WebGL and Canvas 2D. Overview edges remain visible; zoom, search,
   selection and active/hovered nodes retain access to labels.

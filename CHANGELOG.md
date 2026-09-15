@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added
+
+- Layout Options slider for idle galaxy rotation, from 0 to 2× the original
+  0.16 rad/s, remembered in the browser.
+
 ### Changed
 
 - Align the APM package description with the README: Cartograph is an Atlas

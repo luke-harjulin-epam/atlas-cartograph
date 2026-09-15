@@ -12,6 +12,7 @@ import { mountSchemaLayers } from "../.apm/extensions/cartograph/public/schema-l
 import { nodeSearchText } from "../.apm/extensions/cartograph/public/node-search.js";
 import { escapeHtml, renderMarkdown } from "../.apm/extensions/cartograph/public/markdown.js";
 import { FrontendEvent, frontendDocument } from "./helpers/frontend-dom.mjs";
+import { clampIdleRotationMultiplier } from "../.apm/extensions/cartograph/public/graph-canvas.js";
 
 const html = readFileSync(new URL("../.apm/extensions/cartograph/public/index.html", import.meta.url), "utf8");
 const app = readFileSync(new URL("../.apm/extensions/cartograph/public/app.js", import.meta.url), "utf8");
@@ -44,6 +45,55 @@ test("floating status bar groups activation and independent zoom outside the gra
   assert.equal(document.getElementById("activity-connect").getAttribute("aria-controls"), "activity-setup");
   renderers[0].onReducedMotion(true);
   assert.equal(document.getElementById("activity-camera-status").textContent, "true");
+});
+
+test("Layout idle rotation slider applies live, persists, and restores 1× from invalid storage", () => {
+  const section = () => document.getElementById("options-layout-title").closest(".options-section");
+  let { document, renderers, idleRotations, localStorage } = appFixture();
+  const slider = document.getElementById("idle-rotation");
+  const output = document.getElementById("idle-rotation-value");
+  assert.equal(section().contains(slider), true);
+  assert.equal(slider.getAttribute("min"), "0");
+  assert.equal(slider.getAttribute("max"), "2");
+  assert.equal(slider.getAttribute("step"), "0.05");
+  assert.equal(slider.value, "1");
+  assert.equal(slider.getAttribute("aria-valuetext"), "1×");
+  assert.equal(output.textContent, "1×");
+  assert.equal(renderers[0].idleRotation, 1);
+  slider.value = "0.5";
+  slider.dispatchEvent(new FrontendEvent("input"));
+  assert.equal(output.textContent, "0.5×");
+  assert.equal(slider.getAttribute("aria-valuetext"), "0.5×");
+  assert.equal(idleRotations.at(-1), 0.5);
+  assert.equal(localStorage.getItem("cartograph.idle-rotation"), "0.5");
+
+  ({ document, renderers } = appFixture({ localStorage: memoryStorage({ "cartograph.idle-rotation": "2" }) }));
+  assert.equal(document.getElementById("idle-rotation").value, "2");
+  assert.equal(document.getElementById("idle-rotation-value").textContent, "2×");
+  assert.equal(renderers[0].idleRotation, 2);
+
+  ({ document, renderers, localStorage } = appFixture({ localStorage: memoryStorage({ "cartograph.idle-rotation": "fast" }) }));
+  assert.equal(document.getElementById("idle-rotation").value, "1");
+  assert.equal(document.getElementById("idle-rotation-value").textContent, "1×");
+  assert.equal(renderers[0].idleRotation, 1);
+  document.getElementById("idle-rotation").value = "0";
+  document.getElementById("idle-rotation").dispatchEvent(new FrontendEvent("change"));
+  assert.equal(document.getElementById("idle-rotation-value").textContent, "0×");
+  assert.equal(localStorage.getItem("cartograph.idle-rotation"), "0");
+});
+
+test("Layout idle rotation survives storage read/write failures", () => {
+  const blocked = {
+    getItem() { throw new Error("blocked"); },
+    setItem() { throw new Error("quota"); },
+  };
+  const { document, renderers, idleRotations } = appFixture({ localStorage: blocked });
+  assert.equal(document.getElementById("idle-rotation").value, "1");
+  assert.equal(renderers[0].idleRotation, 1);
+  document.getElementById("idle-rotation").value = "1.5";
+  document.getElementById("idle-rotation").dispatchEvent(new FrontendEvent("input"));
+  assert.equal(idleRotations.at(-1), 1.5);
+  assert.equal(document.getElementById("idle-rotation-value").textContent, "1.5×");
 });
 
 test("View popup replaces the island row, selects keyed views and returns to All", () => {
@@ -220,13 +270,23 @@ function controlsFixture(layersRevision = 0) {
   return { controls, calls, changes };
 }
 
-function appFixture({ reducedMotion = false, phase = "map", clusters = [], onChatSerialize = () => {} } = {}) {
+function memoryStorage(initial = {}) {
+  const data = new Map(Object.entries(initial));
+  return {
+    getItem(key) { return data.has(key) ? data.get(key) : null; },
+    setItem(key, value) { data.set(String(key), String(value)); },
+    removeItem(key) { data.delete(key); },
+  };
+}
+
+function appFixture({ reducedMotion = false, phase = "map", clusters = [], onChatSerialize = () => {}, localStorage = memoryStorage() } = {}) {
   const document = frontendDocument(html);
   const calls = [];
   const opened = [];
   const queries = [];
   const graphs = [];
   const renderers = [];
+  const idleRotations = [];
   const flights = [];
   let focusedCluster = null;
   const streams = [];
@@ -270,7 +330,7 @@ function appFixture({ reducedMotion = false, phase = "map", clusters = [], onCha
       },
     },
     document, allNodeLayersOn, createLayerControls, createStateControls, handleContentClick, mountNodeBrowser, escapeHtml, renderMarkdown,
-    renderExternalSources, sourceKind,
+    renderExternalSources, sourceKind, clampIdleRotationMultiplier, localStorage,
     fallbackLayerLabel, nodeCategory, nodeLayer, layerCounts, mountSchemaLayers, nodeSearchText,
     window: {
       matchMedia: () => motion, open: (...args) => opened.push(args),
@@ -298,6 +358,7 @@ function appFixture({ reducedMotion = false, phase = "map", clusters = [], onCha
         setActivity(activity) { activities.push(activity); }, clusters: () => clusters,
         focusCluster: () => focusedCluster,
         flyTo(key) { focusedCluster = key; flights.push(key); options.onCluster?.(); },
+        setIdleRotation(value) { idleRotations.push(value); },
       };
     },
     EventSource: class {
@@ -324,7 +385,7 @@ function appFixture({ reducedMotion = false, phase = "map", clusters = [], onCha
   function apply(next) { return vm.runInContext(`applyState(${JSON.stringify(next)})`, context); }
   apply(initial);
   return {
-    document, calls, opened, queries, graphs, renderers, flights, timers, bootstrap, apply, activities, activityStatuses,
+    document, calls, opened, queries, graphs, renderers, idleRotations, localStorage, flights, timers, bootstrap, apply, activities, activityStatuses,
     frames, drawings, motionListeners, resizeObservers, windowListeners,
     frame() {
       clock += 16;

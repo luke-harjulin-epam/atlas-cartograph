@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
-import { mountGraphCanvas } from "../.apm/extensions/cartograph/public/graph-canvas.js";
+import { mountGraphCanvas, clampIdleRotationMultiplier, IDLE_ROTATION_RAD_PER_SEC } from "../.apm/extensions/cartograph/public/graph-canvas.js";
 import { createGraphGL, GraphGL } from "../.apm/extensions/cartograph/public/graph-gl.js";
 import { ActivityPlayback, ACTIVITY_SPACING_MS } from "../.apm/extensions/cartograph/public/activity-playback.js";
 import { ActivityCamera } from "../.apm/extensions/cartograph/public/activity-camera.js";
@@ -514,6 +514,54 @@ test("galaxies restore the original idle rotation while selection and reduced mo
   step(31060);
   const reduced = angles.at(-1);
   step(32060);
+  assert.equal(angles.at(-1), reduced);
+});
+
+test("idle rotation multiplier clamps to 0–2 and treats invalid values as 1×", () => {
+  assert.equal(clampIdleRotationMultiplier(1), 1);
+  assert.equal(clampIdleRotationMultiplier(0), 0);
+  assert.equal(clampIdleRotationMultiplier(2), 2);
+  assert.equal(clampIdleRotationMultiplier(-0.5), 0);
+  assert.equal(clampIdleRotationMultiplier(9), 2);
+  assert.equal(clampIdleRotationMultiplier("1.5"), 1.5);
+  assert.equal(clampIdleRotationMultiplier(""), 1);
+  assert.equal(clampIdleRotationMultiplier(null), 1);
+  assert.equal(clampIdleRotationMultiplier(undefined), 1);
+  assert.equal(clampIdleRotationMultiplier("fast"), 1);
+  assert.equal(clampIdleRotationMultiplier(Number.NaN), 1);
+  assert.equal(IDLE_ROTATION_RAD_PER_SEC, 0.16);
+});
+
+test("idle rotation speed scales yaw and still yields to selection and reduced motion", (t) => {
+  const angles = [];
+  const update = ActivityCamera.prototype.update;
+  t.mock.method(ActivityCamera.prototype, "update", function(nodes, camera, ...rest) {
+    angles.push(camera.yaw);
+    return update.call(this, nodes, camera, ...rest);
+  });
+  const { map, step, preference } = fixture(t, { reduce: false });
+  map.setGraph(nodes, edges, "layers", changes(0));
+  map.setIdleRotation(2);
+  for (let time = 0; time <= 30000; time += 20) step(time);
+  const before = angles.at(-1);
+  for (let time = 30020; time <= 31000; time += 20) step(time);
+  assert.ok(Math.abs(angles.at(-1) - before - 0.32) < 1e-8);
+  map.setIdleRotation(0);
+  step(31020);
+  const stopped = angles.at(-1);
+  for (let time = 31040; time <= 32000; time += 20) step(time);
+  assert.equal(angles.at(-1), stopped);
+  map.setIdleRotation(2);
+  map.setSelected("a");
+  step(32020);
+  const selected = angles.at(-1);
+  step(33020);
+  assert.equal(angles.at(-1), selected);
+  map.setSelected(null);
+  preference.fire("change", { matches: true });
+  step(33040);
+  const reduced = angles.at(-1);
+  step(34040);
   assert.equal(angles.at(-1), reduced);
 });
 

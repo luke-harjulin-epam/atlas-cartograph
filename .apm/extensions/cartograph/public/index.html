@@ -241,7 +241,12 @@
                 <button class="layer" data-grouping="atlases" type="button">Atlases</button>
                 <button class="layer" data-grouping="proximity" type="button">Proximity</button>
               </div>
-              <div id="layout-info" hidden><p>Layers groups pages by type and schema. Atlases groups by store. Proximity uses folder and relationship neighborhoods.</p><p>Layout changes placement, not relationships or schema membership. Use View in the status bar to focus a group.</p></div>
+              <div class="idle-rotation">
+                <label for="idle-rotation">Idle rotation</label>
+                <output id="idle-rotation-value" for="idle-rotation">1×</output>
+                <input id="idle-rotation" type="range" min="0" max="2" step="0.05" value="1" aria-valuetext="1×" />
+              </div>
+              <div id="layout-info" hidden><p>Layers groups pages by type and schema. Atlases groups by store. Proximity uses folder and relationship neighborhoods.</p><p>Layout changes placement, not relationships or schema membership. Use View in the status bar to focus a group.</p><p>Idle rotation is the home-view spin. 1× is 0.16 radians per second. 0 stops it. Selection and reduced motion still stop rotation without clearing this setting.</p></div>
             </section>
             <section class="options-section" aria-labelledby="options-layers-title">
               <div class="options-section-head">

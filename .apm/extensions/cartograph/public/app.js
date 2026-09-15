@@ -1,4 +1,4 @@
-import { mountGraphCanvas } from "./graph-canvas.js";
+import { mountGraphCanvas, clampIdleRotationMultiplier } from "./graph-canvas.js";
 import { escapeHtml, renderMarkdown } from "./markdown.js";
 import { mountActivityControls } from "./activity-controls.js";
 import { mountMenuInfo } from "./menu-info.js";
@@ -27,6 +27,39 @@ The map remembers so you don't
 have to grep the dark.`;
 
 const $ = (id) => document.getElementById(id);
+const IDLE_ROTATION_STORAGE_KEY = "cartograph.idle-rotation";
+
+function idleRotationText(value) {
+  return `${String(Number(clampIdleRotationMultiplier(value).toFixed(2)))}×`;
+}
+
+function readIdleRotation() {
+  try {
+    return clampIdleRotationMultiplier(localStorage.getItem(IDLE_ROTATION_STORAGE_KEY));
+  } catch {
+    return 1;
+  }
+}
+
+function writeIdleRotation(value) {
+  try {
+    localStorage.setItem(IDLE_ROTATION_STORAGE_KEY, String(clampIdleRotationMultiplier(value)));
+  } catch { /* private mode or quota */ }
+}
+
+function applyIdleRotation(multiplier, persist = false) {
+  const value = clampIdleRotationMultiplier(multiplier);
+  const label = idleRotationText(value);
+  const slider = $("idle-rotation");
+  const output = $("idle-rotation-value");
+  if (slider) {
+    slider.value = String(value);
+    slider.setAttribute("aria-valuetext", label);
+  }
+  if (output && output.textContent !== label) output.textContent = label;
+  map?.setIdleRotation(value);
+  if (persist) writeIdleRotation(value);
+}
 const menuInfo = mountMenuInfo(document);
 const phases = {
   crawl: $("phase-crawl"),
@@ -242,6 +275,7 @@ function ensureMap() {
     zoomControls: $("status-zoom"),
     onReducedMotion: (reduced) => activityControls.setReducedMotion(reduced),
     autoFocus: activityControls.autoFocusEnabled(),
+    idleRotation: clampIdleRotationMultiplier($("idle-rotation")?.value),
     onPlayback: (playback) => activityControls.setPlayback(playback),
     onFrameRate: (fps) => {
       $("frame-rate").textContent = ` | ${state.phase === "map" && fps !== null ? fps : "--"} FPS`;
@@ -776,6 +810,10 @@ $("preview").addEventListener("keydown", (e) => {
     closePreview();
   }
 });
+applyIdleRotation(readIdleRotation());
+const idleRotation = $("idle-rotation");
+idleRotation?.addEventListener("input", (e) => applyIdleRotation(e.target.value, true));
+idleRotation?.addEventListener("change", (e) => applyIdleRotation(e.target.value, true));
 $("panel").addEventListener("click", (e) => {
   const groupBtn = e.target.closest("[data-grouping]");
   if (groupBtn) {

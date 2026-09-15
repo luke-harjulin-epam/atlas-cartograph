@@ -33,6 +33,15 @@ const KIND_GLOW = {
 
 const MIN_K = 0.22;
 const MAX_K = 20;
+export const IDLE_ROTATION_RAD_PER_SEC = 0.16;
+export const IDLE_ROTATION_MAX_MULTIPLIER = 2;
+
+export function clampIdleRotationMultiplier(value) {
+  if (value == null || value === "") return 1;
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return 1;
+  return Math.min(IDLE_ROTATION_MAX_MULTIPLIER, Math.max(0, n));
+}
 
 function hashedRand(seed) {
   let h = 2166136261 ^ seed;
@@ -525,6 +534,7 @@ export function mountGraphCanvas(wrap, options) {
     pointers: new Map(), pinch: null,
     focusCluster: null, targetPivot: null, targetLook: null, lookVelocity: { yaw: 0, pitch: 0 },
     aimed: false, grouping: "layers", featured: null,
+    idleRotation: clampIdleRotationMultiplier(options.idleRotation),
   };
   s.activityCamera.setEnabled(options.autoFocus !== false);
   const onMotionChange = (event) => {
@@ -767,7 +777,9 @@ export function mountGraphCanvas(wrap, options) {
         if (Math.abs(s.cam.k - s.cam.targetK) < 0.012) { s.cam.k = s.cam.targetK; s.cam.targetK = null; }
       }
       if (!s.spin) {
-        if (!s.reduce && !s.selectedId && !s.targetLook) s.cam.yaw += 0.16 * dt;
+        if (!s.reduce && !s.selectedId && !s.targetLook) {
+          s.cam.yaw += IDLE_ROTATION_RAD_PER_SEC * s.idleRotation * dt;
+        }
         s.cam.yaw += s.cam.vYaw; s.cam.pitch += s.cam.vPitch;
         s.cam.vYaw *= 0.92; s.cam.vPitch *= 0.92;
       }
@@ -929,6 +941,9 @@ export function mountGraphCanvas(wrap, options) {
     setAutoFocus(enabled) {
       pauseAutoFocus();
       s.activityCamera.setEnabled(enabled);
+    },
+    setIdleRotation(multiplier) {
+      s.idleRotation = clampIdleRotationMultiplier(multiplier);
     },
     flyTo,
     clusters,

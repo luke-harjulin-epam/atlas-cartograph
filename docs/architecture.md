@@ -213,7 +213,8 @@ becomes static under reduced motion; it is separate from read-path pulses.
 
 Galaxy home navigation uses the camera's radial-normal convention plus an
 oblique offset, instead of aiming the plane edge-on. The original
-0.16-radian/second idle rotation is enabled, yielding to selected nodes, reduced
+0.16-radian/second idle rotation is the default 1× Layout speed, scalable from 0
+to 2× and remembered in the browser, yielding to selected nodes, reduced
 motion, manual orbit and navigation/activation targets. Large overviews fade
 ordinary edge opacity from 28% at home zoom to full detail at 3x, keeping all
 relationships. High-mass and interacted-with labels remain available at home
