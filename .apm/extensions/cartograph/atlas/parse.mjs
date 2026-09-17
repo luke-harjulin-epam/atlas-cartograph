@@ -82,7 +82,7 @@ function parseFrontmatter(text) {
     if (currentObj && objectList && currentObj.path) objectList.push(currentObj);
     currentObj = null;
   };
-  const lines = block.split("\n");
+  const lines = block.split("\n").map((line) => line.replace(/\r$/, ""));
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
     const sourceField = line.match(/^sources:\s*(.*)$/);
