@@ -72,6 +72,11 @@ test("Layout idle rotation slider applies live, persists, and restores 1× from 
   assert.equal(document.getElementById("idle-rotation-value").textContent, "2×");
   assert.equal(renderers[0].idleRotation, 2);
 
+  ({ document, renderers, localStorage } = appFixture({ localStorage: memoryStorage({ "cartograph.idle-rotation": "   " }) }));
+  assert.equal(document.getElementById("idle-rotation").value, "1");
+  assert.equal(document.getElementById("idle-rotation-value").textContent, "1×");
+  assert.equal(renderers[0].idleRotation, 1);
+
   ({ document, renderers, localStorage } = appFixture({ localStorage: memoryStorage({ "cartograph.idle-rotation": "fast" }) }));
   assert.equal(document.getElementById("idle-rotation").value, "1");
   assert.equal(document.getElementById("idle-rotation-value").textContent, "1×");

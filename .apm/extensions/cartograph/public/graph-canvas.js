@@ -37,8 +37,16 @@ export const IDLE_ROTATION_RAD_PER_SEC = 0.16;
 export const IDLE_ROTATION_MAX_MULTIPLIER = 2;
 
 export function clampIdleRotationMultiplier(value) {
-  if (value == null || value === "") return 1;
-  const n = typeof value === "number" ? value : Number(value);
+  let n;
+  if (typeof value === "number") {
+    n = value;
+  } else if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return 1;
+    n = Number(trimmed);
+  } else {
+    return 1;
+  }
   if (!Number.isFinite(n)) return 1;
   return Math.min(IDLE_ROTATION_MAX_MULTIPLIER, Math.max(0, n));
 }

@@ -525,9 +525,14 @@ test("idle rotation multiplier clamps to 0–2 and treats invalid values as 1×"
   assert.equal(clampIdleRotationMultiplier(9), 2);
   assert.equal(clampIdleRotationMultiplier("1.5"), 1.5);
   assert.equal(clampIdleRotationMultiplier(""), 1);
+  assert.equal(clampIdleRotationMultiplier("   "), 1);
+  assert.equal(clampIdleRotationMultiplier("\t\n"), 1);
+  assert.equal(clampIdleRotationMultiplier("  0  "), 0);
   assert.equal(clampIdleRotationMultiplier(null), 1);
   assert.equal(clampIdleRotationMultiplier(undefined), 1);
   assert.equal(clampIdleRotationMultiplier("fast"), 1);
+  assert.equal(clampIdleRotationMultiplier(true), 1);
+  assert.equal(clampIdleRotationMultiplier(false), 1);
   assert.equal(clampIdleRotationMultiplier(Number.NaN), 1);
   assert.equal(IDLE_ROTATION_RAD_PER_SEC, 0.16);
 });
